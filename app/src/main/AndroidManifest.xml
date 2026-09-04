@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 안드로이드 11+ 는 다른 앱의 존재를 기본으로 숨긴다. 게임을 찾아 실행하려면 여기 적어야 한다
+         (안 적으면 getLaunchIntentForPackage 가 null 을 준다 - 실제로 "설치돼 있지 않다"고 나왔다). -->
+    <queries>
+        <package android:name="com.devsisters.cc" />
+    </queries>
+
+    <!-- 화면 읽기(MediaProjection)는 포그라운드 서비스로만 가능하다. 안드로이드 14+ 는 전용 권한도 요구한다. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:allowBackup="false"
+        android:label="크럼블 폰봇 시험"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 화면 캡처용 포그라운드 서비스 -->
+        <service
+            android:name=".CaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <!-- 탭을 넣는 접근성 서비스 (루트·adb 불필요) -->
+        <service
+            android:name=".TapService"
+            android:exported="false"
+            android:label="크럼블 폰봇 조작"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_config" />
+        </service>
+    </application>
+</manifest>
