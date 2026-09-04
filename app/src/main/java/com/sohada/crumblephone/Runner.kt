@@ -16,6 +16,8 @@ object Runner {
     @Volatile var status = "쉬는 중"        // 큰 글씨로 보일 한 줄
     @Volatile var detail = ""              // 작은 글씨 상세
     @Volatile var lastResult = ""          // 끝난 뒤에도 남길 결과
+    @Volatile var lastScore = 0L           // 이번 판 점수
+    @Volatile var bestScore = 0L           // 이번 세션 최고 점수
 
     /** 화면 한 장.
      *  ⚠️ 다음에 shot() 을 부르면 앞 장은 버려진다(한 장이 18MB 라 들고 있을 수 없다).
@@ -91,7 +93,24 @@ object Runner {
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         set("게임 여는 중", "잠시만요")
         ctx.startActivity(i)
-        sleep(12000)   // 로딩·인트로가 지나갈 때까지
+        sleep(6000)
+        return waitGameReady()
+    }
+
+    /**
+     * 게임이 화면을 다 그릴 때까지 기다린다.
+     * 로딩 중에 판정하면 엉뚱한 결론이 난다(실제로 로딩 화면에서 뒤로가기를 눌러 '전투 중'으로 잘못 끝났다).
+     * 우리가 아는 화면(메인·토벌 로비·결과창·확인창) 중 하나가 보이면 준비된 것으로 본다.
+     */
+    private fun waitGameReady(maxSec: Int = 45): Boolean {
+        val deadline = System.currentTimeMillis() + maxSec * 1000L
+        while (System.currentTimeMillis() < deadline && running) {
+            val b = shot()
+            if (b != null && (Screen.atMain(b) || Screen.atTobolLobby(b) || Screen.isBattleOver(b) || Screen.isConfirmDialog(b))) return true
+            set("게임 여는 중", "로딩을 기다리는 중")
+            sleep(2000)
+        }
+        return false
         return true
     }
 
@@ -99,7 +118,7 @@ object Runner {
         if (running) { Bot.log("이미 무언가 돌고 있어요"); return }
         if (!TapService.isReady) { set("시작 못 함", "접근성 서비스를 켜 주세요"); return }
         if (CaptureService.instance == null) { set("시작 못 함", "화면 읽기를 허용해 주세요"); return }
-        running = true; task = "토벌전"
+        running = true; task = "토벌전"; lastScore = 0L; bestScore = 0L
         thread(name = "tobol") {
             try {
                 if (!bringGameToFront(ctx)) { set("시작 못 함", "게임을 찾지 못했어요"); return@thread }
@@ -120,6 +139,13 @@ object Runner {
             if (!running) return false
             var b = shot() ?: return false
             if (Screen.atTobolLobby(b)) return true
+            // 결과창이 떠 있으면 먼저 닫는다(로비로 돌아간다). 시도마다 확인한다.
+            if (Screen.isBattleOver(b)) {
+                set("지난 결과창 닫는 중")
+                tap(Screen.TOBOL_CLOSE, 2500)
+                if (shot()?.let { Screen.atTobolLobby(it) } == true) return true
+                b = shot() ?: return false
+            }
             if (!Screen.atMain(b)) {
                 set("메인 화면으로 이동 중")
                 val (ok, why) = resetToMain()
@@ -182,14 +208,31 @@ object Runner {
             while (System.currentTimeMillis() < deadline && running) {
                 val s = shot()
                 if (s != null && Screen.isBattleOver(s)) { over = true; break }
-                status = "토벌전 " + attempts + "회차"; detail = "자동 전투 중"
+                status = "토벌전 " + attempts + "회차"; detail = if (bestScore > 0) "자동 전투 중 · 최고 " + Ocr.comma(bestScore) else "자동 전투 중"
                 sleep(3000)
             }
             if (!running) break
             if (!over) { Bot.log("전투 끝을 못 잡음 - 로비 복귀 시도"); closeResult(); continue }
+            // 최종 점수 읽기(금색 큰 숫자). 막 떠서 안 잡힐 수 있으니 몇 번 다시 본다.
+            set("토벌전 " + attempts + "회차", "점수 확인 중")
+            var score: Long? = null
+            for (t in 1..5) {
+                if (!running) break
+                val s2 = shot() ?: break
+                // 실측: 최종 점수 숫자는 x400~1070 · y1400~1506. 여유를 둬 넉넉히 자른다.
+                // (PC 봇의 340,1335,800,120 을 그대로 쓰면 숫자 아래쪽이 잘려 204,721 처럼 오독한다)
+                score = Ocr.readNumber(s2, 330, 1380, 830, 150, minDigits = 6)
+                if (score != null) break
+                sleep(700)
+            }
+            if (score != null) {
+                lastScore = score
+                if (score > bestScore) bestScore = score
+                Bot.log("이번 " + Ocr.comma(score) + " · 최고 " + Ocr.comma(bestScore))
+            }
             set("토벌전 " + attempts + "회차", "결과창 닫는 중")
             if (!closeResult()) { set("토벌전 끝", "결과창을 닫지 못했어요"); break }
-            lastResult = "토벌전 " + attempts + "회 도전함"
+            lastResult = if (bestScore > 0) "토벌전 " + attempts + "회 · 최고 " + Ocr.comma(bestScore) else "토벌전 " + attempts + "회 도전함"
         }
         if (running) set("토벌전 끝", attempts.toString() + "회 도전했어요") else set("멈췄어요", "토벌전 " + attempts + "회까지 했어요")
         lastResult = "토벌전 " + attempts + "회 도전함"

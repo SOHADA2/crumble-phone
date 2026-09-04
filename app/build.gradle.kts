@@ -24,4 +24,6 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    // 글자 읽기: 모델을 APK 에 넣지 않는 Play 서비스판(앱 크기를 키우지 않는다)
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
 }
