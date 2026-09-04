@@ -95,7 +95,7 @@ class MainActivity : AppCompatActivity() {
         card.addView(lblStatus); card.addView(lblDetail)
         root.addView(card)
 
-        btnStart = button("토벌전 시작", ACCENT, Color.WHITE) { Runner.startTobol(applicationContext) }
+        btnStart = button("토벌전 시작", ACCENT, Color.WHITE) { Overlay.show(applicationContext); Runner.startTobol(applicationContext) }
         btnStop = button("멈추기", STOP, STOP, outlined = true) { Runner.stop() }
         root.addView(btnStart); root.addView(btnStop)
 
@@ -109,6 +109,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         })
         setupRow.addView(button("화면 읽기 허용", LINE, TXT) { askProjection() })
+        setupRow.addView(button("게임 위에 표시 허용", LINE, TXT) {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:" + packageName)))
+        })
         root.addView(setupRow)
 
         root.addView(button("게임 켜기", LINE, TXT) { launchGame() })
@@ -133,8 +137,10 @@ class MainActivity : AppCompatActivity() {
     private fun tick() {
         val accOk = TapService.isReady
         val capOk = CaptureService.instance != null
-        lblReady.text = "접근성 " + (if (accOk) "✓" else "✗") + " · 화면 읽기 " + (if (capOk) "✓" else "✗")
-        setupRow.visibility = if (accOk && capOk) View.GONE else View.VISIBLE
+        lblReady.text = "접근성 " + (if (accOk) "✓" else "✗") + " · 화면 읽기 " + (if (capOk) "✓" else "✗") +
+                        " · 게임 위 표시 " + (if (Overlay.canDraw(this)) "✓" else "✗")
+        val ovOk = Overlay.canDraw(this)
+        setupRow.visibility = if (accOk && capOk && ovOk) View.GONE else View.VISIBLE
 
         lblStatus.text = Runner.status
         lblDetail.text = if (Runner.detail.isNotEmpty()) Runner.detail
