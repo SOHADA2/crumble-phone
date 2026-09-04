@@ -1,0 +1,67 @@
+# main 에 밀어 넣으면 GitHub 이 APK 를 대신 빌드해 준다.
+#   → 개발 PC 가 없어도(다른 컴퓨터·클라우드에서 작업해도) 폰에 넣을 APK 가 나온다.
+#   결과는 ① Actions 아티팩트 ② 'latest' 릴리스에 붙은 app-debug.apk 두 곳에 올라간다.
+#   폰 브라우저에서 릴리스의 APK 를 바로 받아 설치하면 된다(비공개 저장소라 GitHub 로그인 필요).
+name: APK 빌드
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle/**'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 자바 17 준비
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle 캐시
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+
+      - name: 빌드
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: 버전 이름 만들기
+        id: v
+        run: echo "tag=build-$(date +%Y%m%d-%H%M)" >> $GITHUB_OUTPUT
+
+      - name: 아티팩트로 올리기
+        uses: actions/upload-artifact@v4
+        with:
+          name: crumble-phone-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: latest 릴리스에 붙이기 (폰에서 바로 받도록)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: 최신 APK
+          body: |
+            자동 빌드 · ${{ steps.v.outputs.tag }}
+            커밋: ${{ github.sha }}
+
+            폰 브라우저에서 아래 app-debug.apk 를 받아 설치하세요.
+          files: app/build/outputs/apk/debug/app-debug.apk
+          prerelease: true
