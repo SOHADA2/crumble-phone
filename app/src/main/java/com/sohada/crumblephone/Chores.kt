@@ -4,7 +4,8 @@ import android.content.Context
 import kotlin.concurrent.thread
 
 /**
- * 봇 본체 — PC 봇 `bot.ps1`(+ `box.ps1`)의 퀘스트 순환을 옮긴 것.
+ * 퀘스트 자동(관제 화면의 '퀘스트') — PC 봇 `bot.ps1`(+ `box.ps1`)의 퀘스트 순환을 옮긴 것.
+ * PC 봇에서는 이걸 '봇 본체' 라고 불렀다. 화면에서는 토벌전·아레나와 같은 결로 '퀘스트' 다.
  *
  * 하는 일은 넷이다.
  *   ① 보상 자동 받기 — 미션 '모두 받기' + 출석 '받기' (20분마다)
@@ -38,7 +39,7 @@ object Chores {
         if (Runner.running) { Bot.log("이미 무언가 돌고 있어요"); return }
         if (!TapService.isReady) { Runner.set("시작 못 함", "접근성 서비스를 켜 주세요"); return }
         if (CaptureService.instance == null) { Runner.set("시작 못 함", "화면 읽기를 허용해 주세요"); return }
-        Runner.running = true; Runner.task = "봇 본체"
+        Runner.running = true; Runner.task = "퀘스트"
         ovenTried = false
         thread(name = "chores") {
             try {
@@ -87,7 +88,7 @@ object Chores {
         var nextRewardAt = System.currentTimeMillis()      // 시작하자마자 한 번 받는다
 
         while (Runner.running) {
-            if (maxQuests > 0 && quests >= maxQuests) { Runner.set("봇 본체 끝", "퀘스트 " + quests + "개를 받았어요"); break }
+            if (maxQuests > 0 && quests >= maxQuests) { Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요"); break }
 
             val b = Runner.shot()
             if (b == null) { Runner.set("화면을 못 읽었어요", "다시 시도 중"); Runner.sleep(5000); continue }
@@ -226,7 +227,7 @@ object Chores {
             bossTries = 0                          // 쉬고 나면 조합 1번부터 다시
             Runner.sleep(8000)
         }
-        if (Runner.running) Runner.set("봇 본체 끝", "퀘스트 " + quests + "개를 받았어요")
+        if (Runner.running) Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요")
         else Runner.set("멈췄어요", "퀘스트 " + quests + "개까지 받았어요")
         Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
     }

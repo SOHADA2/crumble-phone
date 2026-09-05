@@ -53,7 +53,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var capOffSep: View
     private lateinit var logView: TextView
     private lateinit var rowUpdate: LinearLayout
-    private var lastRunning: Boolean? = null      // 버튼 배경을 상태가 바뀔 때만 갈아 끼우려고 기억한다
     private var lastProgress = -1
     private var setupShown = false      // 이번에 켠 뒤로 안내를 한 번 띄웠나
 
@@ -105,12 +104,23 @@ class MainActivity : AppCompatActivity() {
     private fun row(
         title: String,
         value: String = "",
+        subtitle: String = "",
         chevron: Boolean = true,
         tint: Int? = null,
         onClick: () -> Unit
     ): LinearLayout {
-        val lbl = text(title, 17f, tint ?: t.label).apply {
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+        // 부제가 있으면 제목 아래 한 줄 더. 콘텐츠 줄이 무슨 일을 하는지 한눈에 보이게 한다.
+        val lbl: View = if (subtitle.isEmpty()) {
+            text(title, 17f, tint ?: t.label).apply {
+                layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            }
+        } else {
+            LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(text(title, 17f, tint ?: t.label))
+                addView(text(subtitle, 13f, t.label2).apply { setPadding(0, dp(2), 0, 0) })
+                layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            }
         }
         val v = text(value, 17f, t.label2).apply { tag = "value" }
         return LinearLayout(this).apply {
@@ -201,24 +211,35 @@ class MainActivity : AppCompatActivity() {
         hero.addView(track)
         root.addView(hero)
 
-        // ── 주 버튼 (도는 중이면 멈추기로 바뀐다) ──
-        btnPrimary = text("봇 본체 시작", 17f, Color.WHITE, medium).apply {
+        // ── 주 버튼은 **돌고 있을 때만** 나온다(멈추기) ──
+        // 무엇을 시작할지는 아래 '자동 실행' 목록에서 고른다. 콘텐츠가 늘어도 구조가 그대로다.
+        btnPrimary = text("멈추기", 17f, Color.WHITE, medium).apply {
             gravity = Gravity.CENTER
-            background = t.rippleRound(t.blue, dpf(12f))
+            background = t.rippleRound(t.red, dpf(12f))
+            visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(50)).apply {
                 leftMargin = dp(16); rightMargin = dp(16); topMargin = dp(16)
             }
             isClickable = true
-            setOnClickListener { onPrimary() }
+            setOnClickListener { Runner.stop() }
         }
         root.addView(btnPrimary)
 
         // ── 자동 실행 ──
         root.addView(sectionHeader("자동 실행"))
         runRows = group()
-        val rTobol = row("토벌전") { Overlay.show(applicationContext); Runner.startTobol(applicationContext) }
-        val rReward = row("보상만 받기", "안전") { Overlay.show(applicationContext); Chores.startRewardsOnly(applicationContext) }
-        runRows.addView(rTobol); runRows.addView(separator()); runRows.addView(rReward)
+        val rQuest = row("퀘스트", subtitle = "보상 받고 · 뽑기 · 상자 · 오븐 · 보스") {
+            Overlay.show(applicationContext); Chores.start(applicationContext)
+        }
+        val rTobol = row("토벌전", subtitle = "반복 도전하고 점수 기록") {
+            Overlay.show(applicationContext); Runner.startTobol(applicationContext)
+        }
+        val rReward = row("보상만 받기", value = "안전", subtitle = "미션 · 출석 한 번만") {
+            Overlay.show(applicationContext); Chores.startRewardsOnly(applicationContext)
+        }
+        runRows.addView(rQuest); runRows.addView(separator())
+        runRows.addView(rTobol); runRows.addView(separator())
+        runRows.addView(rReward)
         root.addView(runRows)
 
         // ── 준비 (다 되면 통째로 사라진다) ──
@@ -290,12 +311,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun openSetup() = startActivity(Intent(this, SetupActivity::class.java))
 
-    /** 주 버튼은 하나뿐이다 — 쉴 때는 [봇 본체 시작], 돌 때는 [멈추기]. */
-    private fun onPrimary() {
-        if (Runner.running) Runner.stop()
-        else { Overlay.show(applicationContext); Chores.start(applicationContext) }
-    }
-
     /** 1초마다 상태만 갈아 끼운다(무거운 일은 하지 않는다). */
     private fun tick() {
         val accOk = TapService.isReady
@@ -312,7 +327,7 @@ class MainActivity : AppCompatActivity() {
 
         lblSubtitle.text = when {
             Runner.running -> "봇이 게임을 대신 하고 있어요"
-            ready          -> "시작할 준비가 됐어요"
+            ready          -> "무엇을 자동으로 돌릴지 골라 주세요"
             else           -> "아래 '준비'를 먼저 해 주세요"
         }
 
@@ -341,14 +356,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        if (lastRunning != running) {
-            lastRunning = running
-            btnPrimary.text = if (running) "멈추기" else "봇 본체 시작"
-            btnPrimary.background = t.rippleRound(if (running) t.red else t.blue, dpf(12f))
-        }
-        btnPrimary.isEnabled = running || ready
-        btnPrimary.alpha = if (btnPrimary.isEnabled) 1f else 0.35f
+        btnPrimary.visibility = if (running) View.VISIBLE else View.GONE
 
+        // 도는 동안에는 다른 콘텐츠를 못 고르게 흐린다(한 번에 하나만 돈다).
         for (i in 0 until runRows.childCount) {
             (runRows.getChildAt(i) as? LinearLayout)?.enable(!running && ready)
         }
