@@ -1,7 +1,7 @@
 # main 에 밀어 넣으면 GitHub 이 APK 를 대신 빌드해 준다.
 #   → 개발 PC 가 없어도(다른 컴퓨터·클라우드에서 작업해도) 폰에 넣을 APK 가 나온다.
-#   결과는 ① Actions 아티팩트 ② 'latest' 릴리스에 붙은 app-debug.apk 두 곳에 올라간다.
-#   폰 브라우저에서 릴리스의 APK 를 바로 받아 설치하면 된다(비공개 저장소라 GitHub 로그인 필요).
+#   결과는 ① Actions 아티팩트 ② 'latest' 릴리스에 붙은 app-debug.apk + latest.json 두 곳에 올라간다.
+#   저장소가 공개라 앱이 인증 없이 릴리스에서 바로 받아 간다(앱 안 [업데이트]).
 name: APK 빌드
 
 on:
@@ -21,10 +21,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      # 공개 릴리스 저장소에 올릴 토큰. 없으면 그 단계만 건너뛴다(빌드는 그대로 성공한다).
-      RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-      RELEASES_REPO: SOHADA2/crumble-phone-releases
     steps:
       - uses: actions/checkout@v4
 
@@ -70,38 +66,18 @@ jobs:
           name: crumble-phone-apk
           path: app/build/outputs/apk/debug/app-debug.apk
 
-      - name: latest 릴리스에 붙이기 (폰에서 바로 받도록)
+      - name: latest 릴리스에 붙이기 (앱이 여기서 받아 간다)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: 최신 APK
-          body: |
-            자동 빌드 · ${{ steps.v.outputs.tag }}
-            커밋: ${{ github.sha }}
-
-            폰 브라우저에서 아래 app-debug.apk 를 받아 설치하세요.
-          files: app/build/outputs/apk/debug/app-debug.apk
-          prerelease: true
-
-      # ── 앱 안 자동 업데이트용 ────────────────────────────────────────────
-      # 이 저장소는 비공개라 릴리스 주소가 로그인을 요구한다 — 앱이 그냥 못 받는다.
-      # 앱에 토큰을 넣는 건 답이 아니다(APK 를 뜯으면 누구나 저장소에 접근하게 된다).
-      # 그래서 APK 만 공개 저장소의 릴리스로 따로 올린다. 소스는 여기 비공개로 남는다.
-      # RELEASES_TOKEN 시크릿이 없으면 이 단계는 조용히 건너뛴다.
-      - name: 공개 릴리스 저장소에도 올리기 (앱이 직접 받도록)
-        if: ${{ env.RELEASES_TOKEN != '' }}
-        uses: softprops/action-gh-release@v2
-        with:
-          repository: ${{ env.RELEASES_REPO }}
-          token: ${{ secrets.RELEASES_TOKEN }}
           tag_name: latest
           name: 최신 APK ${{ steps.v.outputs.name }}
           body: |
-            크럼블 폰봇 ${{ steps.v.outputs.name }}
-            ${{ steps.v.outputs.tag }}
+            크럼블 폰봇 ${{ steps.v.outputs.name }} · ${{ steps.v.outputs.tag }}
+            커밋: ${{ github.sha }}
 
             앱 안 [업데이트] 를 누르면 여기서 받아 갑니다.
+            처음 설치할 때만 아래 app-debug.apk 를 직접 받으세요.
           files: |
             app/build/outputs/apk/debug/app-debug.apk
             latest.json
-          prerelease: false
+          prerelease: true

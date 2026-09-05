@@ -15,17 +15,18 @@ import kotlin.concurrent.thread
 /**
  * 앱 안에서 새 판을 받아 설치한다.
  *
- * 소스 저장소(`crumble-phone`)는 **비공개**라 그 릴리스는 로그인을 요구한다 — 앱이 그냥 못 받는다.
- * 앱에 토큰을 넣는 건 답이 아니다(APK 를 뜯으면 누구나 저장소에 접근하게 된다).
- * 그래서 **APK 만 공개 저장소(`crumble-phone-releases`)의 릴리스로 따로 올린다.**
- * 소스는 비공개 그대로고, 앱은 인증 없이 받을 수 있다.
+ * **저장소가 공개라 인증이 필요 없다.** 앱에 토큰을 넣는 건 답이 아니었다 —
+ * APK 를 뜯으면 누구나 저장소에 접근하게 된다. 비공개로 두면서 앱이 받게 하려면
+ * 공개 릴리스 저장소를 따로 두고 토큰을 발급해 시크릿에 넣어야 했는데,
+ * 저장소를 공개로 돌리는 편이 단계가 훨씬 적어서 그쪽을 골랐다.
  *
  * 마지막 '설치' 확인은 안드로이드가 반드시 사용자에게 묻는다(사이드로드 앱은 예외가 없다).
  * 그 앞 — 새 판이 있는지 확인 · 내려받기 — 까지가 자동이다.
  */
 object Updater {
 
-    private const val BASE = "https://github.com/SOHADA2/crumble-phone-releases/releases/download/latest"
+    // 태그를 직접 가리킨다. `/releases/latest` 는 프리릴리스를 건너뛰어서 404 가 난다.
+    private const val BASE = "https://github.com/SOHADA2/crumble-phone/releases/download/latest"
     private const val MANIFEST = "$BASE/latest.json"
     private const val APK = "$BASE/app-debug.apk"
 
@@ -66,7 +67,8 @@ object Updater {
             }
             catch (e: Exception) {
                 // 릴리스 저장소가 아직 없거나 인터넷이 안 될 때 여기로 온다. 조용히 지나간다.
-                state = if (quiet) "" else "확인 실패 (인터넷·릴리스 저장소를 확인해 주세요)"
+                // 저장소가 아직 비공개면 여기로 온다(주소가 로그인을 요구한다). 조용히 지나간다.
+                state = if (quiet) "" else "확인 실패 (인터넷·저장소 공개 여부를 확인해 주세요)"
                 if (!quiet) Bot.log("업데이트 확인 실패: " + (e.message ?: "알 수 없음"))
             }
             finally { busy = false }
