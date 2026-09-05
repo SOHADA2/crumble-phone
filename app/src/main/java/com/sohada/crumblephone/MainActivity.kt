@@ -38,7 +38,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var lblReady: TextView
     private lateinit var lblStatus: TextView
     private lateinit var lblDetail: TextView
-    private lateinit var btnStart: Button
+    private lateinit var btnChores: Button
+    private lateinit var btnTobol: Button
+    private lateinit var btnRewards: Button
     private lateinit var btnStop: Button
     private lateinit var setupRow: LinearLayout
     private lateinit var logView: TextView
@@ -95,9 +97,18 @@ class MainActivity : AppCompatActivity() {
         card.addView(lblStatus); card.addView(lblDetail)
         root.addView(card)
 
-        btnStart = button("토벌전 시작", ACCENT, Color.WHITE) { Overlay.show(applicationContext); Runner.startTobol(applicationContext) }
+        // 봇 본체가 주력이다 — 보상을 안 받으면 재료가 0 이라 다른 게 다 막힌다.
+        btnChores = button("봇 본체 시작", ACCENT, Color.WHITE) {
+            Overlay.show(applicationContext); Chores.start(applicationContext)
+        }
+        btnTobol = button("토벌전 시작", LINE, TXT) {
+            Overlay.show(applicationContext); Runner.startTobol(applicationContext)
+        }
+        btnRewards = button("보상만 받기", LINE, TXT) {
+            Overlay.show(applicationContext); Chores.startRewardsOnly(applicationContext)
+        }
         btnStop = button("멈추기", STOP, STOP, outlined = true) { Runner.stop() }
-        root.addView(btnStart); root.addView(btnStop)
+        root.addView(btnChores); root.addView(btnTobol); root.addView(btnRewards); root.addView(btnStop)
 
         // 준비 줄 — 아직 안 된 게 있을 때만 보인다
         setupRow = LinearLayout(this).apply {
@@ -116,6 +127,8 @@ class MainActivity : AppCompatActivity() {
         root.addView(setupRow)
 
         root.addView(button("게임 켜기", LINE, TXT) { launchGame() })
+        // 앱은 스스로 업데이트되지 않는다(안드로이드 APK 라서). 릴리스 페이지를 열어 직접 받는다.
+        root.addView(button("새 APK 받기", LINE, SUB) { openReleases() })
 
         root.addView(text("기록", 12f, SUB).apply { setPadding(0, dp(18), 0, dp(6)) })
         logView = text("", 11.5f, SUB)
@@ -145,8 +158,11 @@ class MainActivity : AppCompatActivity() {
         lblStatus.text = Runner.status
         lblDetail.text = if (Runner.detail.isNotEmpty()) Runner.detail
                          else if (Runner.lastResult.isNotEmpty()) "지난 결과: " + Runner.lastResult else ""
-        btnStart.isEnabled = !Runner.running && accOk && capOk
-        btnStart.alpha = if (btnStart.isEnabled) 1f else 0.4f
+        val canStart = !Runner.running && accOk && capOk
+        for (b in arrayOf(btnChores, btnTobol, btnRewards)) {
+            b.isEnabled = canStart
+            b.alpha = if (canStart) 1f else 0.4f
+        }
         btnStop.visibility = if (Runner.running) View.VISIBLE else View.GONE
 
         ui.postDelayed({ tick() }, 1000)
@@ -155,6 +171,12 @@ class MainActivity : AppCompatActivity() {
     private fun askProjection() {
         val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAP)
+    }
+
+    /** 릴리스 페이지를 연다. main 에 push 하면 GitHub Actions 가 여기에 새 APK 를 올려 준다. */
+    private fun openReleases() {
+        startActivity(Intent(Intent.ACTION_VIEW,
+            android.net.Uri.parse("https://github.com/SOHADA2/crumble-phone/releases/latest")))
     }
 
     private fun launchGame() {

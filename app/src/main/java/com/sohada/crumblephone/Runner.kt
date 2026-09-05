@@ -39,14 +39,14 @@ object Runner {
         return last
     }
 
-    private fun sleep(ms: Long) = Thread.sleep(ms)
+    internal fun sleep(ms: Long) = Thread.sleep(ms)
 
-    private fun set(s: String, d: String = "") { status = s; detail = d; Bot.log("$s ${if (d.isEmpty()) "" else "· $d"}") }
+    internal fun set(s: String, d: String = "") { status = s; detail = d; Bot.log("$s ${if (d.isEmpty()) "" else "· $d"}") }
 
     fun tap(p: IntArray, waitMs: Long = 1800) { TapService.tap(p[0], p[1]); sleep(waitMs) }
 
     /** 절전이면 왕관을 씌워 깨운다(절전이 아니면 빈 바닥 드래그라 무해). */
-    private fun wake() {
+    internal fun wake() {
         val w = Screen.WAKE
         TapService.swipe(w[0], w[1], w[2], w[3], 900)
         sleep(1800)
@@ -88,7 +88,7 @@ object Runner {
     const val GAME = "com.devsisters.cc"
 
     /** 게임을 앞으로 띄운다. 앱이 앞에 있으면 앱 자신을 읽게 되므로 반드시 먼저 해야 한다. */
-    private fun bringGameToFront(ctx: Context): Boolean {
+    internal fun bringGameToFront(ctx: Context): Boolean {
         val i = ctx.packageManager.getLaunchIntentForPackage(GAME) ?: return false
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         set("게임 여는 중", "잠시만요")
@@ -102,7 +102,7 @@ object Runner {
      * 로딩 중에 판정하면 엉뚱한 결론이 난다(실제로 로딩 화면에서 뒤로가기를 눌러 '전투 중'으로 잘못 끝났다).
      * 우리가 아는 화면(메인·토벌 로비·결과창·확인창) 중 하나가 보이면 준비된 것으로 본다.
      */
-    private fun waitGameReady(maxSec: Int = 45): Boolean {
+    internal fun waitGameReady(maxSec: Int = 45): Boolean {
         val deadline = System.currentTimeMillis() + maxSec * 1000L
         while (System.currentTimeMillis() < deadline && running) {
             val b = shot()
@@ -111,7 +111,6 @@ object Runner {
             sleep(2000)
         }
         return false
-        return true
     }
 
     fun startTobol(ctx: Context, maxAttempts: Int = 300) {
@@ -169,7 +168,7 @@ object Runner {
         return false
     }
 
-    private fun failByReason(why: String) {
+    internal fun failByReason(why: String) {
         when (why) {
             "battle" -> { set("시작 못 함", "게임이 전투 중이라 들어갈 수 없어요. 전투가 끝난 뒤 다시 눌러 주세요")
                           lastResult = "전투 중이라 시작하지 못했어요" }

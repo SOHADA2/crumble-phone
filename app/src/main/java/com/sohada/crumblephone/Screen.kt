@@ -16,6 +16,28 @@ object Screen {
     val TOBOL_CHALLENGE = intArrayOf(700, 2715)      // 도전하기!
     val TOBOL_CLOSE = intArrayOf(715, 2990)          // BATTLE OVER 결과창 ✕
 
+    // ── 봇 본체(퀘스트 순환) — PC 봇 bot.ps1 의 720 축소본 좌표를 ×2 한 실좌표 ──
+    val QUEST_BAR   = intArrayOf(1140, 2020)         // 전투 화면 오른쪽 퀘스트 띠
+    val NAV_CLOSE   = intArrayOf(720, 3016)          // 하단 네비 한가운데 X (열린 화면 닫기)
+    val SUB_CLOSE   = intArrayOf(718, 3054)          // 미션·출석처럼 전체를 덮는 창의 하단 X
+    val OUTSIDE     = intArrayOf(720, 1100)          // 팝업 바깥(전장 빈 곳) — 닫기 버튼이 없는 팝업용
+    val GACHA_10    = intArrayOf(712, 2640)          // 뽑기 '10회'
+    val GACHA_CLOSE = intArrayOf(712, 2976)          // 뽑기 결과창 X
+
+    // 가방 상자 사용(box.ps1) — 퀘스트가 상자를 맨 앞 칸에 올려 준다는 전제
+    val BAG_SLOT1   = intArrayOf(228, 2116)          // 가방 첫 번째 칸
+    val BAG_USE     = intArrayOf(712, 1692)          // 사용하기
+    val BAG_DISMISS = intArrayOf(712, 1600)          // 보상 화면 빈 곳
+
+    // 보상 자동 받기(bot.ps1 의 Claim-Missions / Claim-Attendance)
+    val ICON_MISSION  = intArrayOf(1336, 1130)       // 우측 미션(클립보드) 아이콘
+    val ICON_CALENDAR = intArrayOf(1336, 1300)       // 우측 달력(이벤트 허브) 아이콘
+    val MISSION_TABS  = arrayOf(intArrayOf(274, 2700), intArrayOf(710, 2700), intArrayOf(1138, 2700)) // 일일·주간·도전
+    val CLAIM_ALL     = intArrayOf(716, 2490)        // 모두 받기
+    val ATT_MIRACLE   = intArrayOf(390, 2840)        // 기적의 출석 탭
+    val ATT_NEW       = intArrayOf(196, 2840)        // 신규 출석 탭(기적을 고른 뒤에야 보인다)
+    val ATT_CLAIM     = intArrayOf(720, 2570)        // 받기 / 모두 받기
+
     private val DOCK = intArrayOf(300, 1150, 2820, 2980)
     private val CLOSE_PTS = arrayOf(
         intArrayOf(711, 3030), intArrayOf(680, 3010), intArrayOf(740, 3050), intArrayOf(711, 2990),
@@ -27,23 +49,42 @@ object Screen {
     private fun px(b: Bitmap, x: Int, y: Int): Int =
         if (x in 0 until b.width && y in 0 until b.height) b.getPixel(x, y) else Color.BLACK
 
-    /** 하단 '플레이트 강화' 독의 나무색 비율. 밝기와 무관하다. */
-    fun dockRatio(b: Bitmap): Double {
+    /** 독을 한 번 훑어 세 값을 같이 낸다. 셋 다 밝기와 무관하다. */
+    class Dock(val mean: Double, val ratio: Double, val cv: Double)
+
+    /**
+     * 하단 '플레이트 강화' 독의 통계.
+     *   ratio = (R-B)/평균밝기 — 메인 +0.23~0.33 / 가방 -0.45 / 뽑기 -0.60
+     *   cv    = 표준편차/평균  — 정상 0.89(밝든 어둡든) / 절전 0.11
+     *
+     * 절전을 절대 밝기로 가르면 안 된다. 게임이 무터치 시 화면을 어둡게 만드는데
+     * 그게 절전 화면보다 더 어두울 때가 있어(정상 6.7 vs 절전 12.6) 어떤 임계값도 안전하지 않다.
+     */
+    fun dockStats(b: Bitmap): Dock {
         var rs = 0L; var gs = 0L; var bs = 0L; var n = 0
+        val vals = ArrayList<Double>()
         var x = DOCK[0]
         while (x < DOCK[1]) {
             var y = DOCK[2]
             while (y < DOCK[3]) {
                 val c = px(b, x, y)
-                rs += Color.red(c); gs += Color.green(c); bs += Color.blue(c); n++
+                val r = Color.red(c); val g = Color.green(c); val bl = Color.blue(c)
+                rs += r; gs += g; bs += bl; n++
+                vals.add((r + g + bl) / 3.0)
                 y += 6
             }
             x += 6
         }
-        if (n == 0) return 0.0
+        if (n == 0) return Dock(0.0, 0.0, 0.0)
         val mean = (rs + gs + bs).toDouble() / (3.0 * n)
-        return if (mean < 0.5) 0.0 else ((rs - bs).toDouble() / n) / mean
+        if (mean < 0.5) return Dock(mean, 0.0, 0.0)
+        var sq = 0.0
+        for (v in vals) sq += (v - mean) * (v - mean)
+        return Dock(mean, ((rs - bs).toDouble() / n) / mean, Math.sqrt(sq / vals.size) / mean)
     }
+
+    /** 하단 '플레이트 강화' 독의 나무색 비율. 밝기와 무관하다. */
+    fun dockRatio(b: Bitmap): Double = dockStats(b).ratio
 
     /** 하단 한가운데 주황 닫기(✕)/뒤로(↩) 버튼이 있나? 있으면 서브 화면이다. */
     fun hasCloseButton(b: Bitmap): Boolean {
@@ -108,6 +149,84 @@ object Screen {
             if (!(Color.red(c) < 75 && Color.green(c) < 55 && Color.blue(c) < 45)) return false
         }
         return hasCloseButton(b)
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  봇 본체(퀘스트 순환) 판정 — bot.ps1 / box.ps1 에서 옮겼다
+    // ══════════════════════════════════════════════════════════
+
+    private val BAR = intArrayOf(940, 1430, 1905, 2075)
+
+    /**
+     * 전투 화면 오른쪽 퀘스트 띠의 (R-B)/평균밝기.
+     * 게임이 화면을 어둡게 만들어도 비율은 유지된다.
+     *   실측: 완료 1.11~1.28 / 미완료 0.16~0.58 (띠가 반투명이라 뒤 배경에 따라 흔들린다)
+     * -0.6 아래로 크게 벗어나면 무언가가 띠를 덮고 있다는 뜻이다.
+     */
+    fun questBarRatio(b: Bitmap): Double {
+        var rs = 0L; var gs = 0L; var bs = 0L; var n = 0
+        var x = BAR[0]
+        while (x < BAR[1]) {
+            var y = BAR[2]
+            while (y < BAR[3]) {
+                val c = px(b, x, y)
+                rs += Color.red(c); gs += Color.green(c); bs += Color.blue(c); n++
+                y += 6
+            }
+            x += 6
+        }
+        if (n == 0) return 0.0
+        val mean = (rs + gs + bs).toDouble() / (3.0 * n)
+        return if (mean < 1) 0.0 else ((rs - bs).toDouble() / n) / mean
+    }
+
+    /** 퀘스트가 완료돼 받을 수 있나? 미완료를 잘못 누르는 쪽이 훨씬 위험해서 넉넉히 잡는다. */
+    fun isQuestDone(b: Bitmap): Boolean = questBarRatio(b) >= 0.85
+
+    private val GACHA_BTNS = arrayOf(intArrayOf(266, 2640), intArrayOf(712, 2640), intArrayOf(1158, 2640))
+
+    /**
+     * 뽑기 화면의 1회/10회/30회 주황 버튼 3자리 중 몇 개가 주황인가? (0~3)
+     * 3이면 뽑기 화면. 1~2 는 '뽑기 화면 같은데 뭔가 다른' 상태라 건드리지 않는다.
+     */
+    fun gachaHits(b: Bitmap): Int {
+        var hit = 0
+        for (p in GACHA_BTNS) {
+            val c = px(b, p[0], p[1])
+            val r = Color.red(c); val g = Color.green(c); val bl = Color.blue(c)
+            // 화면이 어두워져도(절전 직전) 유지되도록 비율로 본다. 15는 완전 검정 배제용.
+            if (r >= 15 && r > bl * 2 && g > bl && r > g) hit++
+        }
+        return hit
+    }
+
+    fun isGachaScreen(b: Bitmap): Boolean = gachaHits(b) == 3
+
+    /**
+     * 가방·뽑기 같은 청록 패널이 하단을 덮고 있나?
+     * 절대 R-B 로 보면 패널 경계에 걸려 가방 내용물에 따라 흔들린다(실제로 가방을 통째로 놓쳤다).
+     *   실측 ratio: 메인 +0.23~0.33 / 가방 -0.45 / 뽑기 -0.60 → 두 분포 사이인 -0.2 를 임계로.
+     */
+    fun isBottomPanel(b: Bitmap): Boolean = dockRatio(b) <= -0.2
+
+    /**
+     * 가방에서 칸을 고른 뒤 '사용하기' 주황 버튼이 떠 있나?
+     * 없으면 그 칸이 상자가 아니므로 아무것도 누르지 않고 가방을 닫아야 한다.
+     */
+    fun hasUseButton(b: Bitmap): Boolean {
+        var hit = 0; var n = 0
+        var x = 620
+        while (x < 810) {
+            var y = 1670
+            while (y < 1715) {
+                val c = px(b, x, y); n++
+                val r = Color.red(c); val g = Color.green(c); val bl = Color.blue(c)
+                if (r > 30 && r > bl * 2 && g > bl) hit++
+                y += 6
+            }
+            x += 6
+        }
+        return n > 0 && hit.toDouble() / n > 0.3
     }
 }
 
