@@ -55,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rowUpdate: LinearLayout
     private var lastRunning: Boolean? = null      // 버튼 배경을 상태가 바뀔 때만 갈아 끼우려고 기억한다
     private var lastProgress = -1
+    private var setupShown = false      // 이번에 켠 뒤로 안내를 한 번 띄웠나
 
     private fun dp(v: Int) = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
@@ -224,6 +225,8 @@ class MainActivity : AppCompatActivity() {
         setupSection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         setupSection.addView(sectionHeader("준비"))
         val g2 = group()
+        g2.addView(row("차근차근 안내 받기") { openSetup() })
+        g2.addView(separator())
         rowAcc = row("접근성 서비스") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
         rowCap = row("화면 읽기") { askProjection() }
         rowOverlay = row("게임 위에 표시") {
@@ -274,6 +277,18 @@ class MainActivity : AppCompatActivity() {
         }
         tick()
     }
+
+    override fun onResume() {
+        super.onResume()
+        // 켤 것이 남아 있으면 안내부터 보여 준다. 목록만 던져 두면 무엇부터 눌러야 할지 알 수 없다.
+        // 한 번 띄우고 나면 다시 강요하지 않는다(목록의 '차근차근 안내 받기' 로 언제든 다시 열 수 있다).
+        if (!setupShown && (!TapService.isReady || CaptureService.instance == null)) {
+            setupShown = true
+            openSetup()
+        }
+    }
+
+    private fun openSetup() = startActivity(Intent(this, SetupActivity::class.java))
 
     /** 주 버튼은 하나뿐이다 — 쉴 때는 [봇 본체 시작], 돌 때는 [멈추기]. */
     private fun onPrimary() {

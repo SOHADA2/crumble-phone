@@ -41,6 +41,12 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
+        <!-- 첫 실행 안내 (켤 것을 하나씩만 보여 준다) -->
+        <activity
+            android:name=".SetupActivity"
+            android:exported="false"
+            android:label="시작하기" />
+
         <!-- 업데이트 설치 결과를 받는다(사용자 확인 창도 여기서 띄운다) -->
         <receiver
             android:name=".InstallReceiver"
