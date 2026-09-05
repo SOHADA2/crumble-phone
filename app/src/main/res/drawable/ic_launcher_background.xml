@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 따뜻한 갈색 바탕. 크럼블 메인 화면의 정체성 색이다(PC 봇 관제창과 같은 계열). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#C2703A"
+        android:pathData="M0,0 h108 v108 h-108 z" />
+</vector>

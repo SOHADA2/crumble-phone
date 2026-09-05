@@ -16,7 +16,9 @@
 
     <application
         android:allowBackup="false"
-        android:label="크럼블 폰봇 시험"
+        android:label="크럼블 폰봇"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
 

@@ -72,8 +72,8 @@ class CaptureService : Service() {
         val noti = Notification.Builder(this, CH)
             .setContentTitle("크럼블 폰봇")
             .setContentText("화면을 읽는 중")
-            .setSmallIcon(android.R.drawable.ic_menu_view)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "끄기", stopPi)
+            .setSmallIcon(R.drawable.ic_stat_bot)
+            .addAction(R.drawable.ic_stat_bot, "끄기", stopPi)
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(1, noti, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)

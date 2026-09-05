@@ -2,6 +2,7 @@ package com.sohada.crumblephone
 
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.media.projection.MediaProjectionManager
 import android.os.Build
@@ -12,137 +13,233 @@ import android.provider.Settings
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
 
 /**
- * 관제 화면. 이미지·커스텀 글꼴을 일부러 쓰지 않는다(가볍고 깔끔한 것이 우선).
- * 단색 몇 개 + 시스템 기본 글꼴 + 둥근 사각형만으로 만든다.
+ * 관제 화면. iOS 의 '묶음 목록(Inset Grouped)' 구조를 따랐다 —
+ * 큰 제목 → 지금 상태 카드 → 주 버튼 → 묶음 목록 → 기록.
+ *
+ * 이미지도 커스텀 글꼴도 쓰지 않는다(APK 를 가볍게 유지한다). 앱처럼 보이는 것은
+ * **색·간격·글자 크기의 위계**에서 나온다:
+ *   34 굵게(제목) · 22 중간(지금 하는 일) · 17(버튼·목록) · 15(설명) · 13(구역 이름)
+ * 색은 `Theme.kt` 가 라이트/다크 한 벌씩 들고 있다.
  */
 class MainActivity : AppCompatActivity() {
 
-    // ── 색 (어두운 중립 + 강조 하나) ──
-    private val BG = Color.parseColor("#14161A")
-    private val CARD = Color.parseColor("#1E2126")
-    private val LINE = Color.parseColor("#2A2E35")
-    private val TXT = Color.parseColor("#E9EBEE")
-    private val SUB = Color.parseColor("#9AA1AA")
-    private val ACCENT = Color.parseColor("#4C8DFF")
-    private val STOP = Color.parseColor("#E5484D")
-
+    private lateinit var t: Theme
     private val ui = Handler(Looper.getMainLooper())
     private val REQ_CAP = 1001
 
-    private lateinit var lblReady: TextView
+    private lateinit var lblSubtitle: TextView
+    private lateinit var dot: View
+    private lateinit var lblTask: TextView
     private lateinit var lblStatus: TextView
     private lateinit var lblDetail: TextView
-    private lateinit var btnChores: Button
-    private lateinit var btnTobol: Button
-    private lateinit var btnRewards: Button
-    private lateinit var btnStop: Button
-    private lateinit var btnCapOff: Button
-    private lateinit var setupRow: LinearLayout
+    private lateinit var btnPrimary: TextView
+    private lateinit var runRows: LinearLayout
+    private lateinit var setupSection: LinearLayout
+    private lateinit var rowAcc: LinearLayout
+    private lateinit var rowCap: LinearLayout
+    private lateinit var rowOverlay: LinearLayout
+    private lateinit var rowCapOff: LinearLayout
+    private lateinit var capOffSep: View
     private lateinit var logView: TextView
+    private var lastRunning: Boolean? = null      // 버튼 배경을 상태가 바뀔 때만 갈아 끼우려고 기억한다
 
     private fun dp(v: Int) = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
 
-    private fun round(color: Int, radius: Int, stroke: Int = 0, strokeColor: Int = 0) =
-        GradientDrawable().apply {
-            setColor(color)
-            cornerRadius = dp(radius).toFloat()
-            if (stroke > 0) setStroke(dp(stroke), strokeColor)
-        }
+    private fun dpf(v: Float) = TypedValue.applyDimension(
+        TypedValue.COMPLEX_UNIT_DIP, v, resources.displayMetrics)
 
-    private fun text(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
-        text = s; setTextSize(TypedValue.COMPLEX_UNIT_SP, size); setTextColor(color)
-        if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+    private fun text(s: String, size: Float, color: Int, face: Typeface? = null) = TextView(this).apply {
+        text = s
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
+        setTextColor(color)
+        if (face != null) typeface = face
     }
 
-    private fun button(s: String, fill: Int, fg: Int, outlined: Boolean = false, onClick: () -> Unit) =
-        Button(this).apply {
-            text = s
-            isAllCaps = false
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            setTextColor(fg)
-            stateListAnimator = null
-            background = if (outlined) round(Color.TRANSPARENT, 12, 1, fill) else round(fill, 12)
-            setOnClickListener { onClick() }
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(52)).apply { topMargin = dp(8) }
+    private val medium: Typeface get() = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+
+    // ── iOS 묶음 목록 조각들 ──────────────────────────────────
+
+    /** 구역 이름. 목록 위에 작게 붙는 회색 글씨. */
+    private fun sectionHeader(title: String) = text(title, 13f, t.label2, medium).apply {
+        setPadding(dp(20), dp(24), dp(20), dp(7))
+        letterSpacing = 0.02f
+    }
+
+    /** 셀들을 담는 둥근 카드. 모서리 클리핑은 여기서 한 번만 한다. */
+    private fun group(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = t.round(t.cell, dpf(12f))
+        clipToOutline = true
+        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+            leftMargin = dp(16); rightMargin = dp(16)
         }
+    }
+
+    /** 셀 사이 가는 선. 왼쪽은 글자 시작점까지 들여쓴다(iOS 방식). */
+    private fun separator(): View = View(this).apply {
+        setBackgroundColor(t.separator)
+        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, Math.max(1, (dpf(0.5f)).toInt())).apply {
+            leftMargin = dp(16)
+        }
+    }
+
+    /**
+     * 목록 한 줄. 왼쪽 제목 · 오른쪽 값 · 그 옆 꺾쇠.
+     * `tint` 를 주면 제목이 그 색이 된다(위험한 동작을 빨갛게 표시할 때).
+     */
+    private fun row(
+        title: String,
+        value: String = "",
+        chevron: Boolean = true,
+        tint: Int? = null,
+        onClick: () -> Unit
+    ): LinearLayout {
+        val lbl = text(title, 17f, tint ?: t.label).apply {
+            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+        }
+        val v = text(value, 17f, t.label2).apply { tag = "value" }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = t.ripple(t.cell)
+            minimumHeight = dp(50)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            addView(lbl)
+            addView(v)
+            if (chevron) addView(text("›", 20f, t.label3).apply {
+                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(6) }
+            })
+            isClickable = true
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun LinearLayout.setValue(s: String, color: Int) {
+        (findViewWithTag<TextView>("value"))?.let { it.text = s; it.setTextColor(color) }
+    }
+
+    private fun LinearLayout.enable(on: Boolean) {
+        isEnabled = on; alpha = if (on) 1f else 0.35f
+    }
+
+    // ── 화면 ─────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        t = Theme.of(this)
+        window.statusBarColor = t.bg
+        window.navigationBarColor = t.bg
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !t.dark
+            isAppearanceLightNavigationBars = !t.dark
+        }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(BG)
-            setPadding(dp(20), dp(28), dp(20), dp(20))
+            setBackgroundColor(t.bg)
+            setPadding(0, dp(8), 0, dp(32))
         }
 
-        root.addView(text("크럼블 폰봇", 24f, TXT, bold = true))
-        lblReady = text("", 12f, SUB).apply { setPadding(0, dp(4), 0, dp(18)) }
-        root.addView(lblReady)
-
-        // 상태 카드
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = round(CARD, 16, 1, LINE)
-            setPadding(dp(18), dp(16), dp(18), dp(16))
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
-        }
-        lblStatus = text("쉬는 중", 20f, TXT, bold = true)
-        lblDetail = text("", 13f, SUB).apply { setPadding(0, dp(4), 0, 0) }
-        card.addView(lblStatus); card.addView(lblDetail)
-        root.addView(card)
-
-        // 봇 본체가 주력이다 — 보상을 안 받으면 재료가 0 이라 다른 게 다 막힌다.
-        btnChores = button("봇 본체 시작", ACCENT, Color.WHITE) {
-            Overlay.show(applicationContext); Chores.start(applicationContext)
-        }
-        btnTobol = button("토벌전 시작", LINE, TXT) {
-            Overlay.show(applicationContext); Runner.startTobol(applicationContext)
-        }
-        btnRewards = button("보상만 받기", LINE, TXT) {
-            Overlay.show(applicationContext); Chores.startRewardsOnly(applicationContext)
-        }
-        btnStop = button("멈추기", STOP, STOP, outlined = true) { Runner.stop() }
-        root.addView(btnChores); root.addView(btnTobol); root.addView(btnRewards); root.addView(btnStop)
-
-        // 준비 줄 — 아직 안 된 게 있을 때만 보인다
-        setupRow = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(14), 0, 0)
-        }
-        setupRow.addView(text("준비", 12f, SUB))
-        setupRow.addView(button("접근성 서비스 켜기", LINE, TXT) {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        // 큰 제목
+        root.addView(text("크럼블 폰봇", 34f, t.label, Typeface.DEFAULT_BOLD).apply {
+            setPadding(dp(20), dp(12), dp(20), 0)
         })
-        setupRow.addView(button("화면 읽기 허용", LINE, TXT) { askProjection() })
-        setupRow.addView(button("게임 위에 표시 허용", LINE, TXT) {
+        lblSubtitle = text("", 15f, t.label2).apply { setPadding(dp(20), dp(2), dp(20), 0) }
+        root.addView(lblSubtitle)
+
+        // ── 지금 상태 ──
+        val hero = group().apply {
+            setPadding(dp(18), dp(16), dp(18), dp(18))
+            (layoutParams as LinearLayout.LayoutParams).topMargin = dp(20)
+        }
+        dot = View(this).apply {
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(t.label3) }
+            layoutParams = LinearLayout.LayoutParams(dp(8), dp(8)).apply { rightMargin = dp(7) }
+        }
+        lblTask = text("대기 중", 13f, t.label2, medium)
+        hero.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(dot); addView(lblTask)
+        })
+        lblStatus = text("쉬는 중", 22f, t.label, medium).apply { setPadding(0, dp(8), 0, 0) }
+        lblDetail = text("", 15f, t.label2).apply { setPadding(0, dp(3), 0, 0) }
+        hero.addView(lblStatus); hero.addView(lblDetail)
+        root.addView(hero)
+
+        // ── 주 버튼 (도는 중이면 멈추기로 바뀐다) ──
+        btnPrimary = text("봇 본체 시작", 17f, Color.WHITE, medium).apply {
+            gravity = Gravity.CENTER
+            background = t.rippleRound(t.blue, dpf(12f))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(50)).apply {
+                leftMargin = dp(16); rightMargin = dp(16); topMargin = dp(16)
+            }
+            isClickable = true
+            setOnClickListener { onPrimary() }
+        }
+        root.addView(btnPrimary)
+
+        // ── 자동 실행 ──
+        root.addView(sectionHeader("자동 실행"))
+        runRows = group()
+        val rTobol = row("토벌전") { Overlay.show(applicationContext); Runner.startTobol(applicationContext) }
+        val rReward = row("보상만 받기", "안전") { Overlay.show(applicationContext); Chores.startRewardsOnly(applicationContext) }
+        runRows.addView(rTobol); runRows.addView(separator()); runRows.addView(rReward)
+        root.addView(runRows)
+
+        // ── 준비 (다 되면 통째로 사라진다) ──
+        setupSection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        setupSection.addView(sectionHeader("준비"))
+        val g2 = group()
+        rowAcc = row("접근성 서비스") { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+        rowCap = row("화면 읽기") { askProjection() }
+        rowOverlay = row("게임 위에 표시") {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 android.net.Uri.parse("package:" + packageName)))
+        }
+        g2.addView(rowAcc); g2.addView(separator()); g2.addView(rowCap); g2.addView(separator()); g2.addView(rowOverlay)
+        setupSection.addView(g2)
+        root.addView(setupSection)
+
+        // ── 도구 ──
+        root.addView(sectionHeader("도구"))
+        val g3 = group()
+        g3.addView(row("게임 켜기") { launchGame() })
+        capOffSep = separator()
+        rowCapOff = row("화면 읽기 끄기", tint = t.red) { CaptureService.stop(applicationContext) }
+        g3.addView(capOffSep); g3.addView(rowCapOff)
+        g3.addView(separator())
+        g3.addView(row("새 APK 받기") { openReleases() })
+        root.addView(g3)
+
+        // ── 기록 ──
+        root.addView(sectionHeader("기록"))
+        logView = text("", 12f, t.label2, Typeface.MONOSPACE).apply { setLineSpacing(dpf(2f), 1f) }
+        root.addView(group().apply {
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            addView(ScrollView(this@MainActivity).apply {
+                addView(logView)
+                isVerticalScrollBarEnabled = false
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(180))
+            })
         })
-        root.addView(setupRow)
 
-        root.addView(button("게임 켜기", LINE, TXT) { launchGame() })
-        // 화면 읽기는 포그라운드 서비스라 앱을 최근목록에서 밀어내도 안 꺼진다.
-        // 켜는 길만 있고 끄는 길이 없으면 알림이 계속 남는다.
-        btnCapOff = button("화면 읽기 끄기", LINE, SUB) { CaptureService.stop(applicationContext) }
-        root.addView(btnCapOff)
-        // 앱은 스스로 업데이트되지 않는다(안드로이드 APK 라서). 릴리스 페이지를 열어 직접 받는다.
-        root.addView(button("새 APK 받기", LINE, SUB) { openReleases() })
-
-        root.addView(text("기록", 12f, SUB).apply { setPadding(0, dp(18), 0, dp(6)) })
-        logView = text("", 11.5f, SUB)
-        root.addView(ScrollView(this).apply {
-            addView(logView)
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f)
+        setContentView(ScrollView(this).apply {
+            addView(root)
+            setBackgroundColor(t.bg)
+            isVerticalScrollBarEnabled = false
+            fitsSystemWindows = true
+            layoutParams = ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
         })
-
-        setContentView(ScrollView(this).apply { addView(root); setBackgroundColor(BG) })
 
         Bot.logger = { s -> ui.post { logView.append(s + "\n") } }
         if (Build.VERSION.SDK_INT >= 33) {
@@ -151,25 +248,53 @@ class MainActivity : AppCompatActivity() {
         tick()
     }
 
+    /** 주 버튼은 하나뿐이다 — 쉴 때는 [봇 본체 시작], 돌 때는 [멈추기]. */
+    private fun onPrimary() {
+        if (Runner.running) Runner.stop()
+        else { Overlay.show(applicationContext); Chores.start(applicationContext) }
+    }
+
     /** 1초마다 상태만 갈아 끼운다(무거운 일은 하지 않는다). */
     private fun tick() {
         val accOk = TapService.isReady
         val capOk = CaptureService.instance != null
-        lblReady.text = "접근성 " + (if (accOk) "✓" else "✗") + " · 화면 읽기 " + (if (capOk) "✓" else "✗") +
-                        " · 게임 위 표시 " + (if (Overlay.canDraw(this)) "✓" else "✗")
         val ovOk = Overlay.canDraw(this)
-        setupRow.visibility = if (accOk && capOk && ovOk) View.GONE else View.VISIBLE
+        val ready = accOk && capOk
 
+        rowAcc.setValue(if (accOk) "켜짐" else "필요", if (accOk) t.green else t.orange)
+        rowCap.setValue(if (capOk) "켜짐" else "필요", if (capOk) t.green else t.orange)
+        rowOverlay.setValue(if (ovOk) "켜짐" else "권장", if (ovOk) t.green else t.label2)
+        setupSection.visibility = if (accOk && capOk && ovOk) View.GONE else View.VISIBLE
+        rowCapOff.visibility = if (capOk) View.VISIBLE else View.GONE
+        capOffSep.visibility = rowCapOff.visibility
+
+        lblSubtitle.text = when {
+            Runner.running -> "봇이 게임을 대신 하고 있어요"
+            ready          -> "시작할 준비가 됐어요"
+            else           -> "아래 '준비'를 먼저 해 주세요"
+        }
+
+        // 지금 상태
+        val running = Runner.running
+        (dot.background as GradientDrawable).setColor(if (running) t.green else t.label3)
+        lblTask.text = if (running) (if (Runner.task.isEmpty()) "실행 중" else Runner.task) else "대기 중"
+        lblTask.setTextColor(if (running) t.green else t.label2)
         lblStatus.text = Runner.status
         lblDetail.text = if (Runner.detail.isNotEmpty()) Runner.detail
-                         else if (Runner.lastResult.isNotEmpty()) "지난 결과: " + Runner.lastResult else ""
-        val canStart = !Runner.running && accOk && capOk
-        for (b in arrayOf(btnChores, btnTobol, btnRewards)) {
-            b.isEnabled = canStart
-            b.alpha = if (canStart) 1f else 0.4f
+                         else if (Runner.lastResult.isNotEmpty()) "지난 결과 · " + Runner.lastResult else ""
+        lblDetail.visibility = if (lblDetail.text.isNullOrEmpty()) View.GONE else View.VISIBLE
+
+        if (lastRunning != running) {
+            lastRunning = running
+            btnPrimary.text = if (running) "멈추기" else "봇 본체 시작"
+            btnPrimary.background = t.rippleRound(if (running) t.red else t.blue, dpf(12f))
         }
-        btnStop.visibility = if (Runner.running) View.VISIBLE else View.GONE
-        btnCapOff.visibility = if (capOk) View.VISIBLE else View.GONE
+        btnPrimary.isEnabled = running || ready
+        btnPrimary.alpha = if (btnPrimary.isEnabled) 1f else 0.35f
+
+        for (i in 0 until runRows.childCount) {
+            (runRows.getChildAt(i) as? LinearLayout)?.enable(!running && ready)
+        }
 
         ui.postDelayed({ tick() }, 1000)
     }

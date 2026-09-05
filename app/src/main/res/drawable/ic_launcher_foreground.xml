@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 쿠키 한 조각. 이미지 파일을 쓰지 않으려고 벡터로 그렸다(APK 크기에 영향이 없다).
+     적응형 아이콘 규격: 108x108, 가운데 72x72 안에만 그림을 둔다(바깥은 잘릴 수 있다). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 쿠키 몸통 -->
+    <path
+        android:fillColor="#FFF3DC"
+        android:pathData="M27,54 A27,27 0 1,1 81,54 A27,27 0 1,1 27,54 Z" />
+
+    <path android:fillColor="#8A5323" android:pathData="M40.4,45 A4.6,4.6 0 1,1 49.6,45 A4.6,4.6 0 1,1 40.4,45 Z" />
+    <path android:fillColor="#8A5323" android:pathData="M61.0,51 A4.0,4.0 0 1,1 69.0,51 A4.0,4.0 0 1,1 61.0,51 Z" />
+    <path android:fillColor="#8A5323" android:pathData="M45.0,66 A5.0,5.0 0 1,1 55.0,66 A5.0,5.0 0 1,1 45.0,66 Z" />
+    <path android:fillColor="#8A5323" android:pathData="M62.6,67 A3.4,3.4 0 1,1 69.4,67 A3.4,3.4 0 1,1 62.6,67 Z" />
+</vector>

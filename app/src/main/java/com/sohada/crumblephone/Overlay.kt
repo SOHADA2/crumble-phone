@@ -36,6 +36,7 @@ object Overlay {
     private var lp: WindowManager.LayoutParams? = null
     private var label: TextView? = null
     private var stopBtn: TextView? = null
+    private var dotView: View? = null
     private var expanded = false
     private var idleTicks = 0
     private val ui = Handler(Looper.getMainLooper())
@@ -50,30 +51,37 @@ object Overlay {
         if (view != null || !canDraw(ctx)) return
         val w = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
+        // 게임 위에 뜨는 것이라 게임이 밝든 어둡든 읽혀야 한다 → 관제 화면의 라이트/다크와
+        // 무관하게 언제나 어두운 반투명 알약으로 둔다(iOS 의 다크 재질과 같은 결).
         val bg = GradientDrawable().apply {
-            setColor(Color.parseColor("#DD1E2126"))
-            cornerRadius = dp(ctx, 18).toFloat()
-            setStroke(dp(ctx, 1), Color.parseColor("#3A3F47"))
+            setColor(Color.parseColor("#E61C1C1E"))
+            cornerRadius = dp(ctx, 100).toFloat()      // 완전한 알약 모양
         }
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = bg
-            setPadding(dp(ctx, 12), dp(ctx, 8), dp(ctx, 12), dp(ctx, 8))
+            elevation = dp(ctx, 6).toFloat()
+            setPadding(dp(ctx, 14), dp(ctx, 9), dp(ctx, 14), dp(ctx, 9))
         }
-        val dot = TextView(ctx).apply {
-            text = "●"; setTextColor(Color.parseColor("#4C8DFF"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
-            setPadding(0, 0, dp(ctx, 8), 0)
+        val dot = View(ctx).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL; setColor(Color.parseColor("#30D158"))
+            }
+            layoutParams = LinearLayout.LayoutParams(dp(ctx, 7), dp(ctx, 7)).apply {
+                rightMargin = dp(ctx, 8)
+            }
         }
         val txt = TextView(ctx).apply {
-            text = "쉬는 중"; setTextColor(Color.parseColor("#E9EBEE"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            text = "쉬는 중"; setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         }
         val stop = TextView(ctx).apply {
-            text = "멈추기"; setTextColor(Color.parseColor("#E5484D"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setPadding(dp(ctx, 12), 0, 0, 0)
+            text = "멈추기"; setTextColor(Color.parseColor("#FF453A"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            setPadding(dp(ctx, 14), 0, 0, 0)
             visibility = View.GONE
             setOnClickListener { Runner.stop() }
         }
@@ -121,14 +129,14 @@ object Overlay {
         }
 
         try { w.addView(box, p) } catch (e: Exception) { Bot.log("오버레이 실패: ${e.message}"); return }
-        wm = w; view = box; lp = p; label = txt; stopBtn = stop
+        wm = w; view = box; lp = p; label = txt; stopBtn = stop; dotView = dot
         tick()
     }
 
     fun hide() {
         val w = wm; val v = view
         ui.post { if (w != null && v != null) try { w.removeView(v) } catch (_: Exception) {} }
-        wm = null; view = null; lp = null; label = null; stopBtn = null; expanded = false
+        wm = null; view = null; lp = null; label = null; stopBtn = null; dotView = null; expanded = false
     }
 
     /** 1초마다 글자만 갈아 끼운다. 돌고 있지 않으면 알약을 접어 둔다. */
@@ -138,6 +146,8 @@ object Overlay {
             Runner.status + (if (Runner.detail.isNotEmpty()) " · " + Runner.detail else "")
         } else "쉬는 중"
         if (l.text != s) l.text = s
+        (dotView?.background as? GradientDrawable)?.setColor(
+            if (Runner.running) Color.parseColor("#30D158") else Color.parseColor("#8E8E93"))
         if (!Runner.running) {
             if (expanded) { expanded = false; stopBtn?.visibility = View.GONE }
             // 다 끝났으면 결과를 잠깐 보여 준 뒤 알아서 사라진다(게임 화면을 가리지 않게).
