@@ -143,7 +143,10 @@ object Overlay {
     private fun tick() {
         val l = label ?: return
         val s = if (Runner.running) {
-            Runner.status + (if (Runner.detail.isNotEmpty()) " · " + Runner.detail else "")
+            val pct = Runner.progress
+            Runner.status +
+                (if (pct >= 0) " " + pct + "%" else "") +
+                (if (Runner.detail.isNotEmpty()) " · " + Runner.detail else "")
         } else "쉬는 중"
         if (l.text != s) l.text = s
         (dotView?.background as? GradientDrawable)?.setColor(

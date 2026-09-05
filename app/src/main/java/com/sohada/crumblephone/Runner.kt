@@ -16,6 +16,12 @@ object Runner {
     @Volatile var status = "쉬는 중"        // 큰 글씨로 보일 한 줄
     @Volatile var detail = ""              // 작은 글씨 상세
     @Volatile var lastResult = ""          // 끝난 뒤에도 남길 결과
+    /**
+     * 진행률 0~100. **-1 이면 막대를 숨긴다.**
+     * 진짜 분모가 있을 때만 채운다 — 없는 걸 지어내면 막대가 거짓말을 한다.
+     * `set()` 으로 새 상태를 쓰면 자동으로 -1 이 된다(다음 단계로 넘어갔으니 앞 막대는 의미가 없다).
+     */
+    @Volatile var progress = -1
     @Volatile var lastScore = 0L           // 이번 판 점수
     @Volatile var bestScore = 0L           // 이번 세션 최고 점수
 
@@ -41,7 +47,15 @@ object Runner {
 
     internal fun sleep(ms: Long) = Thread.sleep(ms)
 
-    internal fun set(s: String, d: String = "") { status = s; detail = d; Bot.log("$s ${if (d.isEmpty()) "" else "· $d"}") }
+    internal fun set(s: String, d: String = "") {
+        status = s; detail = d; progress = -1
+        Bot.log("$s ${if (d.isEmpty()) "" else "· $d"}")
+    }
+
+    /** 진행률을 '한 일 / 전체'로 담는다. 전체가 0 이하면 막대를 숨긴다. */
+    fun setProgress(done: Int, total: Int) {
+        progress = if (total <= 0) -1 else (100L * done / total).toInt().coerceIn(0, 100)
+    }
 
     fun tap(p: IntArray, waitMs: Long = 1800) { TapService.tap(p[0], p[1]); sleep(waitMs) }
 
@@ -203,11 +217,17 @@ object Runner {
             tap(Screen.TOBOL_CHALLENGE, 3000)
 
             var over = false
-            val deadline = System.currentTimeMillis() + 90_000
+            val WAIT_MS = 90_000L
+            val started = System.currentTimeMillis()
+            val deadline = started + WAIT_MS
             while (System.currentTimeMillis() < deadline && running) {
                 val s = shot()
                 if (s != null && Screen.isBattleOver(s)) { over = true; break }
-                status = "토벌전 " + attempts + "회차"; detail = if (bestScore > 0) "자동 전투 중 · 최고 " + Ocr.comma(bestScore) else "자동 전투 중"
+                status = "토벌전 " + attempts + "회차"
+                detail = if (bestScore > 0) "자동 전투 중 · 최고 " + Ocr.comma(bestScore) else "자동 전투 중"
+                // 전투가 얼마나 걸릴지는 모른다. 이 막대는 '포기까지 얼마나 남았나'다 —
+                // 전투가 끝나면 다음 회차에서 0 부터 다시 찬다.
+                setProgress(((System.currentTimeMillis() - started) / 1000).toInt(), (WAIT_MS / 1000).toInt())
                 sleep(3000)
             }
             if (!running) break

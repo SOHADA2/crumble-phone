@@ -25,6 +25,7 @@ object Chores {
     private const val BOSS_WAIT_SEC = 35L         // 보스 소환 후 결과 대기 (실측: 전투 ~30초에 종료)
     private const val BOSS_PRESETS = 5            // 쿠키 조합 1~5 를 하나씩 바꿔 가며 도전한다
     private const val BACKOFF_MINUTES = 15L       // 조합을 다 써도 못 깼을 때 쉬는 시간
+    private const val REWARD_STEPS = 6            // 보상 받기 걸음 수(미션 3탭 + 출석 3단계) — 진행률용
 
     /**
      * 이 퀘스트에서 오븐을 이미 돌려 봤나.
@@ -127,6 +128,7 @@ object Chores {
                 val left = (bossWaitUntil - System.currentTimeMillis()) / 1000
                 Runner.status = "보스전 진행 중"
                 Runner.detail = "쿠키 조합 " + bossTries + "/" + BOSS_PRESETS + " · " + left + "초 남음"
+                Runner.setProgress((BOSS_WAIT_SEC - left).toInt(), BOSS_WAIT_SEC.toInt())
                 Runner.sleep(4000); continue
             }
 
@@ -322,6 +324,7 @@ object Chores {
                 return true
             }
             Runner.set("뽑기 결과 정리하는 중")
+            Runner.setProgress(i, 24)
             Runner.tap(Screen.GACHA_CLOSE, 1200)
         }
         if (!back) { Bot.log("    뽑기 화면 복귀 실패"); return false }
@@ -368,11 +371,14 @@ object Chores {
     /** 미션 창을 열어 일일·주간·도전 탭에서 각각 '모두 받기'. 이미 받았으면 회색이라 눌러도 무해하다. */
     private fun claimMissions() {
         Runner.set("보상 받기", "미션")
+        Runner.setProgress(0, REWARD_STEPS)
         Runner.tap(Screen.ICON_MISSION, 2500)
         val chk = Runner.shot()
         if (chk != null && Screen.atMain(chk)) { Bot.log("  [보상] 미션 창이 안 열렸어요 - 건너뜁니다"); return }
+        var step = 0
         for (tab in Screen.MISSION_TABS) {
             if (!Runner.running) return
+            Runner.setProgress(++step, REWARD_STEPS)
             Runner.tap(tab, 1500)
             Runner.tap(Screen.CLAIM_ALL, 1800)
             Runner.tap(Screen.CLAIM_ALL, 1200)   // 보상 팝업이 떴으면 한 번 더(없으면 무해)
@@ -389,15 +395,18 @@ object Chores {
      */
     private fun claimAttendance() {
         Runner.set("보상 받기", "출석")
+        Runner.setProgress(3, REWARD_STEPS)      // 미션 세 탭을 이미 지나왔다
         Runner.tap(Screen.ICON_CALENDAR, 2500)
         val chk = Runner.shot()
         if (chk != null && Screen.atMain(chk)) { Bot.log("  [보상] 이벤트 창이 안 열렸어요 - 건너뜁니다"); return }
         Runner.tap(Screen.ATT_MIRACLE, 1800)     // 기적의 출석 탭
         Runner.tap(Screen.ATT_CLAIM, 1800)
         Runner.tap(Screen.ATT_CLAIM, 1200)
+        Runner.setProgress(4, REWARD_STEPS)
         Runner.tap(Screen.ATT_NEW, 1800)         // 신규 출석 탭(기적을 고른 뒤에야 보인다)
         Runner.tap(Screen.ATT_CLAIM, 1800)
         Runner.tap(Screen.ATT_CLAIM, 1200)
+        Runner.setProgress(5, REWARD_STEPS)
         Runner.tap(Screen.SUB_CLOSE, 1500)
         Runner.tap(Screen.SUB_CLOSE, 2000)
         Bot.log("  [보상] 출석 수령 완료")

@@ -74,6 +74,7 @@ object Oven {
             // 140초 동안 팝업 55개(≈장비 110개)를 뽑아 재화를 크게 낭비했다.
             val deadline = System.currentTimeMillis() + maxOf(60, count * 7) * 1000L
             Runner.set("오븐에서 장비 뽑는 중", "0/" + MAX_DISMISS)
+            Runner.setProgress(0, MAX_DISMISS)
             while (System.currentTimeMillis() < deadline && dismissed < MAX_DISMISS && Runner.running) {
                 val cur = Runner.shot()
                 if (cur == null) { Runner.sleep(2000); continue }
@@ -87,6 +88,7 @@ object Oven {
                     Runner.tap(Screen.OUTSIDE, 1000)   // 넘기면 오븐에 쌓인다(퀘스트 수치도 오른다)
                     dismissed++
                     Runner.set("오븐에서 장비 뽑는 중", dismissed.toString() + "/" + MAX_DISMISS)
+                    Runner.setProgress(dismissed, MAX_DISMISS)
                     // 팝업이 사라진 순간에 띠가 드러난다. 여기서 다시 봐야 완료를 안 놓친다.
                     val after = Runner.shot()
                     if (after != null && Screen.questBarRatio(after) >= DONE_STRICT) {

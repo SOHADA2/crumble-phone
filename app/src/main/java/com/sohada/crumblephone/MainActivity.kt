@@ -38,6 +38,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var lblSubtitle: TextView
     private lateinit var dot: View
     private lateinit var lblTask: TextView
+    private lateinit var lblPercent: TextView
+    private lateinit var track: FrameLayout
+    private lateinit var fill: View
     private lateinit var lblStatus: TextView
     private lateinit var lblDetail: TextView
     private lateinit var btnPrimary: TextView
@@ -50,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var capOffSep: View
     private lateinit var logView: TextView
     private var lastRunning: Boolean? = null      // 버튼 배경을 상태가 바뀔 때만 갈아 끼우려고 기억한다
+    private var lastProgress = -1
 
     private fun dp(v: Int) = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
@@ -165,15 +169,34 @@ class MainActivity : AppCompatActivity() {
             background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(t.label3) }
             layoutParams = LinearLayout.LayoutParams(dp(8), dp(8)).apply { rightMargin = dp(7) }
         }
-        lblTask = text("대기 중", 13f, t.label2, medium)
+        lblTask = text("대기 중", 13f, t.label2, medium).apply {
+            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+        }
+        lblPercent = text("", 13f, t.label2, medium)
         hero.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(dot); addView(lblTask)
+            addView(dot); addView(lblTask); addView(lblPercent)
         })
         lblStatus = text("쉬는 중", 22f, t.label, medium).apply { setPadding(0, dp(8), 0, 0) }
         lblDetail = text("", 15f, t.label2).apply { setPadding(0, dp(3), 0, 0) }
         hero.addView(lblStatus); hero.addView(lblDetail)
+
+        // 진행률 막대. 너비를 직접 바꾸면 애니메이션이 안 되므로,
+        // 꽉 찬 막대를 왼쪽 기준으로 scaleX 만 줄여 둔다(그건 부드럽게 움직인다).
+        fill = View(this).apply {
+            background = t.round(t.blue, dpf(2f))
+            layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+            pivotX = 0f
+            scaleX = 0f
+        }
+        track = FrameLayout(this).apply {
+            background = t.round(t.separator, dpf(2f))
+            addView(fill)
+            visibility = View.GONE
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(4)).apply { topMargin = dp(14) }
+        }
+        hero.addView(track)
         root.addView(hero)
 
         // ── 주 버튼 (도는 중이면 멈추기로 바뀐다) ──
@@ -283,6 +306,21 @@ class MainActivity : AppCompatActivity() {
         lblDetail.text = if (Runner.detail.isNotEmpty()) Runner.detail
                          else if (Runner.lastResult.isNotEmpty()) "지난 결과 · " + Runner.lastResult else ""
         lblDetail.visibility = if (lblDetail.text.isNullOrEmpty()) View.GONE else View.VISIBLE
+
+        // 진행률 — 진짜 분모가 있는 작업만 막대를 보여 준다(-1 이면 숨긴다).
+        val p = Runner.progress
+        if (p < 0) {
+            track.visibility = View.GONE
+            lblPercent.text = ""
+            lastProgress = -1
+        } else {
+            track.visibility = View.VISIBLE
+            lblPercent.text = p.toString() + "%"
+            if (p != lastProgress) {
+                lastProgress = p
+                fill.animate().scaleX(p / 100f).setDuration(280).start()
+            }
+        }
 
         if (lastRunning != running) {
             lastRunning = running
