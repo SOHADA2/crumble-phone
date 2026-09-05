@@ -6,23 +6,25 @@ import kotlin.concurrent.thread
 /**
  * 봇 본체 — PC 봇 `bot.ps1`(+ `box.ps1`)의 퀘스트 순환을 옮긴 것.
  *
- * 하는 일은 셋이다.
+ * 하는 일은 넷이다.
  *   ① 보상 자동 받기 — 미션 '모두 받기' + 출석 '받기' (20분마다)
  *   ② 완료된 퀘스트 수령 — 퀘스트 띠가 완료 색이면 눌러서 받는다
- *   ③ 다음 퀘스트가 행동형이면 대신 해 준다 — 쿠키 뽑기 10회 / 가방 상자 사용 / 오븐 장비 뽑기
+ *   ③ 다음 퀘스트가 행동형이면 대신 해 준다 — 쿠키 뽑기 10회 / 가방 상자 / 오븐 장비 뽑기
+ *   ④ 스테이지가 막히면 보스를 깬다 — 쿠키 조합 1~5 를 바꿔 가며 최대 5번
  *
  * ★ 이 고리를 모르면 초반에 영영 못 나간다(PC 봇에서 몇 시간을 헛돌았다):
  *     방치 전투로 몹 처치 → 퀘스트 완료 → **보상 수령** → 레벨업 재료·골드
  *       → 편성 팀 레벨업 → 전투력 상승 → 보스 클리어 → 다음 스테이지
  *   보상을 안 받으면 재료가 0 이라 레벨업을 눌러도 아무 일이 없다.
- *
- * 아직 안 옮긴 것: 보스 소환. 스테이지 클리어형 퀘스트는 그냥 지나간다.
  */
 object Chores {
 
     private const val POWERSAVE_CV = 0.4          // 독의 변동계수가 이보다 낮으면 절전(평평한 화면)
     private const val COMPLETE_RATIO = 0.85       // 퀘스트 띠가 이 이상이면 완료
     private const val REWARD_MINUTES = 20L        // 보상 자동 받기 주기
+    private const val BOSS_WAIT_SEC = 35L         // 보스 소환 후 결과 대기 (실측: 전투 ~30초에 종료)
+    private const val BOSS_PRESETS = 5            // 쿠키 조합 1~5 를 하나씩 바꿔 가며 도전한다
+    private const val BACKOFF_MINUTES = 15L       // 조합을 다 써도 못 깼을 때 쉬는 시간
 
     /**
      * 이 퀘스트에서 오븐을 이미 돌려 봤나.
@@ -78,6 +80,9 @@ object Chores {
         var offMain = 0           // 메인이 아닌 상태가 연속 몇 번인지
         var covered = 0           // 퀘스트 띠 가림이 연속 몇 번째인지
         var powersave = 0         // 절전 해제를 몇 번 시도했는지
+        var bossTries = 0         // 이 퀘스트에서 보스를 몇 번 도전했는지(조합 번호이기도 하다)
+        var bossWaitUntil = 0L    // 내가 소환한 보스전이 끝날 때까지
+        var probeAllowedAt = 0L   // 조합을 다 써서 쉬는 중이면 이 시각까지 탐색을 미룬다
         var nextRewardAt = System.currentTimeMillis()      // 시작하자마자 한 번 받는다
 
         while (Runner.running) {
@@ -108,6 +113,22 @@ object Chores {
                 Runner.sleep(4000); continue
             }
             if (powersave > 0) { powersave = 0; Bot.log("화면 정상 - 작업 재개") }
+
+            // ── 내가 소환한 보스전이 도는 중이면 아무것도 누르지 않고 기다린다 ──
+            // 보스전 중인지를 화면 색으로 알아내려던 시도는 두 번 다 실패했다(PC 봇 기록):
+            //   상단 이름표 자리는 스테이지 배경에 좌우되고(사막 -13 / 초록 들판 +85),
+            //   '보스 소환' 버튼 자리는 보스 HP 바도 같은 빨강이라 전투 중에도 값이 똑같다.
+            // 그래서 화면을 안 읽고 '내가 소환한 시각'만 기억해서 그 동안 기다린다.
+            //
+            // ※ PC 봇은 이 검사를 팝업 닫기·보상 뒤에 뒀지만 여기서는 앞으로 당겼다.
+            //   전투 중에 뒤로가기를 누르면 '전투를 바로 종료하시겠습니까?' 창이 뜨고,
+            //   보상을 받으러 창을 여닫으면 전투 중에 화면을 헤집게 된다. 기다리는 게 맞다.
+            if (System.currentTimeMillis() < bossWaitUntil) {
+                val left = (bossWaitUntil - System.currentTimeMillis()) / 1000
+                Runner.status = "보스전 진행 중"
+                Runner.detail = "쿠키 조합 " + bossTries + "/" + BOSS_PRESETS + " · " + left + "초 남음"
+                Runner.sleep(4000); continue
+            }
 
             val atMain = dock.ratio >= 0.1 && !Screen.hasCloseButton(b)
 
@@ -160,15 +181,47 @@ object Chores {
                 Runner.set("퀘스트 보상 받는 중", "지금까지 " + quests + "개")
                 Bot.log("퀘스트 수령 (" + fmt(ratio) + ")")
                 Runner.tap(Screen.QUEST_BAR, 2500)
-                ovenTried = false          // 새 퀘스트가 올라왔으니 오븐 기회를 되돌린다
+                // 새 퀘스트가 올라왔으니 오븐·보스 기회를 되돌린다.
+                // 백오프도 같이 푼다 — 안 그러면 앞 퀘스트 때문에 걸린 15분이
+                // 이미 교체된 새 퀘스트의 탐색까지 막아 버린다.
+                ovenTried = false
+                bossTries = 0
+                probeAllowedAt = 0L
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 Runner.sleep(3000); continue
             }
 
-            // ── 미완료 퀘스트: 행동형이면 대신 해 준다 ──
+            // ── 미완료 퀘스트 ──
             Runner.status = "퀘스트 기다리는 중"
             Runner.detail = "받은 퀘스트 " + quests + "개 · 대신 해 준 일 " + handled + "번"
-            if (probe()) handled++
+
+            if (System.currentTimeMillis() < probeAllowedAt) { Runner.sleep(8000); continue }
+
+            // 행동형(뽑기·상자·오븐)이면 대신 해 준다.
+            if (probe()) { handled++; Runner.sleep(3000); continue }
+
+            // 탐색으로도 안 풀렸다 = 스테이지 클리어형. 보스를 깨야 넘어간다.
+            // 이때 게임이 '보스만 눌리는 락'을 건다(빈 곳이나 퀘스트를 눌러도 안 풀리고 보스 버튼만
+            // 반응한다). 보스를 한 판 소환해 들어갔다 나오면 풀린다.
+            //
+            // ⚠️ 여기서 버튼이 있는지 색으로 확인하지 않는다. PC 봇은 빨강 판정을 썼다가
+            //    배너 위로 전투 이펙트·데미지 숫자가 겹쳐 값이 흔들려(락 2.09 vs 다른 프레임 0.76)
+            //    버튼을 놓치고 갇혔다. 이 자리는 탐색이 이미 실패한 뒤라 바로 눌러도 된다.
+            if (bossTries < BOSS_PRESETS) {
+                bossTries++
+                Runner.set("보스전 준비 중", "쿠키 조합 " + bossTries + "/" + BOSS_PRESETS)
+                switchPreset(bossTries)            // 보스가 세면 조합을 바꿔 가며 도전한다
+                Runner.tap(Screen.BOSS_SUMMON, 6000)
+                bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
+                continue
+            }
+
+            // 조합 1~5 를 다 써도 못 깼다. 여기서 멈춰 버리면 그 뒤로 보상도 못 받으니
+            // 잠시 쉬었다가 처음부터 다시 해 본다(그 사이 쿠키가 크면 저절로 넘어가기도 한다).
+            Runner.set("보스를 못 깼어요", "쿠키 조합 1~5 모두 도전함 · " + BACKOFF_MINUTES + "분 뒤 다시")
+            Bot.log("쿠키 조합 1~5 를 모두 도전했지만 실패했어요 (" + BACKOFF_MINUTES + "분 뒤 재시도)")
+            probeAllowedAt = System.currentTimeMillis() + BACKOFF_MINUTES * 60_000
+            bossTries = 0                          // 쉬고 나면 조합 1번부터 다시
             Runner.sleep(8000)
         }
         if (Runner.running) Runner.set("봇 본체 끝", "퀘스트 " + quests + "개를 받았어요")
@@ -217,6 +270,17 @@ object Chores {
         val after = Runner.shot()
         if (after != null && !Screen.atMain(after)) { TapService.back(); Runner.sleep(3000) }
         return false
+    }
+
+    /**
+     * 쿠키 조합(프리셋) n 번으로 바꾼다. 보스가 세서 못 깰 때 1~5 를 하나씩 시험하는 데 쓴다.
+     * 하단 '쿠키' 탭 → 프리셋 탭 → '전투' 탭으로 돌아온다.
+     */
+    private fun switchPreset(n: Int) {
+        if (n < 1 || n > Screen.PRESET_TABS.size) return
+        Runner.tap(Screen.NAV_COOKIE, 2000)
+        Runner.tap(Screen.PRESET_TABS[n - 1], 1500)
+        Runner.tap(Screen.NAV_BATTLE, 2000)
     }
 
     // ══════════════════════════════════════════════════════════

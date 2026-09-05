@@ -209,6 +209,15 @@ object Screen {
      */
     fun isBottomPanel(b: Bitmap): Boolean = dockRatio(b) <= -0.2
 
+    // ── 보스 소환 / 쿠키 조합(프리셋) ──
+    val BOSS_SUMMON = intArrayOf(710, 406)           // 상단 '보스 소환' 빨간 배너 중앙
+    val NAV_COOKIE  = intArrayOf(70, 2972)           // 하단 좌측 '쿠키' 탭 → 편성 화면
+    val NAV_BATTLE  = intArrayOf(718, 2972)          // 하단 '전투/홈' 탭 → 메인 전투로 복귀
+    val PRESET_TABS = arrayOf(                       // 쿠키 편성 화면의 프리셋 1~5 탭
+        intArrayOf(74, 698), intArrayOf(194, 698), intArrayOf(312, 698),
+        intArrayOf(428, 698), intArrayOf(542, 698)
+    )
+
     // ── 오븐(oven.ps1) ──
     val OVEN_AUTO   = intArrayOf(516, 2840)          // 오븐 왼쪽 'Auto' 버튼
     val OVEN_GO     = intArrayOf(713, 2815)          // '자동 열기'의 [시작] 과 '자동 열기 결과'의 [정리 하기] 가 같은 자리다
