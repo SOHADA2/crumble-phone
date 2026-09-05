@@ -209,6 +209,42 @@ object Screen {
      */
     fun isBottomPanel(b: Bitmap): Boolean = dockRatio(b) <= -0.2
 
+    // ── 오븐(oven.ps1) ──
+    val OVEN_AUTO   = intArrayOf(516, 2840)          // 오븐 왼쪽 'Auto' 버튼
+    val OVEN_GO     = intArrayOf(713, 2815)          // '자동 열기'의 [시작] 과 '자동 열기 결과'의 [정리 하기] 가 같은 자리다
+    private val OVEN_EQUIP = intArrayOf(826, 2300)   // 장착 버튼 자리 — 팝업이 떴는지 보는 데만 쓰고 누르지 않는다
+    private val OVEN_BADGE = intArrayOf(770, 845, 2675, 2750)   // 오븐에 쌓인 장비 뱃지(빨간 원)
+
+    /**
+     * 장착/판매 비교 팝업이 떠 있나? '장착' 버튼 자리가 청록이면 참.
+     * 절대값을 쓰면 게임이 화면을 어둡게 만들 때 깨진다 — 청록은 G·B 가 R 보다 훨씬 크다는 비율로 본다.
+     */
+    fun isOvenPopup(b: Bitmap): Boolean {
+        val c = px(b, OVEN_EQUIP[0], OVEN_EQUIP[1])
+        val r = Color.red(c); val g = Color.green(c); val bl = Color.blue(c)
+        return g > r * 2 && bl > r * 2 && (g + bl) > 20
+    }
+
+    /**
+     * 오븐 뱃지(쌓인 장비 표시)의 진한 빨강 픽셀 수. 늘어나면 Auto 가 실제로 돌고 있다는 뜻이다.
+     * 실측: 뱃지 있음 ~2700-3100 / 없음 ~600-900
+     */
+    fun ovenBadge(b: Bitmap): Int {
+        var d = 0
+        var x = OVEN_BADGE[0]
+        while (x < OVEN_BADGE[1]) {
+            var y = OVEN_BADGE[2]
+            while (y < OVEN_BADGE[3]) {
+                val c = px(b, x, y)
+                val r = Color.red(c)
+                if (r in 101..199 && Color.green(c) < 60 && Color.blue(c) < 60) d++
+                y++
+            }
+            x++
+        }
+        return d
+    }
+
     /**
      * 가방에서 칸을 고른 뒤 '사용하기' 주황 버튼이 떠 있나?
      * 없으면 그 칸이 상자가 아니므로 아무것도 누르지 않고 가방을 닫아야 한다.

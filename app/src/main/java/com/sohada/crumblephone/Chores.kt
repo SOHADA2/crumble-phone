@@ -9,14 +9,14 @@ import kotlin.concurrent.thread
  * 하는 일은 셋이다.
  *   ① 보상 자동 받기 — 미션 '모두 받기' + 출석 '받기' (20분마다)
  *   ② 완료된 퀘스트 수령 — 퀘스트 띠가 완료 색이면 눌러서 받는다
- *   ③ 다음 퀘스트가 행동형이면 대신 해 준다 — 쿠키 뽑기 10회 / 가방 상자 사용
+ *   ③ 다음 퀘스트가 행동형이면 대신 해 준다 — 쿠키 뽑기 10회 / 가방 상자 사용 / 오븐 장비 뽑기
  *
  * ★ 이 고리를 모르면 초반에 영영 못 나간다(PC 봇에서 몇 시간을 헛돌았다):
  *     방치 전투로 몹 처치 → 퀘스트 완료 → **보상 수령** → 레벨업 재료·골드
  *       → 편성 팀 레벨업 → 전투력 상승 → 보스 클리어 → 다음 스테이지
  *   보상을 안 받으면 재료가 0 이라 레벨업을 눌러도 아무 일이 없다.
  *
- * 아직 안 옮긴 것: 오븐(`oven.ps1`) · 보스 소환. 그 자리는 그냥 지나간다.
+ * 아직 안 옮긴 것: 보스 소환. 스테이지 클리어형 퀘스트는 그냥 지나간다.
  */
 object Chores {
 
@@ -24,15 +24,19 @@ object Chores {
     private const val COMPLETE_RATIO = 0.85       // 퀘스트 띠가 이 이상이면 완료
     private const val REWARD_MINUTES = 20L        // 보상 자동 받기 주기
 
-    /** 오븐 퀘스트로 보이는데 아직 오븐을 못 옮겨서 지나간다 — 로그를 도배하지 않게 한 번만 알린다. */
-    private var ovenNoticed = false
+    /**
+     * 이 퀘스트에서 오븐을 이미 돌려 봤나.
+     * 스테이지 클리어형 퀘스트도 화면이 안 바뀌어서 오븐과 구분이 안 된다. 한 번 돌려 보고
+     * 완료가 안 되면 오븐 퀘스트가 아닌 것으로 보고 넘긴다 — 안 그러면 계속 오븐만 돌린다.
+     */
+    private var ovenTried = false
 
     fun start(ctx: Context, maxQuests: Int = 0) {
         if (Runner.running) { Bot.log("이미 무언가 돌고 있어요"); return }
         if (!TapService.isReady) { Runner.set("시작 못 함", "접근성 서비스를 켜 주세요"); return }
         if (CaptureService.instance == null) { Runner.set("시작 못 함", "화면 읽기를 허용해 주세요"); return }
         Runner.running = true; Runner.task = "봇 본체"
-        ovenNoticed = false
+        ovenTried = false
         thread(name = "chores") {
             try {
                 if (!Runner.bringGameToFront(ctx)) { Runner.set("시작 못 함", "게임을 찾지 못했어요"); return@thread }
@@ -156,6 +160,7 @@ object Chores {
                 Runner.set("퀘스트 보상 받는 중", "지금까지 " + quests + "개")
                 Bot.log("퀘스트 수령 (" + fmt(ratio) + ")")
                 Runner.tap(Screen.QUEST_BAR, 2500)
+                ovenTried = false          // 새 퀘스트가 올라왔으니 오븐 기회를 되돌린다
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 Runner.sleep(3000); continue
             }
@@ -175,7 +180,7 @@ object Chores {
      * 퀘스트 띠를 눌러 '이 퀘스트가 무슨 유형인지'를 화면 변화로 알아낸다.
      *   뽑기 화면이 열리면  → 10회 뽑기
      *   가방이 열리면      → 첫 칸 상자 사용
-     *   화면이 그대로면    → 오븐(아직 안 옮김) 또는 스테이지 클리어형 → 지나간다
+     *   화면이 그대로면    → 오븐 장비 뽑기 (한 번 해 보고 아니면 다음부터 지나간다)
      * 성공적으로 대신 해 줬으면 true.
      */
     private fun probe(): Boolean {
@@ -201,11 +206,10 @@ object Chores {
 
         if (Screen.dockRatio(b) >= 0.1) {
             // 화면이 안 바뀌는 유형 = 메인의 무언가를 가리키는 손가락 힌트(오븐) 또는 스테이지 클리어형.
-            if (!ovenNoticed) {
-                ovenNoticed = true
-                Bot.log("  화면이 안 바뀜 - 오븐이나 스테이지 퀘스트로 보임(오븐은 아직 안 옮겼어요, 지나갑니다)")
-            }
-            return false
+            if (ovenTried) { Bot.log("  화면이 안 바뀜 - 오븐은 이미 해 봤어요(오븐 퀘스트가 아닙니다)"); return false }
+            ovenTried = true
+            Bot.log("  화면이 안 바뀜 -> 오븐 처리")
+            return Oven.run()
         }
 
         Bot.log("  모르는 화면 - 되돌아 나감")
