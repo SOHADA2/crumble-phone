@@ -36,5 +36,13 @@ object Prefs {
         get() = sp?.getBoolean("dailySweep", false) ?: false
         set(v) { sp?.edit()?.putBoolean("dailySweep", v)?.apply() }
 
+    /**
+     * 고른 게임 앱의 패키지. 비어 있으면 `GameApp` 이 자동으로 찾아 채운다.
+     * 같은 게임이라도 스토어마다 패키지가 달라서(구글 플레이 / 갤럭시 스토어) 기억해 둬야 한다.
+     */
+    var gamePackage: String
+        get() = sp?.getString("gamePackage", "") ?: ""
+        set(v) { sp?.edit()?.putString("gamePackage", v)?.apply() }
+
     val ARENA_CHOICES = intArrayOf(5, 10, 20, 30)
 }

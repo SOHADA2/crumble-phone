@@ -123,6 +123,18 @@ MediaProjection 은 **포그라운드 서비스**라 앱을 최근목록에서 �
 > 같은 이유로 `onStop` 콜백에서 `instance` 를 반드시 비워야 한다. 안 그러면 앱은 '읽는 중'인 줄 알고
 > 영영 빈 화면을 붙든다.
 
+### ⚠️ 게임 패키지를 하나로 박으면 안 된다 (`GameApp.kt`)
+같은 게임이라도 **스토어마다 패키지가 다르다.** 구글 플레이로 깔았다가 **갤럭시 스토어**로 다시 깔면
+앱이 게임을 못 알아본다(실제로 겪었다 — `게임을 찾지 못했어요`).
+
+- `GameApp` 이 런처에 뜨는 앱 중 **`com.devsisters.` 로 시작하는 것**을 찾아 `Prefs.gamePackage` 에 기억한다.
+- 자동 탐지가 빗나가면 **도구 → 게임 앱** 에서 손으로 고른다.
+- 매니페스트 `<queries>` 에 `MAIN/LAUNCHER` 인텐트를 넣어 런처 앱을 볼 수 있게 했다.
+  `QUERY_ALL_PACKAGES` 는 안 쓴다 — 이걸로 충분하고 권한이 더 얌전하다.
+
+> **화면 판정·좌표는 스토어와 무관하게 같다.** 패키지만 맞으면 나머지는 그대로 돈다.
+> 접근성 서비스도 `packageNames` 로 제한하지 않았으므로 어느 판이든 탭이 들어간다.
+
 ### 안드로이드 규칙 메모
 - `getMediaProjection()` **전에** `foregroundServiceType=mediaProjection` 으로 포그라운드 전환이 끝나 있어야 한다(14+).
 - 매니페스트 `<queries>` 에 `com.devsisters.cc` 가 없으면 `getLaunchIntentForPackage` 가 null 을 준다(11+).

@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var capOffSep: View
     private lateinit var logView: TextView
     private lateinit var rowUpdate: LinearLayout
+    private lateinit var rowGame: LinearLayout
     private lateinit var swTest: Switch
     private lateinit var swSweep: Switch
     private lateinit var rowArenaCount: LinearLayout
@@ -317,6 +318,8 @@ class MainActivity : AppCompatActivity() {
         // ── 도구 ──
         root.addView(sectionHeader("도구"))
         val g3 = group()
+        rowGame = row("게임 앱", subtitle = "스토어마다 이름이 달라서 여기서 고를 수 있어요") { pickGame() }
+        g3.addView(rowGame); g3.addView(separator())
         g3.addView(row("게임 켜기") { launchGame() })
         capOffSep = separator()
         rowCapOff = row("화면 읽기 끄기", tint = t.red) { CaptureService.stop(applicationContext) }
@@ -428,6 +431,8 @@ class MainActivity : AppCompatActivity() {
             (runRows.getChildAt(i) as? LinearLayout)?.enable(!running && ready)
         }
 
+        rowGame.setValue(GameApp.label(this) ?: "못 찾음", if (GameApp.pkg(this) == null) t.orange else t.label2)
+
         // 업데이트 줄 — 상태가 곧 값이다(최신 / 새 버전 1.12 있음 / 받는 중 47% …)
         rowUpdate.setValue(
             when {
@@ -454,8 +459,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun launchGame() {
-        val i = packageManager.getLaunchIntentForPackage("com.devsisters.cc")
-        if (i == null) Bot.log("게임을 찾지 못했습니다") else startActivity(i)
+        val i = GameApp.launchIntent(this)
+        if (i == null) { Bot.log("게임을 찾지 못했습니다 - '게임 앱'에서 골라 주세요"); pickGame() }
+        else startActivity(i)
+    }
+
+    /**
+     * 게임 앱을 손으로 고른다. 스토어마다 패키지가 달라서 자동 탐지가 빗나갈 수 있다
+     * (구글 플레이로 깔았다가 갤럭시 스토어로 다시 깐 경우 등).
+     */
+    private fun pickGame() {
+        val list = GameApp.candidates(this)
+        if (list.isEmpty()) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("게임을 찾지 못했어요")
+                .setMessage("이 폰에 쿠키런: 크럼블이 설치돼 있는지 확인해 주세요.\n" +
+                            "설치했는데도 안 보이면 알려 주세요 — 스토어판마다 이름이 다를 수 있습니다.")
+                .setPositiveButton("확인", null)
+                .show()
+            return
+        }
+        val names = list.map { it.second + "\n" + it.first }.toTypedArray()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("게임 앱 고르기")
+            .setItems(names) { _, i -> GameApp.set(this, list[i].first) }
+            .show()
     }
 
     @Deprecated("Deprecated in Java")

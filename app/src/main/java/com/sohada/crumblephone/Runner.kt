@@ -99,11 +99,12 @@ object Runner {
     // ══════════════════════════════════════════════════════════
     //  토벌전
     // ══════════════════════════════════════════════════════════
-    const val GAME = "com.devsisters.cc"
-
-    /** 게임을 앞으로 띄운다. 앱이 앞에 있으면 앱 자신을 읽게 되므로 반드시 먼저 해야 한다. */
+    /**
+     * 게임을 앞으로 띄운다. 앱이 앞에 있으면 앱 자신을 읽게 되므로 반드시 먼저 해야 한다.
+     * 패키지는 `GameApp` 이 찾아 준다 — 스토어마다 다르므로 하나로 박으면 안 된다.
+     */
     internal fun bringGameToFront(ctx: Context): Boolean {
-        val i = ctx.packageManager.getLaunchIntentForPackage(GAME) ?: return false
+        val i = GameApp.launchIntent(ctx) ?: return false
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         set("게임 여는 중", "잠시만요")
         ctx.startActivity(i)
