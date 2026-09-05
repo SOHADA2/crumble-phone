@@ -322,6 +322,34 @@ object Screen {
         return diff < 700
     }
 
+    // ── 아레나(arena.ps1) ──  좌표는 시즌2 기준 실측
+    val ARENA_BANNER   = intArrayOf(710, 1295)       // 던전 화면의 아레나 배너
+    val ARENA_GO       = intArrayOf(1092, 2519)      // '도전하러 가기' → 로비
+    val ARENA_CHALLENGE = intArrayOf(710, 2480)      // 도전하기
+    val ARENA_NEXT     = intArrayOf(1225, 2480)      // 다음 상대
+    val ARENA_CONTINUE = intArrayOf(720, 2790)       // 결과/승급 '화면을 탭하세요'
+    val ARENA_CENTER   = intArrayOf(720, 1560)       // 승급·강등 축하 화면(아무 곳이나 탭)
+
+    // OCR 로 읽을 자리 (x, y, w, h)
+    val A_MY   = intArrayOf(305, 1415, 165, 58)      // 내 전투력(흰 글씨)
+    val A_OPP  = intArrayOf(750, 565, 200, 60)       // 상대 전투력(금 글씨)
+    val A_CUR  = intArrayOf(600, 40, 150, 52)        // 아레나 재화(상단)
+    val A_PTS  = intArrayOf(590, 1415, 140, 58)      // 내 아레나 점수
+
+    /**
+     * '300 크리스탈로 상대 새로고침 하시겠습니까?' 팝업이 떠 있나?
+     * 오른쪽 [확인]이 주황이면 참. 정상 로비는 그 자리가 청록이라 확실히 갈린다.
+     * 이게 뜨면 점수도 못 읽고 갇히므로, 만나면 **왼쪽 [취소]** 를 누르고 지금 상대와 그냥 도전한다.
+     * (오른쪽 주황은 크리스탈 300 을 쓴다 — 어느 창에서든 절대 누르지 않는다.)
+     */
+    fun isArenaRefreshDialog(b: Bitmap): Boolean {
+        for (p in arrayOf(intArrayOf(1040, 2750), intArrayOf(1120, 2830))) {
+            val c = px(b, p[0], p[1])
+            if (!(Color.red(c) > 220 && Color.blue(c) < 90)) return false
+        }
+        return true
+    }
+
     // ── 보스 소환 / 쿠키 조합(프리셋) ──
     val BOSS_SUMMON = intArrayOf(710, 406)           // 상단 '보스 소환' 빨간 배너 중앙
     val NAV_COOKIE  = intArrayOf(70, 2972)           // 하단 좌측 '쿠키' 탭 → 편성 화면
