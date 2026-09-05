@@ -21,6 +21,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # 공개 릴리스 저장소에 올릴 토큰. 없으면 그 단계만 건너뛴다(빌드는 그대로 성공한다).
+      RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+      RELEASES_REPO: SOHADA2/crumble-phone-releases
     steps:
       - uses: actions/checkout@v4
 
@@ -39,13 +43,26 @@ jobs:
           key: gradle-${{ hashFiles('**/*.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
 
       - name: 빌드
+        env:
+          # 앱의 versionCode 가 된다. 실행 번호라 계속 커진다 → 앱이 새 판인지 비교할 수 있다.
+          BUILD_NUMBER: ${{ github.run_number }}
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
-      - name: 버전 이름 만들기
+      - name: 버전 정보 만들기
         id: v
-        run: echo "tag=build-$(date +%Y%m%d-%H%M)" >> $GITHUB_OUTPUT
+        run: |
+          echo "tag=build-$(date +%Y%m%d-%H%M)" >> $GITHUB_OUTPUT
+          echo "name=1.${{ github.run_number }}" >> $GITHUB_OUTPUT
+          # 앱이 읽는 아주 작은 안내문. 버전만 보고 새 판인지 판단한다.
+          NOTES=$(git log -1 --pretty=%s)
+          jq -n --argjson c ${{ github.run_number }} \
+                --arg n "1.${{ github.run_number }}" \
+                --arg s "${{ github.sha }}" \
+                --arg t "$NOTES" \
+                '{versionCode:$c, versionName:$n, commit:$s, notes:$t}' > latest.json
+          cat latest.json
 
       - name: 아티팩트로 올리기
         uses: actions/upload-artifact@v4
@@ -65,3 +82,26 @@ jobs:
             폰 브라우저에서 아래 app-debug.apk 를 받아 설치하세요.
           files: app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
+
+      # ── 앱 안 자동 업데이트용 ────────────────────────────────────────────
+      # 이 저장소는 비공개라 릴리스 주소가 로그인을 요구한다 — 앱이 그냥 못 받는다.
+      # 앱에 토큰을 넣는 건 답이 아니다(APK 를 뜯으면 누구나 저장소에 접근하게 된다).
+      # 그래서 APK 만 공개 저장소의 릴리스로 따로 올린다. 소스는 여기 비공개로 남는다.
+      # RELEASES_TOKEN 시크릿이 없으면 이 단계는 조용히 건너뛴다.
+      - name: 공개 릴리스 저장소에도 올리기 (앱이 직접 받도록)
+        if: ${{ env.RELEASES_TOKEN != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: ${{ env.RELEASES_REPO }}
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: latest
+          name: 최신 APK ${{ steps.v.outputs.name }}
+          body: |
+            크럼블 폰봇 ${{ steps.v.outputs.name }}
+            ${{ steps.v.outputs.tag }}
+
+            앱 안 [업데이트] 를 누르면 여기서 받아 갑니다.
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+            latest.json
+          prerelease: false

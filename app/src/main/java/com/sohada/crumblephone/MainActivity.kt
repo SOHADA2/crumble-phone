@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rowCapOff: LinearLayout
     private lateinit var capOffSep: View
     private lateinit var logView: TextView
+    private lateinit var rowUpdate: LinearLayout
     private var lastRunning: Boolean? = null      // 버튼 배경을 상태가 바뀔 때만 갈아 끼우려고 기억한다
     private var lastProgress = -1
 
@@ -241,7 +242,8 @@ class MainActivity : AppCompatActivity() {
         rowCapOff = row("화면 읽기 끄기", tint = t.red) { CaptureService.stop(applicationContext) }
         g3.addView(capOffSep); g3.addView(rowCapOff)
         g3.addView(separator())
-        g3.addView(row("새 APK 받기") { openReleases() })
+        rowUpdate = row("업데이트") { onUpdate() }
+        g3.addView(rowUpdate)
         root.addView(g3)
 
         // ── 기록 ──
@@ -265,6 +267,8 @@ class MainActivity : AppCompatActivity() {
         })
 
         Bot.logger = { s -> ui.post { logView.append(s + "\n") } }
+        // 켤 때 조용히 한 번 본다. 릴리스 저장소가 없거나 인터넷이 안 되면 아무 말도 안 하고 넘어간다.
+        Updater.check(applicationContext, quiet = true)
         if (Build.VERSION.SDK_INT >= 33) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 2)
         }
@@ -334,22 +338,29 @@ class MainActivity : AppCompatActivity() {
             (runRows.getChildAt(i) as? LinearLayout)?.enable(!running && ready)
         }
 
+        // 업데이트 줄 — 상태가 곧 값이다(최신 / 새 버전 1.12 있음 / 받는 중 47% …)
+        rowUpdate.setValue(
+            when {
+                Updater.progress >= 0 -> Updater.state + " " + Updater.progress + "%"
+                Updater.state.isNotEmpty() -> Updater.state
+                else -> "v" + Updater.currentName(this)
+            },
+            if (Updater.latestCode > Updater.currentCode(this)) t.blue else t.label2
+        )
+
         ui.postDelayed({ tick() }, 1000)
+    }
+
+    /** 새 판이 있으면 바로 받고, 아직 모르면 먼저 확인한다. */
+    private fun onUpdate() {
+        if (Updater.busy) return
+        if (Updater.latestCode > Updater.currentCode(this)) Updater.update(applicationContext)
+        else Updater.check(applicationContext)
     }
 
     private fun askProjection() {
         val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAP)
-    }
-
-    /**
-     * 릴리스 페이지를 연다. main 에 push 하면 GitHub Actions 가 여기에 새 APK 를 올려 준다.
-     * ⚠️ `/releases/latest` 를 쓰면 안 된다 — 워크플로가 prerelease 로 올리는데
-     *    그 주소는 프리릴리스를 건너뛰어서 404 가 난다. 태그를 직접 가리켜야 한다.
-     */
-    private fun openReleases() {
-        startActivity(Intent(Intent.ACTION_VIEW,
-            android.net.Uri.parse("https://github.com/SOHADA2/crumble-phone/releases/tag/latest")))
     }
 
     private fun launchGame() {
