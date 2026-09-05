@@ -70,6 +70,24 @@ Android Studio 는 필요 없다.
 | `Overlay.kt` | 게임 위 상태 알약 | 관제창 |
 | `MainActivity.kt` | 관제 화면 | `CrumbleBotWpf.ps1` |
 
+### 화면 읽기를 끄는 길 (없으면 못 끈다)
+MediaProjection 은 **포그라운드 서비스**라 앱을 최근목록에서 밀어내도 안 죽는다.
+끄는 길을 안 만들면 '화면을 읽는 중' 알림이 계속 남는다(실제로 그랬다). 지금은 세 군데다.
+
+| 끄는 곳 | 경로 |
+|---|---|
+| 알림의 `[끄기]` | `PendingIntent.getForegroundService` → `ACTION_STOP` |
+| 관제 화면 `[화면 읽기 끄기]` | `CaptureService.stop(ctx)` — 켜져 있을 때만 보인다 |
+| 상태바에서 공유 끊기 | `MediaProjection.Callback.onStop` |
+
+셋 다 같은 `shutdown()` 으로 모인다 — **돌던 것 멈춤 → 오버레이 걷기 → 캡처 놓기 → 알림 제거**.
+
+> ⚠️ `START_STICKY` 를 쓰면 안 된다. 시스템이 서비스를 되살려도 화면 읽기 동의는 **1회용 토큰**이라
+> 같이 살아나지 않는다. 그래서 캡처는 안 되는데 알림만 남고, 꺼도 다시 뜨는 것처럼 보인다.
+> `START_NOT_STICKY` 로 둔다.
+> 같은 이유로 `onStop` 콜백에서 `instance` 를 반드시 비워야 한다. 안 그러면 앱은 '읽는 중'인 줄 알고
+> 영영 빈 화면을 붙든다.
+
 ### 안드로이드 규칙 메모
 - `getMediaProjection()` **전에** `foregroundServiceType=mediaProjection` 으로 포그라운드 전환이 끝나 있어야 한다(14+).
 - 매니페스트 `<queries>` 에 `com.devsisters.cc` 가 없으면 `getLaunchIntentForPackage` 가 null 을 준다(11+).

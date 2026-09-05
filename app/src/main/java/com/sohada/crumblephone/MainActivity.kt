@@ -42,6 +42,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnTobol: Button
     private lateinit var btnRewards: Button
     private lateinit var btnStop: Button
+    private lateinit var btnCapOff: Button
     private lateinit var setupRow: LinearLayout
     private lateinit var logView: TextView
 
@@ -127,6 +128,10 @@ class MainActivity : AppCompatActivity() {
         root.addView(setupRow)
 
         root.addView(button("게임 켜기", LINE, TXT) { launchGame() })
+        // 화면 읽기는 포그라운드 서비스라 앱을 최근목록에서 밀어내도 안 꺼진다.
+        // 켜는 길만 있고 끄는 길이 없으면 알림이 계속 남는다.
+        btnCapOff = button("화면 읽기 끄기", LINE, SUB) { CaptureService.stop(applicationContext) }
+        root.addView(btnCapOff)
         // 앱은 스스로 업데이트되지 않는다(안드로이드 APK 라서). 릴리스 페이지를 열어 직접 받는다.
         root.addView(button("새 APK 받기", LINE, SUB) { openReleases() })
 
@@ -164,6 +169,7 @@ class MainActivity : AppCompatActivity() {
             b.alpha = if (canStart) 1f else 0.4f
         }
         btnStop.visibility = if (Runner.running) View.VISIBLE else View.GONE
+        btnCapOff.visibility = if (capOk) View.VISIBLE else View.GONE
 
         ui.postDelayed({ tick() }, 1000)
     }
