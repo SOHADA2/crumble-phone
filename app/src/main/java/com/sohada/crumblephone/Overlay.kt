@@ -142,9 +142,11 @@ object Overlay {
     /** 1초마다 글자만 갈아 끼운다. 돌고 있지 않으면 알약을 접어 둔다. */
     private fun tick() {
         val l = label ?: return
+        // 무엇이 도는지(퀘스트·토벌전…)를 맨 앞에 둔다. 게임을 보는 중에는 이게 제일 궁금하다.
         val s = if (Runner.running) {
             val pct = Runner.progress
-            Runner.status +
+            (if (Runner.task.isNotEmpty()) Runner.task + " · " else "") +
+                Runner.status +
                 (if (pct >= 0) " " + pct + "%" else "") +
                 (if (Runner.detail.isNotEmpty()) " · " + Runner.detail else "")
         } else "쉬는 중"

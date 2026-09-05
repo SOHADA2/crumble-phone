@@ -342,7 +342,7 @@ class MainActivity : AppCompatActivity() {
         // 지금 상태
         val running = Runner.running
         (dot.background as GradientDrawable).setColor(if (running) t.green else t.label3)
-        lblTask.text = if (running) (if (Runner.task.isEmpty()) "실행 중" else Runner.task) else "대기 중"
+        lblTask.text = if (running) (if (Runner.task.isEmpty()) "실행 중" else Runner.task + " 도는 중") else "대기 중"
         lblTask.setTextColor(if (running) t.green else t.label2)
         lblStatus.text = Runner.status
         lblDetail.text = if (Runner.detail.isNotEmpty()) Runner.detail

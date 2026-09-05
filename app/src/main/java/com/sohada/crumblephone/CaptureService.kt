@@ -11,7 +11,9 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.DisplayMetrics
 
 /**
@@ -43,6 +45,9 @@ class CaptureService : Service() {
         }
     }
 
+    private val ui = Handler(Looper.getMainLooper())
+    private var lastNoti = ""          // 알림 글이 바뀔 때만 다시 그린다(같은 글로 계속 부르면 눌린다)
+
     private var projection: MediaProjection? = null
     private var reader: ImageReader? = null
     private var display: VirtualDisplay? = null
@@ -62,24 +67,12 @@ class CaptureService : Service() {
                 NotificationChannel(CH, "크럼블 폰봇", NotificationManager.IMPORTANCE_LOW)
             )
         }
-        // 알림에 [끄기] 를 단다. 이게 없으면 한 번 켠 화면 읽기를 끌 방법이 없다
-        // (포그라운드 서비스라 앱을 최근목록에서 밀어내도 안 죽는다).
-        val stopPi = PendingIntent.getForegroundService(
-            this, 0,
-            Intent(this, CaptureService::class.java).setAction(ACTION_STOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        val noti = Notification.Builder(this, CH)
-            .setContentTitle("크럼블 폰봇")
-            .setContentText("화면을 읽는 중")
-            .setSmallIcon(R.drawable.ic_stat_bot)
-            .addAction(R.drawable.ic_stat_bot, "끄기", stopPi)
-            .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(1, noti, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            startForeground(1, buildNoti(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         } else {
-            startForeground(1, noti)
+            startForeground(1, buildNoti())
         }
+        startTicker()
 
         // 2) 그 다음에 화면 읽기 시작
         val code = intent?.getIntExtra("code", 0) ?: 0
@@ -110,6 +103,7 @@ class CaptureService : Service() {
                 )
                 instance = this
                 Bot.log("화면 읽기 준비됨: ${width}x${height}")
+                refreshNoti()
             } catch (e: Exception) {
                 Bot.log("화면 읽기 실패: ${e.message}")
             }
@@ -117,6 +111,63 @@ class CaptureService : Service() {
         // START_STICKY 로 두면 안 된다 — 시스템이 되살려도 화면 읽기 동의(1회용 토큰)는 없어서
         // 캡처는 안 되는데 '화면을 읽는 중' 알림만 남는다. 그게 못 끄는 것처럼 보였던 원인이다.
         return START_NOT_STICKY
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  알림 = 살아 있는 상태판
+    // ══════════════════════════════════════════════════════════
+    //  봇이 도는 동안 사용자는 **게임 화면**을 본다. 앱을 다시 열어야만 진행을 알 수 있으면
+    //  아무 소용이 없다. 알림줄은 게임 위에서도 늘 볼 수 있는 유일한 자리다
+    //  (오버레이 알약은 권한이 있어야 하지만 알림은 항상 뜬다).
+
+    /** 지금 보여 줄 한 줄. 이게 바뀔 때만 알림을 다시 그린다. */
+    private fun notiText(): String {
+        if (!Runner.running) return "쉬는 중 · 화면 읽기 켜짐"
+        val d = Runner.detail
+        return Runner.status + (if (d.isEmpty()) "" else " · " + d)
+    }
+
+    private fun buildNoti(): Notification {
+        // [끄기] 가 없으면 한 번 켠 화면 읽기를 끌 방법이 없다
+        // (포그라운드 서비스라 앱을 최근목록에서 밀어내도 안 죽는다).
+        val stopPi = PendingIntent.getForegroundService(
+            this, 0,
+            Intent(this, CaptureService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        // 알림을 누르면 관제 화면이 열린다.
+        val openPi = PendingIntent.getActivity(
+            this, 1,
+            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val b = Notification.Builder(this, CH)
+            .setContentTitle(if (Runner.running && Runner.task.isNotEmpty()) "크럼블 폰봇 · " + Runner.task else "크럼블 폰봇")
+            .setContentText(notiText())
+            .setSmallIcon(R.drawable.ic_stat_bot)
+            .setContentIntent(openPi)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)          // 글이 바뀔 때마다 소리·진동이 나면 안 된다
+            .addAction(R.drawable.ic_stat_bot, "끄기", stopPi)
+        val p = Runner.progress
+        if (Runner.running && p >= 0) b.setProgress(100, p, false)
+        return b.build()
+    }
+
+    private fun refreshNoti() {
+        val t = (if (Runner.running) Runner.task else "") + "|" + notiText() + "|" + Runner.progress
+        if (t == lastNoti) return
+        lastNoti = t
+        try {
+            getSystemService(NotificationManager::class.java).notify(1, buildNoti())
+        } catch (e: Exception) { /* 알림 권한이 없으면 조용히 넘어간다 */ }
+    }
+
+    private fun startTicker() {
+        ui.removeCallbacksAndMessages(null)
+        ui.post(object : Runnable {
+            override fun run() { refreshNoti(); ui.postDelayed(this, 1000) }
+        })
     }
 
     /** 지금 화면 한 장. 아직 프레임이 안 왔으면 null. */
@@ -140,6 +191,7 @@ class CaptureService : Service() {
 
     /** 돌던 것을 멈추고, 화면 읽기를 놓고, 알림까지 걷어낸다. */
     private fun shutdown() {
+        ui.removeCallbacksAndMessages(null)
         Runner.stop()
         Overlay.hide()
         release()
@@ -149,6 +201,7 @@ class CaptureService : Service() {
     }
 
     private fun release() {
+        ui.removeCallbacksAndMessages(null)
         display?.release(); display = null
         reader?.close(); reader = null
         projection?.stop(); projection = null
