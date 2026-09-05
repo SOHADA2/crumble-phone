@@ -234,11 +234,15 @@ class MainActivity : AppCompatActivity() {
         val rTobol = row("토벌전", subtitle = "반복 도전하고 점수 기록") {
             Overlay.show(applicationContext); Runner.startTobol(applicationContext)
         }
+        val rDaily = row("일일 던전", value = "입장권", subtitle = "기회 다 쓰고 달성 보상까지") {
+            Overlay.show(applicationContext); Daily.start(applicationContext)
+        }
         val rReward = row("보상만 받기", value = "안전", subtitle = "미션 · 출석 한 번만") {
             Overlay.show(applicationContext); Chores.startRewardsOnly(applicationContext)
         }
         runRows.addView(rQuest); runRows.addView(separator())
         runRows.addView(rTobol); runRows.addView(separator())
+        runRows.addView(rDaily); runRows.addView(separator())
         runRows.addView(rReward)
         root.addView(runRows)
 

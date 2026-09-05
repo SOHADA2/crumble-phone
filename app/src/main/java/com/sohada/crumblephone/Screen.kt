@@ -257,6 +257,71 @@ object Screen {
         return if (n == 0) 0.0 else sum / n
     }
 
+    // ── 일일 던전(daily.ps1) ──
+    // ⚠️ PC 봇의 '던전' 탭은 (530,3054) 인데 **폰에서는 거기가 아이콘 아래 빈 배경**이다
+    //    (실측 41,31,29). PC 는 터치 영역이 넓어 우연히 먹었던 것으로 보인다. 아이콘 한가운데로 옮겼다.
+    val NAV_DUNGEON       = intArrayOf(505, 2990)    // 하단 네비 '던전'(교차한 검)
+    val DAILY_TAB         = intArrayOf(850, 2835)    // '일일 던전' 서브탭 (눈대중보다 아래다)
+    val DAILY_FIRST       = intArrayOf(700, 830)     // 목록 첫 던전 배너
+    val DAILY_CHALLENGE   = intArrayOf(733, 2590)    // 도전하기!
+    val DAILY_CONT_CHK    = intArrayOf(1076, 2574)   // 연속 도전 체크박스
+    val DAILY_NEXT        = intArrayOf(1400, 1470)   // ▶ 다음 던전
+    val DAILY_ACHIEVE     = intArrayOf(1350, 1580)   // 달성 보상 상자
+    val DAILY_CLAIM_ALL   = intArrayOf(710, 2840)    // 모두 받기
+    val DAILY_MODAL_CLOSE = intArrayOf(720, 430)     // 모달 바깥(닫기)
+
+    /** 일일 던전 '진입 화면'인가? 소탕 버튼 자리가 여기서는 늘 청록이다. */
+    fun atDailyEntry(b: Bitmap): Boolean {
+        val c = px(b, 150, 2560)
+        return Color.red(c) < 40 && Color.green(c) > 100 && Color.blue(c) > 120
+    }
+
+    /** 도전하기가 주황 = 기회가 남았다. */
+    fun dailyChallengeOpen(b: Bitmap): Boolean {
+        val c = px(b, 733, 2560)
+        return Color.red(c) > 200 && Color.green(c) > 100 && Color.blue(c) < 60
+    }
+
+    /** 도전하기가 청록 = 기회를 다 썼다(0/3). 이 던전은 끝. */
+    fun dailyChallengeDone(b: Bitmap): Boolean {
+        val c = px(b, 733, 2560)
+        return Color.red(c) < 60 && Color.green(c) > 140 && Color.blue(c) > 140
+    }
+
+    /** '연속 도전' 이 켜져 있나(노란 체크)? 켜져 있으면 꺼야 한다 — 아래 Daily 주석 참고. */
+    fun dailyContChecked(b: Bitmap): Boolean {
+        val c = px(b, 1080, 2610)
+        return Color.red(c) > 230 && Color.green(c) > 200 && Color.blue(c) < 120
+    }
+
+    private val DAILY_SIG_PTS = arrayOf(
+        intArrayOf(160, 600), intArrayOf(280, 600), intArrayOf(400, 600),
+        intArrayOf(160, 700), intArrayOf(280, 700), intArrayOf(400, 700),
+        intArrayOf(160, 800), intArrayOf(280, 800), intArrayOf(400, 800)
+    )
+
+    /**
+     * 어느 던전인지 알아보는 지문 — 좌상단 '보상 아이콘' 박스를 뜬다.
+     * 던전마다 색이 매우 뚜렷하고(XP별·코인·반죽·젬·크리스탈) 애니메이션이 없어 안정적이다.
+     * 제목 글자로 하면 폰트를 못 읽어서(OCR 불가) 안 된다.
+     */
+    fun dailySig(b: Bitmap): IntArray {
+        val out = IntArray(DAILY_SIG_PTS.size * 3)
+        for ((i, p) in DAILY_SIG_PTS.withIndex()) {
+            val c = px(b, p[0], p[1])
+            out[i * 3] = Color.red(c); out[i * 3 + 1] = Color.green(c); out[i * 3 + 2] = Color.blue(c)
+        }
+        return out
+    }
+
+    /** 같은 던전인가? 실측: 같은 던전 ~225 / 다른 던전 1400+ → 700 이 안전한 경계. */
+    fun dailySigMatch(a: IntArray, b: IntArray): Boolean {
+        if (a.size != b.size) return false
+        var diff = 0
+        for (i in a.indices) diff += Math.abs(a[i] - b[i])
+        return diff < 700
+    }
+
     // ── 보스 소환 / 쿠키 조합(프리셋) ──
     val BOSS_SUMMON = intArrayOf(710, 406)           // 상단 '보스 소환' 빨간 배너 중앙
     val NAV_COOKIE  = intArrayOf(70, 2972)           // 하단 좌측 '쿠키' 탭 → 편성 화면
