@@ -45,6 +45,15 @@ Android Studio 는 필요 없다.
 `main` 에 push 하면 **GitHub Actions 가 APK 를 대신 빌드**한다(`.github/workflows/build.yml`).
 결과는 `latest` 릴리스에 `app-debug.apk` 로 붙는다 →
 **폰 브라우저에서 릴리스 페이지를 열어 바로 받아 설치**하면 된다(비공개 저장소라 GitHub 로그인 필요).
+앱의 `[새 APK 받기]` 버튼이 그 페이지를 연다.
+
+    https://github.com/SOHADA2/crumble-phone/releases/tag/latest
+
+> ⚠️ `/releases/latest` 는 안 된다. 워크플로가 `prerelease: true` 로 올리는데
+> 그 주소는 프리릴리스를 건너뛰어서 404 가 난다. **태그를 직접 가리켜야 한다.**
+
+설치는 덮어쓰기라 **접근성·오버레이 권한은 그대로 유지**된다.
+다시 받아야 하는 건 화면 읽기 동의뿐인데, 그건 원래 앱을 켤 때마다 하는 것이라 달라지는 게 없다.
 
 즉 코드 수정·배포는 어느 컴퓨터에서든(클라우드 포함) 되고,
 **폰에 붙어서 하는 실기 검증만** adb 가 연결된 PC 가 필요하다.

@@ -173,10 +173,14 @@ class MainActivity : AppCompatActivity() {
         startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAP)
     }
 
-    /** 릴리스 페이지를 연다. main 에 push 하면 GitHub Actions 가 여기에 새 APK 를 올려 준다. */
+    /**
+     * 릴리스 페이지를 연다. main 에 push 하면 GitHub Actions 가 여기에 새 APK 를 올려 준다.
+     * ⚠️ `/releases/latest` 를 쓰면 안 된다 — 워크플로가 prerelease 로 올리는데
+     *    그 주소는 프리릴리스를 건너뛰어서 404 가 난다. 태그를 직접 가리켜야 한다.
+     */
     private fun openReleases() {
         startActivity(Intent(Intent.ACTION_VIEW,
-            android.net.Uri.parse("https://github.com/SOHADA2/crumble-phone/releases/latest")))
+            android.net.Uri.parse("https://github.com/SOHADA2/crumble-phone/releases/tag/latest")))
     }
 
     private fun launchGame() {
