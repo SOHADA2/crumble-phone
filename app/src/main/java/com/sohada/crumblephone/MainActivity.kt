@@ -53,6 +53,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var capOffSep: View
     private lateinit var logView: TextView
     private lateinit var rowUpdate: LinearLayout
+    private lateinit var swTest: Switch
+    private lateinit var swSweep: Switch
+    private lateinit var rowArenaCount: LinearLayout
     private var lastProgress = -1
     private var setupShown = false      // 이번에 켠 뒤로 안내를 한 번 띄웠나
 
@@ -139,6 +142,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** 켜고 끄는 줄. 오른쪽 끝에 스위치가 붙는다(꺾쇠 대신). */
+    private fun switchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit): Pair<LinearLayout, Switch> {
+        val sw = Switch(this).apply {
+            isChecked = checked
+            setOnCheckedChangeListener { _, v -> onChange(v) }
+        }
+        val lbl = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(text(title, 17f, t.label))
+            addView(text(subtitle, 13f, t.label2).apply { setPadding(0, dp(2), 0, 0) })
+            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = t.ripple(t.cell)
+            minimumHeight = dp(50)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            addView(lbl); addView(sw)
+            isClickable = true
+            setOnClickListener { sw.toggle() }
+        }
+        return row to sw
+    }
+
     private fun LinearLayout.setValue(s: String, color: Int) {
         (findViewWithTag<TextView>("value"))?.let { it.text = s; it.setTextColor(color) }
     }
@@ -151,6 +179,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Prefs.init(this)
         t = Theme.of(this)
         window.statusBarColor = t.bg
         window.navigationBarColor = t.bg
@@ -266,6 +295,25 @@ class MainActivity : AppCompatActivity() {
         setupSection.addView(g2)
         root.addView(setupSection)
 
+        // ── 설정 ──
+        root.addView(sectionHeader("설정"))
+        val g4 = group()
+        // 재화를 쓰는 콘텐츠(일일 던전·아레나·오븐)를 공짜로 시험하는 길. 좌표 확인용이다.
+        val (rTest, sTest) = switchRow("시험 모드", "재화·입장권을 안 쓰고 진입까지만", Prefs.testMode) {
+            Prefs.testMode = it
+        }
+        swTest = sTest
+        rowArenaCount = row("아레나 판수", value = Prefs.arenaFights.toString() + "판",
+            subtitle = "재화가 먼저 떨어지면 거기서 끝난다") { cycleArena() }
+        val (rSweep, sSweep) = switchRow("일일 던전 소탕", "SKIP 티켓까지 쓴다 (광고 제거 보유자용)", Prefs.dailySweep) {
+            Prefs.dailySweep = it
+        }
+        swSweep = sSweep
+        g4.addView(rTest); g4.addView(separator())
+        g4.addView(rowArenaCount); g4.addView(separator())
+        g4.addView(rSweep)
+        root.addView(g4)
+
         // ── 도구 ──
         root.addView(sectionHeader("도구"))
         val g3 = group()
@@ -319,6 +367,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun openSetup() = startActivity(Intent(this, SetupActivity::class.java))
 
+    /** 탭할 때마다 5 → 10 → 20 → 30 → 5 … 로 돈다. 고르는 값이 넷뿐이라 별도 화면을 안 만든다. */
+    private fun cycleArena() {
+        val c = Prefs.ARENA_CHOICES
+        val i = c.indexOf(Prefs.arenaFights)
+        Prefs.arenaFights = c[(if (i < 0) 0 else i + 1) % c.size]
+        rowArenaCount.setValue(Prefs.arenaFights.toString() + "판", t.label2)
+    }
+
     /** 1초마다 상태만 갈아 끼운다(무거운 일은 하지 않는다). */
     private fun tick() {
         val accOk = TapService.isReady
@@ -335,6 +391,7 @@ class MainActivity : AppCompatActivity() {
 
         lblSubtitle.text = when {
             Runner.running -> "봇이 게임을 대신 하고 있어요"
+            Prefs.testMode -> "시험 모드 · 재화를 쓰지 않고 진입까지만"
             ready          -> "무엇을 자동으로 돌릴지 골라 주세요"
             else           -> "아래 '준비'를 먼저 해 주세요"
         }

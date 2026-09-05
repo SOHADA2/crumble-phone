@@ -269,6 +269,9 @@ object Screen {
     val DAILY_ACHIEVE     = intArrayOf(1350, 1580)   // 달성 보상 상자
     val DAILY_CLAIM_ALL   = intArrayOf(710, 2840)    // 모두 받기
     val DAILY_MODAL_CLOSE = intArrayOf(720, 430)     // 모달 바깥(닫기)
+    val DAILY_SWEEP       = intArrayOf(150, 2600)    // 소탕 (SKIP 티켓을 쓴다)
+    val DAILY_SWEEP_MAX   = intArrayOf(1095, 2515)   // 소탕 다이얼로그 '최대'
+    val DAILY_SWEEP_GO    = intArrayOf(715, 2815)    // 소탕 다이얼로그 '소탕하기'
 
     /** 일일 던전 '진입 화면'인가? 소탕 버튼 자리가 여기서는 늘 청록이다. */
     fun atDailyEntry(b: Bitmap): Boolean {

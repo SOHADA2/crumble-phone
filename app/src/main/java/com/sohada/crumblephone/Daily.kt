@@ -12,8 +12,7 @@ import kotlin.concurrent.thread
  * ⚠️ **입장권(기회)을 쓴다.** 진입만 시험하고 싶으면 `maxDungeons = 0` 으로 부르면 된다
  *    (PC 봇의 `-MaxDungeons 0` 과 같은 안전한 시험 방법이다).
  *
- * 아직 안 옮긴 것: **소탕(SKIP 티켓)**. PC 는 `-UseSkip` 스위치로 켜야만 하는데,
- * 폰에는 그 스위치를 둘 자리가 없어 뺐다. 넣으려면 SKIP 티켓을 쓴다는 걸 화면에 밝혀야 한다.
+ * **소탕(SKIP 티켓)** 은 설정에서 켰을 때만 돈다(기본 꺼짐). 광고 제거를 가진 사람만 의미가 있다.
  */
 object Daily {
 
@@ -21,7 +20,7 @@ object Daily {
     private val NAMES = arrayOf("경험치", "코인", "반죽", "연구석", "룬결정", "던전6", "던전7", "던전8")
     private fun nameOf(i: Int) = if (i in 1..NAMES.size) NAMES[i - 1] else "던전$i"
 
-    fun start(ctx: Context, maxDungeons: Int = 8) {
+    fun start(ctx: Context, maxDungeons: Int = if (Prefs.testMode) 0 else 8) {
         if (Runner.running) { Bot.log("이미 무언가 돌고 있어요"); return }
         if (!TapService.isReady) { Runner.set("시작 못 함", "접근성 서비스를 켜 주세요"); return }
         if (CaptureService.instance == null) { Runner.set("시작 못 함", "화면 읽기를 허용해 주세요"); return }
@@ -123,6 +122,17 @@ object Daily {
                 results.add(name + " 확인불가")
                 Runner.tap(Screen.DAILY_NEXT, 2200)
                 continue
+            }
+
+            // ── (설정에서 켰을 때만) 소탕 — SKIP 티켓을 쓴다 ──
+            // 광고 제거를 가진 사람만 의미가 있다. 기본은 꺼져 있고, 켜야만 돈다.
+            if (Prefs.dailySweep && !Prefs.testMode) {
+                Runner.set("일일 던전 " + idx + "번째", name + " · 소탕 (SKIP 티켓)")
+                Runner.tap(Screen.DAILY_SWEEP, 1800)
+                Runner.tap(Screen.DAILY_SWEEP_MAX, 1000)
+                Runner.tap(Screen.DAILY_SWEEP_GO, 2500)
+                Runner.tap(Screen.DAILY_MODAL_CLOSE, 1200)   // 보상 팝업을 바깥 탭으로 넘긴다
+                Runner.tap(Screen.DAILY_MODAL_CLOSE, 1000)
             }
 
             // ── 달성 보상 수령 ──

@@ -262,6 +262,8 @@ object Chores {
 
         if (Screen.dockRatio(b) >= 0.1) {
             // 화면이 안 바뀌는 유형 = 메인의 무언가를 가리키는 손가락 힌트(오븐) 또는 스테이지 클리어형.
+            // 퀘스트 순환에서 재화를 쓰는 건 오븐뿐이다. 시험 모드면 그것만 건너뛴다.
+            if (Prefs.testMode) { Bot.log("  화면이 안 바뀜 - 시험 모드라 오븐은 건너뜁니다"); return false }
             if (ovenTried) { Bot.log("  화면이 안 바뀜 - 오븐은 이미 해 봤어요(오븐 퀘스트가 아닙니다)"); return false }
             ovenTried = true
             Bot.log("  화면이 안 바뀜 -> 오븐 처리")

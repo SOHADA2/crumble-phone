@@ -127,7 +127,7 @@ object Runner {
         return false
     }
 
-    fun startTobol(ctx: Context, maxAttempts: Int = 300) {
+    fun startTobol(ctx: Context, maxAttempts: Int = if (Prefs.testMode) 0 else 300) {
         if (running) { Bot.log("이미 무언가 돌고 있어요"); return }
         if (!TapService.isReady) { set("시작 못 함", "접근성 서비스를 켜 주세요"); return }
         if (CaptureService.instance == null) { set("시작 못 함", "화면 읽기를 허용해 주세요"); return }
