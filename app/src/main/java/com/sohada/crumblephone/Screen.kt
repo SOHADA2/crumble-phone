@@ -12,7 +12,9 @@ object Screen {
     // ── 좌표(1440x3120 실좌표) ──
     val WAKE = intArrayOf(721, 1864, 725, 2520)      // 절전 해제: 왕관 씌우기 드래그
     val DLG_SAFE = intArrayOf(441, 2797)             // 확인창 왼쪽 버튼(계속하기/취소) — 오른쪽 주황은 절대 금지
-    val TOBOL_ENTRY = intArrayOf(1340, 1500)         // 메인 우측 토벌전 바로가기
+    val TOBOL_ENTRY = intArrayOf(1340, 1500)         // 메인 우측 토벌전 바로가기(폴백 경로)
+    val NAV_GUILD   = intArrayOf(905, 3000)          // 하단 네비 '길드' 탭 — 토벌전으로 가는 안전한 길
+    val GUILD_TOBOL = intArrayOf(280, 1880)          // 길드 화면의 '길드 토벌전' 타일(피냐타 그림 한가운데)
     val TOBOL_CHALLENGE = intArrayOf(700, 2715)      // 도전하기!
     val TOBOL_CLOSE = intArrayOf(715, 2990)          // BATTLE OVER 결과창 ✕
 
@@ -133,10 +135,16 @@ object Screen {
         return teal >= need && orange >= need
     }
 
-    /** 토벌전 로비: '도전하기' 버튼이 주황(700,2700). */
+    /**
+     * 토벌전 로비: '도전하기' 버튼이 주황(700,2700).
+     *
+     * ⚠️ `G < 200` 이 꼭 필요하다. 메인 화면의 같은 자리는 골드 숫자라 **노랑 (255,255,66)** 인데,
+     *    이게 `B < 60` 을 **6 차이로** 겨우 비켜가고 있었다(실측). 화면이 조금만 밝아져도 메인을
+     *    로비로 오판했을 것이다. 주황은 G≈149, 노랑은 G=255 라 이 조건이 둘을 크게 벌려 준다.
+     */
     fun atTobolLobby(b: Bitmap): Boolean {
         val c = px(b, 700, 2700)
-        return Color.red(c) > 230 && Color.green(c) > 110 && Color.blue(c) < 60
+        return Color.red(c) > 230 && Color.green(c) in 111..199 && Color.blue(c) < 60
     }
 
     /**
@@ -208,6 +216,46 @@ object Screen {
      *   실측 ratio: 메인 +0.23~0.33 / 가방 -0.45 / 뽑기 -0.60 → 두 분포 사이인 -0.2 를 임계로.
      */
     fun isBottomPanel(b: Bitmap): Boolean = dockRatio(b) <= -0.2
+
+    // ── 길드 화면 ──
+    // 바탕이 청록인지 볼 네 점. 길드·로비 둘 다 4/4, 메인은 0/4 였다(실측).
+    private val TEAL_PTS = arrayOf(
+        intArrayOf(60, 1500), intArrayOf(1380, 1500), intArrayOf(60, 2700), intArrayOf(1390, 2750)
+    )
+    // '길드 토벌전' 타일(피냐타)이 있어야 할 자리. 평균 밝기 실측: 메인 42.6 / 길드 162.5 / 로비 94.9
+    private val GUILD_TILE = intArrayOf(200, 400, 1800, 1980)
+
+    /** 바탕이 청록인가? 길드·던전 같은 서브 화면이 여기 걸린다(메인은 갈색이라 안 걸린다). */
+    fun isTealScreen(b: Bitmap): Boolean {
+        var hit = 0
+        for (p in TEAL_PTS) {
+            val c = px(b, p[0], p[1])
+            val r = Color.red(c); val g = Color.green(c); val bl = Color.blue(c)
+            if (bl > r * 2 && bl > g && bl > 40) hit++
+        }
+        return hit >= 3
+    }
+
+    /**
+     * 길드 화면인가? 청록 바탕 **그리고** '길드 토벌전' 타일이 제자리에 밝게 보여야 한다.
+     * 청록만 보면 던전·로비도 걸린다. 타일은 피냐타라 화려해서 바탕과 밝기가 크게 벌어진다.
+     */
+    fun atGuild(b: Bitmap): Boolean = isTealScreen(b) && tileBrightness(b) >= 130
+
+    private fun tileBrightness(b: Bitmap): Double {
+        var sum = 0.0; var n = 0
+        var x = GUILD_TILE[0]
+        while (x < GUILD_TILE[1]) {
+            var y = GUILD_TILE[2]
+            while (y < GUILD_TILE[3]) {
+                val c = px(b, x, y)
+                sum += (Color.red(c) + Color.green(c) + Color.blue(c)) / 3.0; n++
+                y += 4
+            }
+            x += 4
+        }
+        return if (n == 0) 0.0 else sum / n
+    }
 
     // ── 보스 소환 / 쿠키 조합(프리셋) ──
     val BOSS_SUMMON = intArrayOf(710, 406)           // 상단 '보스 소환' 빨간 배너 중앙

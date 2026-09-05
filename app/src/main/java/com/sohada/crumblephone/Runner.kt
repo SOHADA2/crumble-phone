@@ -144,8 +144,14 @@ object Runner {
 
     /**
      * 토벌전 로비까지 들어간다. 최대 3번 시도한다.
-     *   우측 아이콘 열은 이벤트/화면 전환에 따라 한 칸씩 밀린다 → 찾아서 누르고, 로비가 아니면 되돌려 다시 찾는다.
-     *   (실제로 전환 중에 찾아서 한 칸 위의 '크럼블 패스'를 눌렀다.)
+     *
+     * 길은 두 개고 **길드 탭이 먼저**다.
+     *   1) 하단 '길드' 탭 -> 길드 화면 -> '길드 토벌전' 타일   <- 자리가 고정이라 안전하다
+     *   2) 메인 우측 아이콘 열의 피냐타 바로가기               <- 폴백. 이벤트에 따라 한 칸씩 밀린다
+     *
+     * 2)를 주 경로로 쓰다가 실제로 사고가 났다 - 전환 중에 찾아서 한 칸 위의 '크럼블 패스'
+     * (구매 화면)를 눌렀다. 하단 네비는 화면이 바뀌어도 자리가 그대로라 1)이 훨씬 믿을 만하다.
+     * 그래도 2)는 남겨 둔다 - 이미 실기에서 되는 걸 확인한 길이라 1)이 막히면 받아 준다.
      */
     private fun enterTobolLobby(): Boolean {
         for (t in 1..3) {
@@ -164,16 +170,16 @@ object Runner {
                 val (ok, why) = resetToMain()
                 if (!ok) { failByReason(why); return false }
             }
-            sleep(1500)          // 연출이 끝나 아이콘 열이 자리를 잡을 때까지
-            b = shot() ?: return false
-            if (!Screen.atMain(b)) { Bot.log("메인이 아직 아니에요 - 다시 (" + t + "/3)"); sleep(1500); continue }
-            val sc = Shortcut.findTobol(b)
-            if (sc == null) { Bot.log("토벌전 아이콘을 못 찾음 - 다시 (" + t + "/3)"); sleep(1500); continue }
-            Bot.log("토벌전 아이콘 (" + sc[0] + "," + sc[1] + ")")
-            set("토벌전으로 이동 중")
-            tap(sc, 2800)
-            if (shot()?.let { Screen.atTobolLobby(it) } == true) return true
-            Bot.log("토벌전이 안 열렸어요 - 되돌리고 다시 찾습니다 (" + t + "/3)")
+            sleep(1500)          // 연출이 끝나 화면이 자리를 잡을 때까지
+            if (shot()?.let { Screen.atMain(it) } != true) {
+                Bot.log("메인이 아직 아니에요 - 다시 (" + t + "/3)"); sleep(1500); continue
+            }
+
+            if (enterViaGuild()) { Bot.log("길드 경로로 들어왔어요"); return true }
+            if (!running) return false
+            if (enterViaShortcut()) { Bot.log("바로가기 경로로 들어왔어요"); return true }
+
+            Bot.log("토벌전이 안 열렸어요 - 되돌리고 다시 (" + t + "/3)")
             val (ok2, why2) = resetToMain()
             if (!ok2) { failByReason(why2); return false }
         }
@@ -181,6 +187,40 @@ object Runner {
         lastResult = "토벌전 진입 실패"
         return false
     }
+
+    /**
+     * 1) 하단 '길드' 탭 -> '길드 토벌전' 타일.
+     *
+     * 길드 화면인지 **확인한 뒤에만** 타일을 누른다. 아니면 아무것도 누르지 않고 물러난다 —
+     * 화면을 안 보고 좌표를 누르는 짓은 하지 않는다(그 자리는 화면마다 다른 것이 있다).
+     * 판정 실측: 청록 바탕 4점이 길드 4/4 · 메인 0/4, 타일 밝기가 길드 162 · 로비 95 · 메인 43.
+     */
+    private fun enterViaGuild(): Boolean {
+        set("길드로 이동 중")
+        tap(Screen.NAV_GUILD, 2800)
+        val g = shot() ?: return false
+        if (!Screen.atGuild(g)) { Bot.log("  길드 화면이 아니에요 - 이 길은 건너뜁니다"); return false }
+        set("길드 토벌전으로 이동 중")
+        tap(Screen.GUILD_TOBOL, 3000)
+        return shot()?.let { Screen.atTobolLobby(it) } == true
+    }
+
+    /**
+     * 2) 메인 우측 아이콘 열의 피냐타 바로가기(폴백).
+     * 좌표를 고정하면 안 된다 - 이벤트에 따라 아이콘 개수가 달라져 열이 통째로 밀린다.
+     */
+    private fun enterViaShortcut(): Boolean {
+        val b = shot() ?: return false
+        if (!Screen.atMain(b)) return false
+        val sc = Shortcut.findTobol(b)
+        if (sc == null) { Bot.log("  토벌전 아이콘을 못 찾았어요"); return false }
+        Bot.log("  토벌전 아이콘 (" + sc[0] + "," + sc[1] + ")")
+        set("토벌전으로 이동 중")
+        tap(sc, 2800)
+        return shot()?.let { Screen.atTobolLobby(it) } == true
+    }
+
+
 
     internal fun failByReason(why: String) {
         when (why) {
