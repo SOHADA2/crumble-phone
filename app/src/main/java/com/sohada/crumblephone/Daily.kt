@@ -166,6 +166,9 @@ object Daily {
                 if (Runner.shot()?.let { Screen.atDailyEntry(it) } == true) return true
                 Runner.sleep(900)
             }
+            // 안 들어가졌다. 메인으로 보여도 보상 팝업 같은 게 덮고 있을 수 있으니 치우고 다시.
+            Runner.clearPopups()
+            Runner.resetToMain()
         }
         return false
     }

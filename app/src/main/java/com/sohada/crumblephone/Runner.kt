@@ -85,10 +85,37 @@ object Runner {
                 continue
             }
             if (i == maxBack) break
+            // 서브 화면의 주황 ✕ 가 **실제로 보일 때만** 누른다. 화면을 안 보고 좌표를 누르지 않는다.
+            if (Screen.hasCloseButton(b)) { tap(Screen.NAV_CLOSE, 1800); continue }
+            // 뒤로가기가 주력이다(무엇도 시작시키지 않는다). 다만 뒤로가기로 안 닫히는 팝업이 있어서
+            // 가끔 '팝업 바깥'도 눌러 본다 — 전장 빈 곳이라 눌러도 무해하다.
+            if (i > 0 && i % 3 == 0) { tap(Screen.OUTSIDE, 1500); continue }
             TapService.back()
             sleep(1800)
         }
         return false to "stuck"
+    }
+
+    /**
+     * **메인처럼 보이는데 무언가 덮고 있을 때** 치운다.
+     *
+     * `atMain` 은 '독이 나무색 + 하단 주황 ✕ 없음' 이라, 자동사냥 보상 팝업처럼
+     * **화면 가운데만 덮는 창은 못 잡는다.** 그러면 `resetToMain` 이 "이미 메인" 하고 바로 빠져나가고,
+     * 그다음 누르는 탭은 전부 그 팝업이 먹는다 — 진입이 조용히 실패한다(실제로 겪었다).
+     * 그래서 길이 막혔을 때는 메인으로 보이더라도 한 번 치워 보고 다시 시도한다.
+     *
+     * 순서는 **안전한 것부터**다. 확인창은 왼쪽만, ✕ 는 보일 때만, 나머지는 뒤로가기와 빈 곳 탭.
+     */
+    internal fun clearPopups() {
+        set("가림막 치우는 중")
+        for (i in 1..4) {
+            if (!running) return
+            val b = shot() ?: return
+            if (Screen.isConfirmDialog(b)) { tap(Screen.DLG_SAFE, 2000); continue }
+            if (Screen.hasCloseButton(b)) { tap(Screen.NAV_CLOSE, 1800); continue }
+            if (i % 2 == 1) { TapService.back(); sleep(1800) }
+            else tap(Screen.OUTSIDE, 1500)
+        }
     }
 
     /**
@@ -247,7 +274,10 @@ object Runner {
             if (!running) return false
             if (enterViaShortcut()) { Bot.log("바로가기 경로로 들어왔어요"); return true }
 
-            Bot.log("토벌전이 안 열렸어요 - 되돌리고 다시 (" + t + "/3)")
+            // 두 길이 다 막혔다. 메인으로 보여도 무언가 덮고 있을 수 있으니(보상 팝업 등)
+            // 치워 보고 다시 시도한다. 이걸 안 하면 3번 모두 같은 자리에서 같은 일이 반복된다.
+            Bot.log("토벌전이 안 열렸어요 - 가림막을 치우고 다시 (" + t + "/3)")
+            clearPopups()
             val (ok2, why2) = resetToMain()
             if (!ok2) { failByReason(why2); return false }
         }

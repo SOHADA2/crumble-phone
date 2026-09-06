@@ -167,6 +167,14 @@ object Arena {
         Runner.tap(Screen.NAV_DUNGEON, 2500)     // 던전 → '도전 던전' 탭이 기본으로 열린다
         Runner.tap(Screen.ARENA_BANNER, 2500)
         Runner.tap(Screen.ARENA_GO, 2500)
+        if (myPower() != null) return true
+        // 안 들어가졌다. 메인으로 보여도 보상 팝업 같은 게 덮고 있을 수 있으니 치우고 한 번 더.
+        Runner.clearPopups()
+        val (ok2, _) = Runner.resetToMain()
+        if (!ok2) return false
+        Runner.tap(Screen.NAV_DUNGEON, 2500)
+        Runner.tap(Screen.ARENA_BANNER, 2500)
+        Runner.tap(Screen.ARENA_GO, 2500)
         return myPower() != null
     }
 }
