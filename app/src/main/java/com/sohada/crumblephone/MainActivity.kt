@@ -345,20 +345,6 @@ class MainActivity : AppCompatActivity() {
         rowGame = row("게임 앱", subtitle = "스토어마다 이름이 달라서 여기서 고를 수 있어요") { pickGame() }
         g3.addView(rowGame); g3.addView(separator())
         g3.addView(row("게임 켜기") { launchGame() })
-        g3.addView(separator())
-        // 새 기기에서 좌표가 맞는지만 확인한다. 아무것도 누르지 않으니 재화를 안 쓴다.
-        g3.addView(row("화면 좌표 확인", subtitle = "게임을 띄워 한 장만 보고 판단해요") {
-            Overlay.show(applicationContext); Runner.checkCoords(applicationContext)
-        })
-        g3.addView(separator())
-        // 스크린샷을 찍어 보내는 건 번거롭다. 글로 복사하면 채팅에 그냥 붙여넣을 수 있다.
-        g3.addView(row("지금 화면 재기", subtitle = "게임을 원하는 화면에 두고 눌러요") { measureNow() })
-        g3.addView(separator())
-        g3.addView(row("탭 시험", subtitle = "게임 메인 화면에 두고 눌러요 — 탭이 먹는지 봅니다") { tapTest() })
-        g3.addView(separator())
-        g3.addView(row("화면 보내기", subtitle = "게임을 띄워 5초 뒤 찍어요 — 좌표를 다시 잴 때") { sendShot() })
-        g3.addView(separator())
-        g3.addView(row("진단 보내기", subtitle = "복사 + 공유창 — 채팅 앱을 골라 바로 보내요") { sendDiag() })
         capOffSep = separator()
         rowCapOff = row("화면 읽기 끄기", tint = t.red) { CaptureService.stop(applicationContext) }
         g3.addView(capOffSep); g3.addView(rowCapOff)
@@ -366,6 +352,24 @@ class MainActivity : AppCompatActivity() {
         rowUpdate = row("업데이트") { onUpdate() }
         g3.addView(rowUpdate)
         root.addView(g3)
+
+        // ── 점검 ──
+        // 태블릿에서 좌표가 안 맞던 일을 겪으며 하나씩 늘어난 것들이다. 평소엔 쓸 일이 없어
+        // 도구에서 떼어내 따로 모았다. 넷 다 **아무것도 진행시키지 않는다**(재화를 안 쓴다).
+        root.addView(sectionHeader("점검"))
+        root.addView(text("잘 안 될 때만 쓰면 돼요. 아래 넷 다 게임을 진행시키지 않아요.",
+            13f, t.label2).apply { setPadding(dp(20), 0, dp(20), dp(8)) })
+        val g5 = group()
+        g5.addView(row("화면 점검", subtitle = "게임을 띄워 좌표와 판정값을 한 번에 재요") {
+            Overlay.show(applicationContext); Runner.checkCoords(applicationContext)
+        })
+        g5.addView(separator())
+        g5.addView(row("탭 점검", subtitle = "게임 메인 화면에 두고 눌러요 — 탭이 먹는지 봅니다") { tapTest() })
+        g5.addView(separator())
+        g5.addView(row("진단 보내기", value = "글", subtitle = "기기 정보와 최근 기록") { sendDiag() })
+        g5.addView(separator())
+        g5.addView(row("화면 보내기", value = "그림", subtitle = "게임을 띄워 5초 뒤 찍어요") { sendShot() })
+        root.addView(g5)
 
         // ── 기록 ──
         root.addView(sectionHeader("기록"))
@@ -503,20 +507,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 지금 게임 화면의 판정값을 재서 기록에 남긴다. 게임을 원하는 화면(메인·로비…)에 두고 누른다.
-     * 새 기기에서 '되는 것 같은데 뭔가 이상할' 때, 폰 기준값과 비교할 유일한 방법이다.
-     */
-    private fun measureNow() {
-        if (CaptureService.instance == null) { Bot.log("화면 읽기를 먼저 켜 주세요"); return }
-        Thread {
-            val b = Runner.shot()
-            if (b == null) Bot.log("화면을 읽지 못했어요")
-            else Bot.log("판정값: " + Screen.debugLine(b) + " · 완료기준=" + String.format("%.2f", Chores.doneRatioNow()))
-        }.start()
-        Toast.makeText(this, "기록에 남겼어요 — [진단 보내기]를 눌러 주세요", Toast.LENGTH_LONG).show()
-    }
-
-    /**
      * **탭이 실제로 게임에 들어가는가**를 가린다. 게임을 메인 화면에 두고 누른다.
      *
      * 화면이 안 바뀔 때 원인은 셋인데 로그만으로는 못 가른다:
@@ -529,8 +519,17 @@ class MainActivity : AppCompatActivity() {
     private fun tapTest() {
         if (CaptureService.instance == null) { Bot.log("화면 읽기를 먼저 켜 주세요"); return }
         if (!TapService.isReady) { Bot.log("접근성을 먼저 켜 주세요"); return }
+
+        // ⚠️ 게임을 먼저 띄운다. 이 앱이 앞에 있는 채로 누르면 **이 앱을 누른다**(문서 함정 5번).
+        val gi = GameApp.launchIntent(this)
+        if (gi == null) { Bot.log("게임을 찾지 못했어요 - '게임 앱'에서 골라 주세요"); pickGame(); return }
+        gi.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(gi)
+        Toast.makeText(this, "게임을 띄우고 시험해요 — 20초쯤 걸려요", Toast.LENGTH_LONG).show()
+
         Thread {
-            Bot.log("── 탭 시험 ──")
+            Bot.log("── 탭 점검 ──")
+            Runner.sleep(5000)
             var b = Runner.shot()
             if (b == null) { Bot.log("화면을 읽지 못했어요"); return@Thread }
             Bot.log("전: " + Screen.debugLine(b))
@@ -551,7 +550,6 @@ class MainActivity : AppCompatActivity() {
             }
             Bot.log("→ 두 번 다 화면이 그대로입니다 (탭이 안 먹거나 좌표가 다른 곳)")
         }.start()
-        Toast.makeText(this, "시험 중… 5초 뒤 [진단 보내기]를 눌러 주세요", Toast.LENGTH_LONG).show()
     }
 
     /**

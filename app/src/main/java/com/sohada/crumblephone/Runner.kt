@@ -162,8 +162,11 @@ object Runner {
         Coords.redetect()
         shot()?.let { Coords.detect(it) }
         if (!Coords.ratioOk) {
-            set("시작 못 함", Coords.mismatchReason())
-            lastResult = "이 기기에서는 좌표가 맞지 않아요"
+            // 카드에는 한 줄만, 자세한 사정과 해결책은 기록에. 여러 줄을 카드에 밀어 넣으면
+            // 잘려서 정작 '무엇을 하면 되는지'가 안 보인다.
+            set("이 기기에서는 좌표가 안 맞아요", "게임 배치가 폰과 달라요 · 점검 → [화면 점검] 참고")
+            Bot.log(Coords.mismatchReason())
+            lastResult = "좌표가 안 맞아 시작하지 못했어요 (" + Coords.summary() + ")"
             return false
         }
         return true
@@ -222,9 +225,20 @@ object Runner {
                 Bot.log("좌표 확인 결과: " + sum)
                 // 좌표가 큰 것으로 맞아도 세밀한 판정값이 틀어질 수 있다. 그 값들을 같이 남겨
                 // 폰 기준값과 비교할 수 있게 한다(문서에 기준값이 적혀 있다).
-                shot()?.let { Bot.log("판정값: " + Screen.debugLine(it)) }
-                set(if (Coords.ratioOk) "좌표가 맞아요" else "좌표가 안 맞아요", sum)
-                lastResult = sum
+                shot()?.let {
+                    Bot.log("판정값: " + Screen.debugLine(it) + " · 완료기준=" + String.format("%.2f", Chores.doneRatioNow()))
+                    Bot.log("기준점: " + Screen.landmarks(it))
+                }
+                if (Coords.ratioOk) {
+                    set("화면 점검 끝", sum)
+                    lastResult = sum
+                } else {
+                    // 여기서 끝내면 안 된다. 이 기기에서는 봇을 돌릴 수 없다는 뜻이라,
+                    // 무엇을 하면 되는지까지 알려 준다(로그에만 있으면 못 보고 지나친다).
+                    set("이 기기에서는 좌표가 안 맞아요", sum)
+                    Bot.log(Coords.mismatchReason())
+                    lastResult = "좌표가 안 맞아요 — " + sum
+                }
             }
             catch (e: Exception) { set("오류", e.message ?: "알 수 없음") }
             finally { running = false; task = "" }
