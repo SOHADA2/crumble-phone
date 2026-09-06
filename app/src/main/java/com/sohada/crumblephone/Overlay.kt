@@ -37,7 +37,16 @@ object Overlay {
     private var label: TextView? = null
     private var stopBtn: TextView? = null
     private var dotView: View? = null
-    private var idleTicks = 0
+    private var arrow: TextView? = null
+    private var panel: LinearLayout? = null
+    private var appCtx: Context? = null
+    private val contentBtns = ArrayList<TextView>()
+
+    /**
+     * 사용자가 [알약 숨기기] 로 직접 지웠나. 지웠으면 1초 뒤 `ensure` 가 도로 띄우면 안 된다.
+     * 관제 화면에서 `show()` 를 부르면 다시 풀린다(그건 명시적인 '띄워 줘' 요청이다).
+     */
+    private var dismissed = false
 
     /**
      * 이 시각까지는 화면을 원래 밝기로 둔다(알약을 탭하면 늘어난다).
@@ -58,14 +67,15 @@ object Overlay {
     private fun dp(ctx: Context, v: Int) = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), ctx.resources.displayMetrics).toInt()
 
-    fun show(ctx: Context) {
+    /** 관제 화면에서 부르는 '띄워 줘'. 사용자가 숨겨 뒀더라도 다시 띄운다. */
+    fun show(ctx: Context) { dismissed = false; create(ctx) }
+
+    private fun create(ctx: Context) {
         if (view != null || !canDraw(ctx)) return
-        // ★ 반드시 0 으로 되돌린다. 안 그러면 **두 번째부터는 뜨자마자 사라진다.**
-        //   show() 는 콘텐츠를 시작하기 '전에' 불리므로 첫 tick 때 아직 running 이 false 다.
-        //   지난 번에 쉬면서 7 까지 세어 둔 값이 남아 있으면 그 한 번으로 임계를 넘어 바로 hide 된다.
-        idleTicks = 0
         wakeUntil = 0L
+        appCtx = ctx.applicationContext
         val w = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val th = Theme()
 
         // 게임 위에 뜨는 것이라 게임이 밝든 어둡든 읽혀야 한다 → 언제나 어두운 알약이다.
         // 색은 게임 하단 독에서 딴 갈색(#231A18)이라 게임 화면 위에 얹혀도 이물감이 없다.
@@ -76,12 +86,16 @@ object Overlay {
             cornerRadius = dp(ctx, 100).toFloat()      // 완전한 알약 모양
             setStroke(dp(ctx, 2), Color.parseColor("#8A6A52"))
         }
-        val box = LinearLayout(ctx).apply {
+        val pill = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = bg
             elevation = dp(ctx, 6).toFloat()
-            setPadding(dp(ctx, 14), dp(ctx, 9), dp(ctx, 14), dp(ctx, 9))
+            setPadding(dp(ctx, 14), dp(ctx, 9), dp(ctx, 10), dp(ctx, 9))
+        }
+        // 알약과 펼침 패널을 세로로 담는 뿌리. 바탕은 투명이라 알약 모양이 그대로 보인다.
+        val box = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
         }
         val dot = View(ctx).apply {
             background = GradientDrawable().apply {
@@ -141,7 +155,77 @@ object Overlay {
             // 남는 자리를 글자에게 뺏기지 않게 한다.
             (layoutParams as LinearLayout.LayoutParams).weight = 0f
         }
-        box.addView(dot); box.addView(txt); box.addView(stop)
+        // 펼침 화살표. 눌러서 콘텐츠 버튼들을 여닫는다.
+        // ⚠️ 스스로 clickable 이어야 한다 — 안 그러면 알약의 드래그 리스너가 탭을 먼저 먹는다.
+        val arw = TextView(ctx).apply {
+            text = "▾"
+            setTextColor(Color.parseColor("#BCA491"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setPadding(dp(ctx, 10), dp(ctx, 2), dp(ctx, 6), dp(ctx, 2))
+            isClickable = true
+            setOnClickListener { togglePanel() }
+        }
+        pill.addView(dot); pill.addView(txt); pill.addView(stop); pill.addView(arw)
+
+        // ── 펼침 패널: 여기서 바로 콘텐츠를 시작할 수 있다 ──
+        // 게임을 보는 중에 관제 화면으로 나갔다 오지 않아도 되게.
+        val pnl = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#F2231A18"))
+                cornerRadius = dp(ctx, 18).toFloat()
+                setStroke(dp(ctx, 2), Color.parseColor("#8A6A52"))
+            }
+            elevation = dp(ctx, 6).toFloat()
+            setPadding(dp(ctx, 10), dp(ctx, 10), dp(ctx, 10), dp(ctx, 10))
+            visibility = View.GONE
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(ctx, 8) }
+        }
+        contentBtns.clear()
+        val items = listOf<Pair<String, (Context) -> Unit>>(
+            "퀘스트" to { c -> Chores.start(c) },
+            "보스전" to { c -> Boss.start(c) },
+            "토벌전" to { c -> Runner.startTobol(c) },
+            "일일 던전" to { c -> Daily.start(c) },
+            "아레나" to { c -> Arena.start(c) },
+            "일일 보상" to { c -> Chores.startRewardsOnly(c) }
+        )
+        for ((name, go) in items) {
+            val b2 = TextView(ctx).apply {
+                text = name
+                setTextColor(Color.parseColor("#E8D9C8"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+                gravity = Gravity.CENTER
+                background = th.chunky(th.cell, dp(ctx, 14).toFloat(), dp(ctx, 2), dp(ctx, 3))
+                setPadding(dp(ctx, 14), dp(ctx, 8), dp(ctx, 14), dp(ctx, 8))
+                minWidth = dp(ctx, 128)
+                isClickable = true
+                setOnClickListener {
+                    val c = appCtx ?: return@setOnClickListener
+                    closePanel()
+                    go(c)
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = dp(ctx, 7) }
+            }
+            contentBtns.add(b2)
+            pnl.addView(b2)
+        }
+        pnl.addView(TextView(ctx).apply {
+            text = "알약 숨기기"
+            setTextColor(Color.parseColor("#BCA491"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            gravity = Gravity.CENTER
+            setPadding(dp(ctx, 8), dp(ctx, 8), dp(ctx, 8), dp(ctx, 4))
+            isClickable = true
+            setOnClickListener { dismissed = true; hide() }
+        })
+
+        box.addView(pill); box.addView(pnl)
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -162,7 +246,7 @@ object Overlay {
 
         // 탭하면 [멈추기] 가 나왔다 들어간다. 끌면 위치가 옮겨진다(단, 안전한 세로 띠 안에서만).
         var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var moved = false
-        box.setOnTouchListener { _, e ->
+        pill.setOnTouchListener { _, e ->
             when (e.action) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = e.rawX; downY = e.rawY; startX = p.x; startY = p.y; moved = false; true
@@ -190,6 +274,7 @@ object Overlay {
 
         try { w.addView(box, p) } catch (e: Exception) { Bot.log("오버레이 실패: ${e.message}"); return }
         wm = w; view = box; lp = p; label = txt; stopBtn = stop; dotView = dot
+        arrow = arw; panel = pnl
         tick()
     }
 
@@ -197,6 +282,18 @@ object Overlay {
         val w = wm; val v = view
         ui.post { if (w != null && v != null) try { w.removeView(v) } catch (_: Exception) {} }
         wm = null; view = null; lp = null; label = null; stopBtn = null; dotView = null
+        arrow = null; panel = null; contentBtns.clear()
+    }
+
+    private fun togglePanel() {
+        val pnl = panel ?: return
+        if (pnl.visibility == View.VISIBLE) closePanel()
+        else { pnl.visibility = View.VISIBLE; arrow?.text = "▴" }
+    }
+
+    private fun closePanel() {
+        panel?.visibility = View.GONE
+        arrow?.text = "▾"
     }
 
     /**
@@ -215,10 +312,14 @@ object Overlay {
         try { w.updateViewLayout(v, p) } catch (_: Exception) {}
     }
 
-    /** 봇이 도는 동안에는 알약이 떠 있어야 한다. 이미 떠 있으면 아무 일도 안 한다. */
-    fun ensure(ctx: Context) {
-        if (Runner.running) show(ctx)
-    }
+    /**
+     * 화면 읽기가 켜져 있는 동안에는 알약이 떠 있어야 한다. 이미 떠 있으면 아무 일도 안 한다.
+     *
+     * 예전엔 `Runner.running` 일 때만 띄웠고, 쉬는 중이면 6초 뒤 스스로 사라졌다.
+     * 알약이 **여기서 콘텐츠를 시작하는 조작 패널**이 된 뒤로는 그러면 안 된다 —
+     * 쉬는 중에 쓰라고 있는 것인데 그때만 사라졌다. 지우고 싶으면 패널의 [알약 숨기기] 로 지운다.
+     */
+    fun ensure(ctx: Context) { if (!dismissed) create(ctx) }
 
     /** 1초마다 글자만 갈아 끼운다. 돌고 있지 않으면 알약을 접어 둔다. */
     private fun tick() {
@@ -242,10 +343,17 @@ object Overlay {
         applyBrightness()
         // 돌고 있을 때만 [멈추기] 를 보여 준다. 쉬는 중에 눌러 봐야 할 일이 없다.
         stopBtn?.visibility = if (Runner.running) View.VISIBLE else View.GONE
-        if (!Runner.running) {
-            // 다 끝났으면 결과를 잠깐 보여 준 뒤 알아서 사라진다(게임 화면을 가리지 않게).
-            if (++idleTicks > 6) { hide(); return }
-        } else idleTicks = 0
+
+        // ⚠️ 도는 동안에는 펼침 패널을 반드시 접는다.
+        //    알약은 **화면 캡처에 같이 찍히고 그 자리 탭도 가로챈다.** 알약 자체는 안전한 세로 띠
+        //    (y 120~900) 안에 갇혀 있지만, 패널까지 펼치면 그 아래 판정 구역(아이콘열 y1100~)을
+        //    침범한다. 그래서 시작하는 순간 접고, 도는 동안 다시 열리지 않게 한다.
+        if (Runner.running) closePanel()
+        for (b in contentBtns) {
+            b.isEnabled = !Runner.running
+            b.alpha = if (Runner.running) 0.45f else 1f
+        }
+        // 쉬는 중에도 사라지지 않는다 — 이 알약이 콘텐츠를 시작하는 조작 패널이기 때문이다.
         ui.postDelayed({ tick() }, 1000)
     }
 }
