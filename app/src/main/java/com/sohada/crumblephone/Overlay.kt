@@ -42,6 +42,8 @@ object Overlay {
     private var dotView: View? = null
     private var arrow: TextView? = null
     private var scrollHost: FrameLayout? = null
+    private var barTrack: View? = null
+    private var barFill: View? = null
     private var ticker: ValueAnimator? = null
     private var shownText = ""
     private var panel: LinearLayout? = null
@@ -99,23 +101,53 @@ object Overlay {
         appCtx = ctx.applicationContext
         dpf = ctx.resources.displayMetrics.density
         val w = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val th = Theme()
+        // (Theme 은 관제 화면용이다. 알약은 게임 UI 를 직접 본떠 색을 여기서 쓴다.)
 
-        // 게임 위에 뜨는 것이라 게임이 밝든 어둡든 읽혀야 한다 → 언제나 어두운 알약이다.
-        // 색은 게임 하단 독에서 딴 갈색(#231A18)이라 게임 화면 위에 얹혀도 이물감이 없다.
-        // 화면을 어둡게 해 두면 이 알약이 **유일한 조작점**이라, 게임 패널처럼
-        // **탄색 테두리를 두툼하게** 둘러 어두운 화면에서도 윤곽이 보이게 한다.
+        // 게임의 **'스테이지 바' 판**을 그대로 본떴다(사용자 요청).
+        // 실측: 어두운 판 (44,42,47)~(62,50,54) · 외곽선은 거의 검정 (0,0,12).
+        // 게임 UI 는 테두리가 **얇은 색선이 아니라 두꺼운 검정**이라 만화처럼 보인다.
         val bg = GradientDrawable().apply {
-            setColor(Color.parseColor("#F2231A18"))
-            cornerRadius = dp(ctx, 100).toFloat()      // 완전한 알약 모양
-            setStroke(dp(ctx, 2), Color.parseColor("#8A6A52"))
+            setColor(Color.parseColor("#F02E272C"))
+            cornerRadius = dp(ctx, 22).toFloat()
+            setStroke(dp(ctx, 3), Color.parseColor("#0B0609"))
         }
         val pill = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.VERTICAL
             background = bg
             elevation = dp(ctx, 6).toFloat()
-            setPadding(dp(ctx, 14), dp(ctx, 9), dp(ctx, 10), dp(ctx, 9))
+            setPadding(dp(ctx, 12), dp(ctx, 8), dp(ctx, 10), dp(ctx, 8))
+        }
+        // 게임의 스테이지 바처럼 — 검은 홈 위에 금색 막대가 차오른다.
+        // 실측 단면: 검정 외곽선 → (255,217,44) → (249,193,20) → (254,173,4) → (106,68,6) → 검정.
+        val fillView = View(ctx).apply {
+            background = GradientDrawable().apply {
+                colors = intArrayOf(
+                    Color.parseColor("#FFD92C"), Color.parseColor("#F9C114"),
+                    Color.parseColor("#FEAD04"), Color.parseColor("#8A5605"))
+                orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                cornerRadius = dp(ctx, 5).toFloat()
+            }
+            pivotX = 0f
+            scaleX = 0f
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+        }
+        val track = FrameLayout(ctx).apply {
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#15100F"))
+                cornerRadius = dp(ctx, 6).toFloat()
+                setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
+            }
+            addView(fillView)
+            visibility = View.GONE
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(ctx, 11)).apply {
+                leftMargin = dp(ctx, 2); rightMargin = dp(ctx, 2); bottomMargin = dp(ctx, 7)
+            }
+        }
+        val row = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
         // 알약과 펼침 패널을 세로로 담는 뿌리. 바탕은 투명이라 알약 모양이 그대로 보인다.
         val box = LinearLayout(ctx).apply {
@@ -124,14 +156,15 @@ object Overlay {
         val dot = View(ctx).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL; setColor(Color.parseColor("#7CC24A"))
-                setStroke(dp(ctx, 1), Color.parseColor("#3A2C18"))
+                setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
             }
             layoutParams = LinearLayout.LayoutParams(dp(ctx, 9), dp(ctx, 9)).apply {
                 rightMargin = dp(ctx, 8)
             }
         }
         val txt = TextView(ctx).apply {
-            text = "쉬는 중"; setTextColor(Color.parseColor("#E8D9C8"))   // 크림
+            // 게임의 '스테이지 104-19' 글자와 같은 밝은 금색(실측 (248,240,97)).
+            text = "쉬는 중"; setTextColor(Color.parseColor("#F8E861"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             // 자르지 않는다. 넘치면 아래 `flow()` 가 왼쪽으로 흘려 보낸다.
@@ -161,7 +194,7 @@ object Overlay {
                 colors = intArrayOf(Color.parseColor("#F06A58"), Color.parseColor("#E8503C"))
                 orientation = GradientDrawable.Orientation.TOP_BOTTOM
                 cornerRadius = dp(ctx, 100).toFloat()
-                setStroke(dp(ctx, 2), Color.parseColor("#7A2418"))
+                setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
             }
             setPadding(dp(ctx, 13), dp(ctx, 5), dp(ctx, 13), dp(ctx, 5))
             // 글자가 아무리 길어도 이 버튼은 절대 줄어들지 않는다.
@@ -180,22 +213,23 @@ object Overlay {
         // ⚠️ 스스로 clickable 이어야 한다 — 안 그러면 알약의 드래그 리스너가 탭을 먼저 먹는다.
         val arw = TextView(ctx).apply {
             text = "▾"
-            setTextColor(Color.parseColor("#BCA491"))
+            setTextColor(Color.parseColor("#F8E861"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setPadding(dp(ctx, 10), dp(ctx, 2), dp(ctx, 6), dp(ctx, 2))
             isClickable = true
             setOnClickListener { togglePanel() }
         }
-        pill.addView(dot); pill.addView(host); pill.addView(stop); pill.addView(arw)
+        row.addView(dot); row.addView(host); row.addView(stop); row.addView(arw)
+        pill.addView(track); pill.addView(row)
 
         // ── 펼침 패널: 여기서 바로 콘텐츠를 시작할 수 있다 ──
         // 게임을 보는 중에 관제 화면으로 나갔다 오지 않아도 되게.
         val pnl = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#F2231A18"))
-                cornerRadius = dp(ctx, 18).toFloat()
-                setStroke(dp(ctx, 2), Color.parseColor("#8A6A52"))
+                setColor(Color.parseColor("#F02E272C"))
+                cornerRadius = dp(ctx, 20).toFloat()
+                setStroke(dp(ctx, 3), Color.parseColor("#0B0609"))
             }
             elevation = dp(ctx, 6).toFloat()
             setPadding(dp(ctx, 10), dp(ctx, 10), dp(ctx, 10), dp(ctx, 10))
@@ -216,11 +250,17 @@ object Overlay {
         for ((name, go) in items) {
             val b2 = TextView(ctx).apply {
                 text = name
-                setTextColor(Color.parseColor("#E8D9C8"))
+                // 게임의 '자동 소환 예약' 알약처럼 — 어두운 판 + 검은 외곽선 + 금색 글자.
+                setTextColor(Color.parseColor("#F8E861"))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
                 gravity = Gravity.CENTER
-                background = th.chunky(th.cell, dp(ctx, 14).toFloat(), dp(ctx, 2), dp(ctx, 3))
+                background = GradientDrawable().apply {
+                    colors = intArrayOf(Color.parseColor("#4A4048"), Color.parseColor("#332C32"))
+                    orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                    cornerRadius = dp(ctx, 14).toFloat()
+                    setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
+                }
                 setPadding(dp(ctx, 14), dp(ctx, 8), dp(ctx, 14), dp(ctx, 8))
                 minWidth = dp(ctx, 128)
                 isClickable = true
@@ -238,7 +278,7 @@ object Overlay {
         }
         pnl.addView(TextView(ctx).apply {
             text = "알약 숨기기"
-            setTextColor(Color.parseColor("#BCA491"))
+            setTextColor(Color.parseColor("#C8B79F"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             gravity = Gravity.CENTER
             setPadding(dp(ctx, 8), dp(ctx, 8), dp(ctx, 8), dp(ctx, 4))
@@ -285,7 +325,12 @@ object Overlay {
                     // (오른쪽 [멈추기] 는 자기가 먼저 탭을 가져가므로 여기까지 안 온다.)
                     if (!moved) {
                         wakeUntil = System.currentTimeMillis() + WAKE_MS
-                        applyBrightness()
+                        // 진행률 막대 — 분모가 있는 작업일 때만 보여 준다(없으면 -1).
+        val pct = Runner.progress
+        barTrack?.visibility = if (Runner.running && pct >= 0) View.VISIBLE else View.GONE
+        if (Runner.running && pct >= 0) barFill?.animate()?.scaleX(pct / 100f)?.setDuration(280)?.start()
+
+        applyBrightness()
                     }
                     true
                 }
@@ -296,6 +341,7 @@ object Overlay {
         try { w.addView(box, p) } catch (e: Exception) { Bot.log("오버레이 실패: ${e.message}"); return }
         wm = w; view = box; lp = p; label = txt; stopBtn = stop; dotView = dot
         arrow = arw; panel = pnl; scrollHost = host
+        barTrack = track; barFill = fillView
         maxTextW = Math.max(dp(ctx, 130),
             ctx.resources.displayMetrics.widthPixels - dp(ctx, 190))
         shownText = ""
@@ -308,6 +354,7 @@ object Overlay {
         wm = null; view = null; lp = null; label = null; stopBtn = null; dotView = null
         arrow = null; panel = null; contentBtns.clear()
         ticker?.cancel(); ticker = null; scrollHost = null; shownText = ""
+        barTrack = null; barFill = null
     }
 
     /**
