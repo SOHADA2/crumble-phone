@@ -98,10 +98,19 @@ object Overlay {
             // ⚠️ 창이 WRAP_CONTENT 라, 글자가 길면 알약이 화면 밖까지 커지고
             //    **오른쪽 끝의 [멈추기] 가 잘려 나간다**(빨간 조각만 보였다).
             //    글자 쪽에 상한을 둬서 버튼 자리를 먼저 확보한다.
-            maxLines = 2
-            ellipsize = android.text.TextUtils.TruncateAt.END
             maxWidth = Math.max(dp(ctx, 130),
                 ctx.resources.displayMetrics.widthPixels - dp(ctx, 190))
+
+            // 넘치는 글자는 잘라내지 않고 **흘려 보여 준다**(marquee).
+            // 안드로이드 marquee 가 도는 조건이 까다롭다 — 넷을 다 맞춰야 한다:
+            //   ① 한 줄일 것(여러 줄이면 아예 안 돈다)  ② ellipsize = MARQUEE
+            //   ③ 반복 제한을 풀 것(-1, 기본은 3번 돌고 멈춘다)
+            //   ④ isSelected = true — 보통은 포커스가 있어야 도는데, 알약 창은
+            //      FLAG_NOT_FOCUSABLE 이라 포커스를 못 받는다. 이걸로 대신한다.
+            isSingleLine = true
+            ellipsize = android.text.TextUtils.TruncateAt.MARQUEE
+            marqueeRepeatLimit = -1
+            isSelected = true
         }
         // [멈추기] 는 **늘 보인다.** 예전엔 알약을 탭해야 나왔는데, 그러면 있는 줄도 모른다.
         // 게다가 그 탭에 밝기 깨우기까지 얹혀 있어서 한 동작이 두 가지 일을 했다.
@@ -219,7 +228,11 @@ object Overlay {
                 (if (pct >= 0) " " + pct + "%" else "") +
                 (if (Runner.detail.isNotEmpty()) " · " + Runner.detail else "")
         } else "쉬는 중"
-        if (l.text != s) l.text = s
+        if (l.text != s) {
+            l.text = s
+            // 글자를 갈아 끼우면 흐르기가 멈춘다. 매번 다시 걸어 준다.
+            l.isSelected = true
+        }
         (dotView?.background as? GradientDrawable)?.setColor(
             if (Runner.running) Color.parseColor("#30D158") else Color.parseColor("#8E8E93"))
         applyBrightness()

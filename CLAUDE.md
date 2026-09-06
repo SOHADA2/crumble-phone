@@ -398,7 +398,12 @@ SharedPreferences 하나. 콘텐츠 코드가 Context 를 들고 다니지 않�
 창이 `WRAP_CONTENT` 라 글자가 길수록 알약이 커지는데, 화면 폭에 닿으면 **오른쪽 끝의 [멈추기] 가
 잘려 빨간 조각만 보였다.** 실기 사진으로 확인.
 
-- 글자 쪽에 상한을 뒀다 — `maxLines=2` · `ellipsize=END` · `maxWidth = 화면폭 - 190dp`(최소 130dp)
+- 글자 쪽에 상한을 뒀다 — `maxWidth = 화면폭 - 190dp`(최소 130dp)
+- 넘치는 글자는 **자르지 않고 흘려 보여 준다**(marquee). 도는 조건이 까다로워 넷을 다 맞춰야 한다:
+  `isSingleLine=true`(여러 줄이면 아예 안 돈다) · `ellipsize=MARQUEE` ·
+  `marqueeRepeatLimit=-1`(기본은 3번 돌고 멈춘다) · **`isSelected=true`**
+  (보통은 포커스가 있어야 도는데 알약 창은 `FLAG_NOT_FOCUSABLE` 이라 포커스를 못 받는다).
+  글자를 갈아 끼우면 멈추므로 `tick()` 에서 **매번 `isSelected` 를 다시 걸어 준다.**
 - [멈추기] 는 `minWidth 62dp` · `weight 0` 이라 **절대 줄어들지 않는다**
 - `"퀘스트 · 퀘스트 기다리는 중"` 처럼 앞말이 겹치면 앞을 뺀다(알약은 자리가 귀하다)
 
