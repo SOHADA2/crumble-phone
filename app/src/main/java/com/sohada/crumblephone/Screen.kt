@@ -221,6 +221,31 @@ object Screen {
     fun isBottomPanel(b: Bitmap): Boolean = dockRatio(b) <= -0.2
 
     /**
+     * 지금 화면에서 주요 판정값을 한 줄로 뽑는다.
+     *
+     * 좌표 매핑이 큰 것(독·닫기 버튼)으로는 맞아도 **띠 비율 같은 세밀한 값은 틀어질 수 있다.**
+     * 그러면 판정이 조용히 어긋난다 — 퀘스트가 완료인데 미완료로 읽혀 엉뚱한 걸 돌리는 식이다.
+     * 새 기기에서 그걸 확인하려면 값을 직접 재서 폰과 비교하는 수밖에 없다.
+     *
+     * 폰(설계 그대로) 기준값:
+     *   독 ratio 메인 +0.32 / 가방 -0.45 / 뽑기 -0.60,  cv 정상 0.89 · 절전 0.11
+     *   퀘스트 띠 완료 1.11~1.28 / 미완료 0.16~0.58 (임계 0.85)
+     *   하단 ✕ 메인 0/7 · 서브 4~7/7
+     */
+    fun debugLine(b: Bitmap): String {
+        val d = dockStats(b)
+        return "독 ratio=" + f(d.ratio) + " cv=" + f(d.cv) + " 밝기=" + f(d.mean) +
+            " · 퀘스트띠=" + f(questBarRatio(b)) +
+            " · 뽑기버튼=" + gachaHits(b) + "/3" +
+            " · 하단X=" + (if (hasCloseButton(b)) "있음" else "없음") +
+            " · 메인=" + atMain(b) +
+            " · 토벌로비=" + atTobolLobby(b) +
+            " · 일일진입=" + atDailyEntry(b)
+    }
+
+    private fun f(v: Double) = String.format("%.2f", v)
+
+    /**
      * 지금 화면이 **우리가 아는 게임 화면 중 하나로 보이나?**
      * 좌표 매핑이 맞는지 검증하는 데 쓴다 — 매핑이 맞으면 알아보이고, 틀리면 아무것도 안 걸린다.
      */

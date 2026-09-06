@@ -216,6 +216,9 @@ object Runner {
                 Coords.detect(b)
                 val sum = Coords.summary()
                 Bot.log("좌표 확인 결과: " + sum)
+                // 좌표가 큰 것으로 맞아도 세밀한 판정값이 틀어질 수 있다. 그 값들을 같이 남겨
+                // 폰 기준값과 비교할 수 있게 한다(문서에 기준값이 적혀 있다).
+                shot()?.let { Bot.log("판정값: " + Screen.debugLine(it)) }
                 set(if (Coords.ratioOk) "좌표가 맞아요" else "좌표가 안 맞아요", sum)
                 lastResult = sum
             }

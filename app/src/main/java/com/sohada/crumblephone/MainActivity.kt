@@ -347,6 +347,8 @@ class MainActivity : AppCompatActivity() {
         })
         g3.addView(separator())
         // 스크린샷을 찍어 보내는 건 번거롭다. 글로 복사하면 채팅에 그냥 붙여넣을 수 있다.
+        g3.addView(row("지금 화면 재기", subtitle = "게임을 원하는 화면에 두고 눌러요") { measureNow() })
+        g3.addView(separator())
         g3.addView(row("진단 결과 복사", subtitle = "기기 정보와 최근 기록을 글로 복사해요") { copyDiag() })
         capOffSep = separator()
         rowCapOff = row("화면 읽기 끄기", tint = t.red) { CaptureService.stop(applicationContext) }
@@ -489,6 +491,20 @@ class MainActivity : AppCompatActivity() {
     private fun askProjection() {
         val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAP)
+    }
+
+    /**
+     * 지금 게임 화면의 판정값을 재서 기록에 남긴다. 게임을 원하는 화면(메인·로비…)에 두고 누른다.
+     * 새 기기에서 '되는 것 같은데 뭔가 이상할' 때, 폰 기준값과 비교할 유일한 방법이다.
+     */
+    private fun measureNow() {
+        if (CaptureService.instance == null) { Bot.log("화면 읽기를 먼저 켜 주세요"); return }
+        Thread {
+            val b = Runner.shot()
+            if (b == null) Bot.log("화면을 읽지 못했어요")
+            else Bot.log("판정값: " + Screen.debugLine(b))
+        }.start()
+        Toast.makeText(this, "기록에 남겼어요 — [진단 결과 복사]로 보내 주세요", Toast.LENGTH_LONG).show()
     }
 
     /** 기기 정보 + 최근 기록을 클립보드로. 스크린샷 대신 붙여넣기만 하면 되게. */
