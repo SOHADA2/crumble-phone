@@ -154,6 +154,15 @@ object Coords {
     /** 넓이에 비례하는 값(픽셀 개수 임계 등)을 환산한다. */
     fun area(v: Int): Int = if (sx == 1.0 && sy == 1.0) v else Math.round(v * sx * sy).toInt()
 
+    /** 사람이 읽고 그대로 보내 줄 수 있는 한 줄. 새 기기에서 무엇이 문제인지 이걸로 갈린다. */
+    fun summary(): String {
+        val r = if (cw > 0) ch.toDouble() / cw else 0.0
+        return "화면 " + screenW + "x" + screenH +
+            " · 게임 영역 " + cw + "x" + ch + " @(" + ox + "," + oy + ")" +
+            " · 비율 " + String.format("%.3f", r) + " (설계 " + String.format("%.3f", RATIO) + ")" +
+            " · " + (if (ratioOk) "맞음" else "안 맞음")
+    }
+
     fun mismatchReason(): String =
         "이 기기는 게임 화면 비율이 달라요 (" + cw + "x" + ch + " · 설계는 " + W + "x" + H + ").\n" +
         "게임이 넓은 화면에 맞춰 UI 를 다시 배치한 것으로 보입니다.\n" +

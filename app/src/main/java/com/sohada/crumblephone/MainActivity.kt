@@ -340,6 +340,11 @@ class MainActivity : AppCompatActivity() {
         rowGame = row("게임 앱", subtitle = "스토어마다 이름이 달라서 여기서 고를 수 있어요") { pickGame() }
         g3.addView(rowGame); g3.addView(separator())
         g3.addView(row("게임 켜기") { launchGame() })
+        g3.addView(separator())
+        // 새 기기에서 좌표가 맞는지만 확인한다. 아무것도 누르지 않으니 재화를 안 쓴다.
+        g3.addView(row("화면 좌표 확인", subtitle = "게임을 띄워 한 장만 보고 판단해요") {
+            Overlay.show(applicationContext); Runner.checkCoords(applicationContext)
+        })
         capOffSep = separator()
         rowCapOff = row("화면 읽기 끄기", tint = t.red) { CaptureService.stop(applicationContext) }
         g3.addView(capOffSep); g3.addView(rowCapOff)

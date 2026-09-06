@@ -154,6 +154,28 @@ object Runner {
         return false
     }
 
+    /**
+     * 게임을 띄워 한 장 찍고 **좌표가 맞는 기기인지**만 확인한다. 아무것도 누르지 않는다.
+     * 새 기기(태블릿 등)에서 안 될 때, 무엇이 문제인지 한 줄로 알려 주려고 둔 것이다.
+     */
+    fun checkCoords(ctx: Context) {
+        if (!guard()) return
+        running = true; task = "좌표 확인"
+        thread(name = "coords") {
+            try {
+                set("좌표 확인", "게임 화면을 보는 중")
+                // bringGameToFront 가 게임을 띄우고 detect 까지 한다(안 맞으면 거기서 이유를 남긴다).
+                bringGameToFront(ctx)
+                val s = Coords.summary()
+                Bot.log("좌표 확인 결과: " + s)
+                set(if (Coords.ratioOk) "좌표가 맞아요" else "좌표가 안 맞아요", s)
+                lastResult = s
+            }
+            catch (e: Exception) { set("오류", e.message ?: "알 수 없음") }
+            finally { running = false; task = "" }
+        }
+    }
+
     fun startTobol(ctx: Context, maxAttempts: Int = if (Prefs.testMode) 0 else 300) {
         if (!guard()) return
         running = true; task = "토벌전"; lastScore = 0L; bestScore = 0L
