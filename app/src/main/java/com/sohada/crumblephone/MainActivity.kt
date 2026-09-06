@@ -30,9 +30,8 @@ import androidx.core.view.WindowCompat
  *   34 굵게(제목) · 22 중간(지금 하는 일) · 17(버튼·목록) · 15(설명) · 13(구역 이름)
  * 색은 `Theme.kt` 가 라이트/다크 한 벌씩 들고 있다.
  */
-class MainActivity : AppCompatActivity() {
+class MainActivity : ListActivity() {
 
-    private lateinit var t: Theme
     private val ui = Handler(Looper.getMainLooper())
     private val REQ_CAP = 1001
 
@@ -55,120 +54,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var logView: TextView
     private lateinit var rowUpdate: LinearLayout
     private lateinit var rowGame: LinearLayout
-    private lateinit var swTest: Switch
-    private lateinit var swSweep: Switch
-    private lateinit var swDim: Switch
-    private lateinit var rowArenaCount: LinearLayout
     private var lastProgress = -1
     private var setupShown = false      // 이번에 켠 뒤로 안내를 한 번 띄웠나
-
-    private fun dp(v: Int) = TypedValue.applyDimension(
-        TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
-
-    private fun dpf(v: Float) = TypedValue.applyDimension(
-        TypedValue.COMPLEX_UNIT_DIP, v, resources.displayMetrics)
-
-    private fun text(s: String, size: Float, color: Int, face: Typeface? = null) = TextView(this).apply {
-        text = s
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
-        setTextColor(color)
-        if (face != null) typeface = face
-    }
-
-    private val medium: Typeface get() = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-
-    // ── iOS 묶음 목록 조각들 ──────────────────────────────────
-
-    /** 구역 이름. 목록 위에 작게 붙는 회색 글씨. */
-    private fun sectionHeader(title: String) = text(title, 13f, t.label2, medium).apply {
-        setPadding(dp(20), dp(24), dp(20), dp(7))
-        letterSpacing = 0.02f
-    }
-
-    /** 셀들을 담는 둥근 카드. 모서리 클리핑은 여기서 한 번만 한다. */
-    private fun group(): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        background = t.round(t.cell, dpf(12f))
-        clipToOutline = true
-        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
-            leftMargin = dp(16); rightMargin = dp(16)
-        }
-    }
-
-    /** 셀 사이 가는 선. 왼쪽은 글자 시작점까지 들여쓴다(iOS 방식). */
-    private fun separator(): View = View(this).apply {
-        setBackgroundColor(t.separator)
-        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, Math.max(1, (dpf(0.5f)).toInt())).apply {
-            leftMargin = dp(16)
-        }
-    }
-
-    /**
-     * 목록 한 줄. 왼쪽 제목 · 오른쪽 값 · 그 옆 꺾쇠.
-     * `tint` 를 주면 제목이 그 색이 된다(위험한 동작을 빨갛게 표시할 때).
-     */
-    private fun row(
-        title: String,
-        value: String = "",
-        subtitle: String = "",
-        chevron: Boolean = true,
-        tint: Int? = null,
-        onClick: () -> Unit
-    ): LinearLayout {
-        // 부제가 있으면 제목 아래 한 줄 더. 콘텐츠 줄이 무슨 일을 하는지 한눈에 보이게 한다.
-        val lbl: View = if (subtitle.isEmpty()) {
-            text(title, 17f, tint ?: t.label).apply {
-                layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
-            }
-        } else {
-            LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(text(title, 17f, tint ?: t.label))
-                addView(text(subtitle, 13f, t.label2).apply { setPadding(0, dp(2), 0, 0) })
-                layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
-            }
-        }
-        val v = text(value, 17f, t.label2).apply { tag = "value" }
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = t.ripple(t.cell)
-            minimumHeight = dp(50)
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-            addView(lbl)
-            addView(v)
-            if (chevron) addView(text("›", 20f, t.label3).apply {
-                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(6) }
-            })
-            isClickable = true
-            setOnClickListener { onClick() }
-        }
-    }
-
-    /** 켜고 끄는 줄. 오른쪽 끝에 스위치가 붙는다(꺾쇠 대신). */
-    private fun switchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit): Pair<LinearLayout, Switch> {
-        val sw = Switch(this).apply {
-            isChecked = checked
-            setOnCheckedChangeListener { _, v -> onChange(v) }
-        }
-        val lbl = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(text(title, 17f, t.label))
-            addView(text(subtitle, 13f, t.label2).apply { setPadding(0, dp(2), 0, 0) })
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
-        }
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = t.ripple(t.cell)
-            minimumHeight = dp(50)
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-            addView(lbl); addView(sw)
-            isClickable = true
-            setOnClickListener { sw.toggle() }
-        }
-        return row to sw
-    }
 
     private fun LinearLayout.setValue(s: String, color: Int) {
         (findViewWithTag<TextView>("value"))?.let { it.text = s; it.setTextColor(color) }
@@ -199,9 +86,21 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, dp(8), 0, dp(32))
         }
 
-        // 큰 제목
-        root.addView(text("크럼블 폰봇", 34f, t.label, Typeface.DEFAULT_BOLD).apply {
-            setPadding(dp(20), dp(12), dp(20), 0)
+        // 큰 제목 + 오른쪽 톱니바퀴(설정)
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(text("크럼블 폰봇", 34f, t.label, Typeface.DEFAULT_BOLD).apply {
+                setPadding(dp(20), dp(12), 0, 0)
+                layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            })
+            // 이모지 대신 글리프 하나. 이미지를 안 쓴다는 원칙을 지킨다.
+            addView(text("⚙", 26f, t.label2).apply {
+                setPadding(dp(14), dp(14), dp(20), dp(10))
+                background = t.rippleRound(t.bg, dpf(22f))
+                isClickable = true
+                setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
+            })
         })
         lblSubtitle = text("", 15f, t.label2).apply { setPadding(dp(20), dp(2), dp(20), 0) }
         root.addView(lblSubtitle)
@@ -304,41 +203,6 @@ class MainActivity : AppCompatActivity() {
         setupSection.addView(g2)
         root.addView(setupSection)
 
-        // ── 설정 ──
-        root.addView(sectionHeader("설정"))
-        val g4 = group()
-        // 재화를 쓰는 콘텐츠(일일 던전·아레나·오븐)를 공짜로 시험하는 길. 좌표 확인용이다.
-        val (rTest, sTest) = switchRow("시험 모드", "재화·입장권을 안 쓰고 진입까지만", Prefs.testMode) {
-            Prefs.testMode = it
-        }
-        swTest = sTest
-        rowArenaCount = row("아레나 판수", value = Prefs.arenaFights.toString() + "판",
-            subtitle = "재화가 먼저 떨어지면 거기서 끝난다") { cycleArena() }
-        val (rSweep, sSweep) = switchRow("일일 던전 소탕", "SKIP 티켓까지 쓴다 (광고 제거 보유자용)", Prefs.dailySweep) {
-            Prefs.dailySweep = it
-        }
-        swSweep = sSweep
-        // 화면은 끌 수 없다(화면 읽기도 탭도 화면이 켜져 있어야 한다). 대신 백라이트만 내린다 —
-        // 화면 읽기는 프레임버퍼를 읽으므로 봇에는 아무 영향이 없다.
-        val (rDim, sDim) = switchRow("화면 어둡게",
-            "봇이 도는 동안만. 알약을 탭하면 15초 밝아져요", Prefs.dimScreen) {
-            Prefs.dimScreen = it
-            if (it && !Overlay.canDraw(this)) {
-                android.app.AlertDialog.Builder(this)
-                    .setTitle("'게임 위에 표시'가 필요해요")
-                    .setMessage("화면을 어둡게 하는 것도 게임 위에 띄우는 창으로 합니다.\n" +
-                                "준비 → '게임 위에 표시'를 먼저 허용해 주세요.")
-                    .setPositiveButton("확인", null)
-                    .show()
-            }
-        }
-        swDim = sDim
-        g4.addView(rTest); g4.addView(separator())
-        g4.addView(rowArenaCount); g4.addView(separator())
-        g4.addView(rSweep); g4.addView(separator())
-        g4.addView(rDim)
-        root.addView(g4)
-
         // ── 도구 ──
         root.addView(sectionHeader("도구"))
         val g3 = group()
@@ -411,14 +275,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openSetup() = startActivity(Intent(this, SetupActivity::class.java))
-
-    /** 탭할 때마다 5 → 10 → 20 → 30 → 5 … 로 돈다. 고르는 값이 넷뿐이라 별도 화면을 안 만든다. */
-    private fun cycleArena() {
-        val c = Prefs.ARENA_CHOICES
-        val i = c.indexOf(Prefs.arenaFights)
-        Prefs.arenaFights = c[(if (i < 0) 0 else i + 1) % c.size]
-        rowArenaCount.setValue(Prefs.arenaFights.toString() + "판", t.label2)
-    }
 
     /** 1초마다 상태만 갈아 끼운다(무거운 일은 하지 않는다). */
     private fun tick() {

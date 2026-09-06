@@ -53,5 +53,15 @@ object Prefs {
         get() = sp?.getString("gamePackage", "") ?: ""
         set(v) { sp?.edit()?.putString("gamePackage", v)?.apply() }
 
+    /**
+     * 오븐 '자동 열기'의 **1회에 여는 개수**. 게임 쪽 설정값을 여기에 그대로 적어 둔다.
+     * 봇이 이 값을 바꾸지는 않는다 — 한 싸이클이 얼마나 큰지 알아야 상한을 제대로 잡을 수 있어서다.
+     * 오븐 레벨에 따라 고를 수 있는 값이 달라서 사용자가 직접 맞춘다.
+     */
+    val OVEN_CHOICES = intArrayOf(5, 10, 20, 30, 50)
+    var ovenPerRun: Int
+        get() = sp?.getInt("ovenPerRun", 20) ?: 20
+        set(v) { sp?.edit()?.putInt("ovenPerRun", v)?.apply() }
+
     val ARENA_CHOICES = intArrayOf(5, 10, 20, 30)
 }

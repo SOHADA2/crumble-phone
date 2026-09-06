@@ -50,6 +50,12 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
+        <!-- 설정 (관제 화면 오른쪽 위 톱니바퀴) -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="설정" />
+
         <!-- 첫 실행 안내 (켤 것을 하나씩만 보여 준다) -->
         <activity
             android:name=".SetupActivity"

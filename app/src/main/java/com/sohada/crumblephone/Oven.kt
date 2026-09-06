@@ -19,8 +19,15 @@ package com.sohada.crumblephone
  */
 object Oven {
 
-    private const val MAX_DISMISS = 15     // 이만큼 넘겨도 완료가 안 뜨면 Auto 로 못 끝내는 퀘스트로 보고 나간다
     private const val DONE_STRICT = 1.0    // 가동 중 완료 판정 문턱
+    private const val IDLE_QUIT_MS = 10_000L   // 이만큼 아무 변화가 없으면 한 싸이클이 끝난 것
+
+    /**
+     * Auto 한 번이 얼마나 큰지는 **오븐 레벨마다 다르다**(1회에 5~50개).
+     * 게임 쪽 '자동 열기 → 1회에 여는 개수'를 설정(⚙ → 오븐 1회 개수)에 맞춰 두면
+     * 그 값으로 상한을 잡는다. 20개짜리면 **한 싸이클로 퀘스트가 끝난다**(사용자 확인).
+     */
+    private fun perRun() = Prefs.ovenPerRun.coerceIn(1, 50)
 
     /** 퀘스트를 채웠으면 true. 시작조차 못 했으면 false. */
     fun run(count: Int = 15): Boolean {
@@ -69,15 +76,31 @@ object Oven {
 
         var dismissed = 0
         var done = false
+        val per = perRun()
+        // 상한 셋 — 시간·넘긴 수·'조용해지면 끝'. 예전엔 시간만 있어서 완료 감지가 빗나가면
+        // 140초 동안 팝업 55개(≈장비 110개)를 뽑아 재화를 크게 낭비했다.
+        // 이제는 **한 싸이클 분량**에 맞춘다: 1회 개수보다 조금 넉넉한 만큼만 넘기고,
+        // 팝업도 뱃지 변화도 10초 없으면 싸이클이 끝난 것으로 보고 나간다.
+        val maxDismiss = (per + 5).coerceIn(8, 40)
         try {
-            // 상한 두 가지 — 시간과 뽑기 횟수. 예전엔 시간만 있어서 완료 감지가 빗나가면
-            // 140초 동안 팝업 55개(≈장비 110개)를 뽑아 재화를 크게 낭비했다.
-            val deadline = System.currentTimeMillis() + maxOf(60, count * 7) * 1000L
-            Runner.set("오븐에서 장비 뽑는 중", "0/" + MAX_DISMISS)
-            Runner.setProgress(0, MAX_DISMISS)
-            while (System.currentTimeMillis() < deadline && dismissed < MAX_DISMISS && Runner.running) {
+            val deadline = System.currentTimeMillis() + maxOf(60L, per * 5L) * 1000L
+            var lastMove = System.currentTimeMillis()
+            var lastBadge = baseBadge
+            Bot.log("  오븐: 1회 " + per + "개 기준 · 최대 넘김 " + maxDismiss + "회 · 최대 " +
+                    maxOf(60L, per * 5L) + "초")
+            Runner.set("오븐에서 장비 뽑는 중", "0/" + maxDismiss)
+            Runner.setProgress(0, maxDismiss)
+            while (System.currentTimeMillis() < deadline && dismissed < maxDismiss && Runner.running) {
                 val cur = Runner.shot()
                 if (cur == null) { Runner.sleep(2000); continue }
+
+                // 뱃지가 오르고 있으면 아직 도는 중이다.
+                val badge = Screen.ovenBadge(cur)
+                if (badge != lastBadge) { lastBadge = badge; lastMove = System.currentTimeMillis() }
+                if (System.currentTimeMillis() - lastMove > IDLE_QUIT_MS && !Screen.isOvenPopup(cur)) {
+                    Bot.log("  오븐: 한 싸이클이 끝난 것 같아요 (넘김 " + dismissed + "회) - 나갑니다")
+                    break
+                }
 
                 // 완료 확인을 먼저 한다. 팝업이 띠를 가려 못 읽을 때가 많다.
                 if (Screen.questBarRatio(cur) >= DONE_STRICT) {
@@ -87,8 +110,9 @@ object Oven {
                 if (Screen.isOvenPopup(cur)) {
                     Runner.tap(Screen.OUTSIDE, 1000)   // 넘기면 오븐에 쌓인다(퀘스트 수치도 오른다)
                     dismissed++
-                    Runner.set("오븐에서 장비 뽑는 중", dismissed.toString() + "/" + MAX_DISMISS)
-                    Runner.setProgress(dismissed, MAX_DISMISS)
+                    lastMove = System.currentTimeMillis()
+                    Runner.set("오븐에서 장비 뽑는 중", dismissed.toString() + "/" + maxDismiss)
+                    Runner.setProgress(dismissed, maxDismiss)
                     // 팝업이 사라진 순간에 띠가 드러난다. 여기서 다시 봐야 완료를 안 놓친다.
                     val after = Runner.shot()
                     if (after != null && Screen.questBarRatio(after) >= DONE_STRICT) {
@@ -98,7 +122,7 @@ object Oven {
                 }
                 Runner.sleep(1000)
             }
-            if (dismissed >= MAX_DISMISS) Bot.log("  오븐: 최대 " + MAX_DISMISS + "회 도달 - Auto 로 못 끝내는 퀘스트로 보고 나갑니다")
+            if (dismissed >= maxDismiss) Bot.log("  오븐: 최대 " + maxDismiss + "회 도달 - Auto 로 못 끝내는 퀘스트로 보고 나갑니다")
             else if (!done && Runner.running) Bot.log("  오븐: 시간 상한 도달 (넘김 " + dismissed + "회)")
         }
         finally {
