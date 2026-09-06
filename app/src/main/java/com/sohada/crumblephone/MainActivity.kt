@@ -364,7 +364,7 @@ class MainActivity : AppCompatActivity() {
             Overlay.show(applicationContext); Runner.checkCoords(applicationContext)
         })
         g5.addView(separator())
-        g5.addView(row("탭 점검", subtitle = "게임 메인 화면에 두고 눌러요 — 탭이 먹는지 봅니다") { tapTest() })
+        g5.addView(row("탭 점검", subtitle = "게임을 띄워 눌러 봐요 — 탭이 먹는지 확인") { tapTest() })
         g5.addView(separator())
         g5.addView(row("진단 보내기", value = "글", subtitle = "기기 정보와 최근 기록") { sendDiag() })
         g5.addView(separator())
@@ -525,7 +525,7 @@ class MainActivity : AppCompatActivity() {
         if (gi == null) { Bot.log("게임을 찾지 못했어요 - '게임 앱'에서 골라 주세요"); pickGame(); return }
         gi.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(gi)
-        Toast.makeText(this, "게임을 띄우고 시험해요 — 20초쯤 걸려요", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "게임을 띄우고 시험해요 — 15초쯤 걸려요", Toast.LENGTH_LONG).show()
 
         Thread {
             Bot.log("── 탭 점검 ──")
