@@ -50,6 +50,8 @@ class MainActivity : ListActivity() {
     private lateinit var rowCap: LinearLayout
     private lateinit var rowOverlay: LinearLayout
     private lateinit var logView: TextView
+    private lateinit var lblVersion: TextView
+    private lateinit var dotUpdate: View
     private var lastProgress = -1
     private var setupShown = false      // 이번에 켠 뒤로 안내를 한 번 띄웠나
 
@@ -87,6 +89,37 @@ class MainActivity : ListActivity() {
                 layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
             })
             // 이모지 대신 글리프 하나. 이미지를 안 쓴다는 원칙을 지킨다.
+            // ── 버전 칩 ──
+            // 설정 깊숙이 넣어 뒀더니 업데이트하러 들어가기가 번거로웠다. 제목 옆으로 꺼냈다.
+            // 누르면 최신 확인, 새 판이 있으면 바로 받는다. 새 판이 있을 땐 **빨간 점**이 붙는다
+            // (게임이 '할 일'을 알려 주는 방식 그대로 — 앱에서도 같은 언어를 쓴다).
+            addView(FrameLayout(this@MainActivity).apply {
+                lblVersion = text("", 13f, t.gold, medium).apply {
+                    gravity = Gravity.CENTER
+                    background = t.chunky(t.cell, dpf(15f), dp(2), dp(3))
+                    setPadding(dp(11), dp(6), dp(11), dp(8))
+                    isClickable = true
+                    setOnClickListener { onUpdate() }
+                }
+                addView(lblVersion, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+                    topMargin = dp(5); rightMargin = dp(5)
+                })
+                dotUpdate = View(this@MainActivity).apply {
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(Color.parseColor("#FF3B30"))
+                        setStroke(dp(2), Color.parseColor("#0B0609"))
+                    }
+                    visibility = View.GONE
+                }
+                addView(dotUpdate, FrameLayout.LayoutParams(dp(13), dp(13)).apply {
+                    gravity = Gravity.END or Gravity.TOP
+                })
+                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+                    rightMargin = dp(10); topMargin = dp(14)
+                }
+            })
+
             // 게임 UI 의 동그란 버튼처럼 — 정사각 + 두툼한 테두리 + 아래 그림자.
             addView(text("⚙", 22f, t.label, medium).apply {
                 gravity = Gravity.CENTER
@@ -246,6 +279,16 @@ class MainActivity : ListActivity() {
 
     private fun openSetup() = startActivity(Intent(this, SetupActivity::class.java))
 
+    /** 버전 칩을 눌렀을 때 — 새 판이 있으면 바로 받고, 아직 모르면 먼저 확인한다. */
+    private fun onUpdate() {
+        if (Updater.busy) return
+        if (Updater.latestCode > Updater.currentCode(this)) Updater.update(applicationContext)
+        else {
+            Updater.check(applicationContext)
+            Toast.makeText(this, "최신 판을 확인하는 중…", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     /** 1초마다 상태만 갈아 끼운다(무거운 일은 하지 않는다). */
     private fun tick() {
         val accOk = TapService.isReady
@@ -294,6 +337,17 @@ class MainActivity : ListActivity() {
         }
 
         btnPrimary.visibility = if (running) View.VISIBLE else View.GONE
+
+        // ── 버전 칩 ──
+        // 받는 중에는 진행률을, 새 판이 있으면 그 버전을, 그 밖에는 지금 버전을 보여 준다.
+        val newer = Updater.latestCode > Updater.currentCode(this)
+        lblVersion.text = when {
+            Updater.progress >= 0 -> Updater.progress.toString() + "%"
+            newer -> "v" + Updater.currentName(this) + " ↑"
+            else -> "v" + Updater.currentName(this)
+        }
+        lblVersion.setTextColor(if (newer) t.gold else t.label2)
+        dotUpdate.visibility = if (newer) View.VISIBLE else View.GONE
 
         // 도는 동안에는 다른 콘텐츠를 못 고르게 흐린다(한 번에 하나만 돈다).
         // 비율은 여기서 막지 않는다 — 게임 화면을 보고 판단한 뒤(detected) 안 맞을 때만 막는다.
