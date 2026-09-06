@@ -108,14 +108,14 @@ object Overlay {
         // 게임 UI 는 테두리가 **얇은 색선이 아니라 두꺼운 검정**이라 만화처럼 보인다.
         val bg = GradientDrawable().apply {
             setColor(Color.parseColor("#F02E272C"))
-            cornerRadius = dp(ctx, 22).toFloat()
-            setStroke(dp(ctx, 3), Color.parseColor("#0B0609"))
+            cornerRadius = dp(ctx, 18).toFloat()
+            setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
         }
         val pill = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = bg
             elevation = dp(ctx, 6).toFloat()
-            setPadding(dp(ctx, 12), dp(ctx, 8), dp(ctx, 10), dp(ctx, 8))
+            setPadding(dp(ctx, 10), dp(ctx, 6), dp(ctx, 8), dp(ctx, 6))
         }
         // 게임의 스테이지 바처럼 — 검은 홈 위에 금색 막대가 차오른다.
         // 실측 단면: 검정 외곽선 → (255,217,44) → (249,193,20) → (254,173,4) → (106,68,6) → 검정.
@@ -141,8 +141,8 @@ object Overlay {
             addView(fillView)
             visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(ctx, 11)).apply {
-                leftMargin = dp(ctx, 2); rightMargin = dp(ctx, 2); bottomMargin = dp(ctx, 7)
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(ctx, 9)).apply {
+                leftMargin = dp(ctx, 2); rightMargin = dp(ctx, 2); bottomMargin = dp(ctx, 5)
             }
         }
         val row = LinearLayout(ctx).apply {
@@ -158,14 +158,14 @@ object Overlay {
                 shape = GradientDrawable.OVAL; setColor(Color.parseColor("#7CC24A"))
                 setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
             }
-            layoutParams = LinearLayout.LayoutParams(dp(ctx, 9), dp(ctx, 9)).apply {
-                rightMargin = dp(ctx, 8)
+            layoutParams = LinearLayout.LayoutParams(dp(ctx, 8), dp(ctx, 8)).apply {
+                rightMargin = dp(ctx, 7)
             }
         }
         val txt = TextView(ctx).apply {
             // 게임의 '스테이지 104-19' 글자와 같은 밝은 금색(실측 (248,240,97)).
             text = "쉬는 중"; setTextColor(Color.parseColor("#F8E861"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             // 자르지 않는다. 넘치면 아래 `flow()` 가 왼쪽으로 흘려 보낸다.
             isSingleLine = true
@@ -179,7 +179,7 @@ object Overlay {
             clipChildren = true
             addView(txt, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT))
-            layoutParams = LinearLayout.LayoutParams(dp(ctx, 130), LinearLayout.LayoutParams.WRAP_CONTENT)
+            layoutParams = LinearLayout.LayoutParams(dp(ctx, 120), LinearLayout.LayoutParams.WRAP_CONTENT)
         }
         // [멈추기] 는 **늘 보인다.** 예전엔 알약을 탭해야 나왔는데, 그러면 있는 줄도 모른다.
         // 게다가 그 탭에 밝기 깨우기까지 얹혀 있어서 한 동작이 두 가지 일을 했다.
@@ -187,7 +187,7 @@ object Overlay {
         val stop = TextView(ctx).apply {
             text = "멈추기"
             setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             // 게임 버튼처럼 두툼하게 — 짙은 외곽선 + 위가 밝은 그라데이션.
             background = GradientDrawable().apply {
@@ -196,16 +196,16 @@ object Overlay {
                 cornerRadius = dp(ctx, 100).toFloat()
                 setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
             }
-            setPadding(dp(ctx, 13), dp(ctx, 5), dp(ctx, 13), dp(ctx, 5))
+            setPadding(dp(ctx, 11), dp(ctx, 4), dp(ctx, 11), dp(ctx, 4))
             // 글자가 아무리 길어도 이 버튼은 절대 줄어들지 않는다.
-            minWidth = dp(ctx, 62)
+            minWidth = dp(ctx, 52)
             gravity = Gravity.CENTER
             visibility = View.GONE
             isClickable = true
             setOnClickListener { Runner.stop() }
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { leftMargin = dp(ctx, 12) }
+            ).apply { leftMargin = dp(ctx, 9) }
             // 남는 자리를 글자에게 뺏기지 않게 한다.
             (layoutParams as LinearLayout.LayoutParams).weight = 0f
         }
@@ -214,8 +214,8 @@ object Overlay {
         val arw = TextView(ctx).apply {
             text = "▾"
             setTextColor(Color.parseColor("#F8E861"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            setPadding(dp(ctx, 10), dp(ctx, 2), dp(ctx, 6), dp(ctx, 2))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setPadding(dp(ctx, 8), dp(ctx, 2), dp(ctx, 4), dp(ctx, 2))
             isClickable = true
             setOnClickListener { togglePanel() }
         }
@@ -228,8 +228,8 @@ object Overlay {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#F02E272C"))
-                cornerRadius = dp(ctx, 20).toFloat()
-                setStroke(dp(ctx, 3), Color.parseColor("#0B0609"))
+                cornerRadius = dp(ctx, 16).toFloat()
+                setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
             }
             elevation = dp(ctx, 6).toFloat()
             setPadding(dp(ctx, 10), dp(ctx, 10), dp(ctx, 10), dp(ctx, 10))
@@ -252,7 +252,7 @@ object Overlay {
                 text = name
                 // 게임의 '자동 소환 예약' 알약처럼 — 어두운 판 + 검은 외곽선 + 금색 글자.
                 setTextColor(Color.parseColor("#F8E861"))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
                 gravity = Gravity.CENTER
                 background = GradientDrawable().apply {
@@ -261,8 +261,8 @@ object Overlay {
                     cornerRadius = dp(ctx, 14).toFloat()
                     setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
                 }
-                setPadding(dp(ctx, 14), dp(ctx, 8), dp(ctx, 14), dp(ctx, 8))
-                minWidth = dp(ctx, 128)
+                setPadding(dp(ctx, 12), dp(ctx, 7), dp(ctx, 12), dp(ctx, 7))
+                minWidth = dp(ctx, 112)
                 isClickable = true
                 setOnClickListener {
                     val c = appCtx ?: return@setOnClickListener
@@ -342,8 +342,8 @@ object Overlay {
         wm = w; view = box; lp = p; label = txt; stopBtn = stop; dotView = dot
         arrow = arw; panel = pnl; scrollHost = host
         barTrack = track; barFill = fillView
-        maxTextW = Math.max(dp(ctx, 130),
-            ctx.resources.displayMetrics.widthPixels - dp(ctx, 190))
+        maxTextW = Math.max(dp(ctx, 120),
+            ctx.resources.displayMetrics.widthPixels - dp(ctx, 168))
         shownText = ""
         tick()
     }

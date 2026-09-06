@@ -196,16 +196,14 @@ object Chores {
                 } else {
                     Runner.set("한번에 클리어 받는 중", "밀린 퀘스트를 한 번에 받아요")
                     Bot.log("'한번에 클리어 하기' 발견 (" + fmt(ratio) + ") - 누릅니다")
-                    Runner.tap(Screen.QUEST_BAR, 2500)
-                    Runner.shot()?.let {
-                        if (!Screen.isBulkClear(it)) {
-                            tapsProven = true; quests++; bulkTries = 0
-                            ovenTried = false; bossNoticed = false; probeAllowedAt = 0L
-                            Bot.log("  받았어요 - 띠가 바뀌었습니다")
-                            Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
-                        }
+                    Runner.tap(Screen.QUEST_BAR, 350)
+                    if (waitBarChanged(ratio)) {
+                        tapsProven = true; quests++; bulkTries = 0
+                        ovenTried = false; bossNoticed = false; probeAllowedAt = 0L
+                        Bot.log("  받았어요 - 띠가 바뀌었습니다")
+                        Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                     }
-                    Runner.sleep(3000); continue
+                    continue
                 }
             } else bulkTries = 0
 
@@ -213,14 +211,11 @@ object Chores {
                 quests++
                 Runner.set("퀘스트 보상 받는 중", "지금까지 " + quests + "개")
                 Bot.log("퀘스트 수령 (" + fmt(ratio) + ")")
-                Runner.tap(Screen.QUEST_BAR, 2500)
+                Runner.tap(Screen.QUEST_BAR, 350)
                 // 정말 받아졌나 — 띠가 새 퀘스트로 갈렸으면 받은 것이다.
                 // 이게 '내 탭이 게임에 먹혔다'는 증거이기도 하다(오븐 잠금을 푸는 열쇠).
-                Runner.shot()?.let {
-                    val now = Screen.questBarRatio(it)
-                    if (Math.abs(now - ratio) >= BAR_CHANGED) tapsProven = true
-                    else Bot.log("  띠가 그대로예요 (" + fmt(ratio) + " -> " + fmt(now) + ") - 수령이 안 됐을 수 있어요")
-                }
+                if (waitBarChanged(ratio)) tapsProven = true
+                else Bot.log("  띠가 그대로예요 - 수령이 안 됐을 수 있어요")
                 // 새 퀘스트가 올라왔으니 오븐·보스 기회를 되돌린다.
                 // 백오프도 같이 푼다 — 안 그러면 앞 퀘스트 때문에 걸린 15분이
                 // 이미 교체된 새 퀘스트의 탐색까지 막아 버린다.
@@ -228,7 +223,7 @@ object Chores {
                 bossNoticed = false
                 probeAllowedAt = 0L
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
-                Runner.sleep(3000); continue
+                continue
             }
 
             // ── 미완료 퀘스트 ──
@@ -241,7 +236,7 @@ object Chores {
             // ⚠️ 비트맵을 probe 안까지 들고 가면 안 된다 - Runner.shot() 이 이전 장을 recycle 한다.
             //    필요한 값(뽑기 버튼 수)만 여기서 미리 재서 숫자로 넘긴다.
             val r = probe(Screen.gachaHits(b), ratio)
-            if (r == PROBE_DID) { handled++; Runner.sleep(3000); continue }
+            if (r == PROBE_DID) { handled++; Runner.sleep(800); continue }
             if (r == PROBE_CLAIMED) {
                 // 탐색으로 누른 게 사실은 '보상 받기'였다 = 이 기기에서는 완료가 0.85 밑으로 읽힌다.
                 // 다음부터는 탐색을 거치지 않도록 기준을 이 값에 맞춰 낮춘다.
@@ -288,7 +283,7 @@ object Chores {
      */
     private fun probe(preHits: Int, before: Double): Int {
         Runner.set("다음 할 일 찾는 중")
-        Runner.tap(Screen.QUEST_BAR, 2500)
+        Runner.tap(Screen.QUEST_BAR, 1200)
         val b = Runner.shot() ?: return PROBE_NONE
         Bot.log("  누른 뒤 화면: " + Screen.debugLine(b))
 
@@ -502,6 +497,23 @@ object Chores {
         Runner.tap(Screen.SUB_CLOSE, 1500)
         Runner.tap(Screen.SUB_CLOSE, 2000)
         Bot.log("  [보상] 출석 수령 완료")
+    }
+
+    /**
+     * 띠가 바뀔 때까지 **짧게 지켜본다**. 바뀌면 그 즉시 돌아온다.
+     *
+     * 예전엔 누르고 나서 2.5초 + 3초를 **무조건** 기다렸다(퀘스트 하나에 6초).
+     * 게임은 대개 0.5초 안에 반응하므로 그 대부분이 버리는 시간이었다.
+     * 고정 대기 대신 결과를 보고 판단하면 **빠를 땐 빠르고 느릴 땐 기다린다.**
+     */
+    private fun waitBarChanged(before: Double, tries: Int = 6): Boolean {
+        for (i in 1..tries) {
+            if (!Runner.running) return false
+            val b = Runner.shot() ?: return false
+            if (Math.abs(Screen.questBarRatio(b) - before) >= BAR_CHANGED) return true
+            Runner.sleep(250)
+        }
+        return false
     }
 
     private fun fmt(v: Double): String = String.format("%.2f", v)
