@@ -56,6 +56,7 @@ object Daily {
         val results = ArrayList<String>()
         var battled = 0
         var scrolls = 0
+        var achieveWarned = false   // 달성 보상 창은 한 번만 열어 보고 만다(좌표 미측정)
 
         for (d in 1..maxDungeons) {
             if (!Runner.running) break
@@ -166,12 +167,27 @@ object Daily {
                 continue
             }
 
-            // ── 달성 보상 수령 ──
-            Runner.set("일일 던전 " + idx + "번째", name + " · 달성 보상 수령")
-            Runner.setProgress(4, 4)
-            Runner.tap(Screen.DAILY_ACHIEVE, 1600)
-            Runner.tap(Screen.DAILY_CLAIM_ALL, 1600)
-            Runner.tap(Screen.DAILY_MODAL_CLOSE, 1200)
+            // ── 달성 보상 ──
+            // ⚠️ 상자를 눌러 창을 여는 것까지만 한다. **창 안은 아직 좌표를 못 쟀다.**
+            //    옛 `DAILY_CLAIM_ALL (710,2840)` 은 실측해 보니 하단 '일일 던전' 서브탭이었다 —
+            //    창은 안 닫히고 탭만 건드렸다. 그 상태로 다음 바퀴에서 화면을 목록으로 오인해
+            //    **쿠키 카드를 눌러 편성 화면으로 빠졌다.** 그래서 지금은 눌러 보고
+            //    창이 열리면 **뒤로가기로 닫기만** 한다. 창 스크린샷을 받으면 수령까지 넣는다.
+            if (!achieveWarned) {
+                Runner.set("일일 던전 " + idx + "번째", name + " · 달성 보상 확인")
+                Runner.setProgress(4, 4)
+                Runner.tap(Screen.DAILY_ACHIEVE, 1600)
+                val m = Runner.shot()
+                if (m != null && !Screen.atDailyEntry(m)) {
+                    achieveWarned = true
+                    Bot.log("달성 보상 창이 열렸어요 - 아직 좌표를 못 재서 닫습니다")
+                    Bot.log("  설정 → 점검 → [화면 보내기] 로 이 창을 보내 주시면 수령까지 넣을게요")
+                    for (k in 1..3) {
+                        TapService.back(); Runner.sleep(1200)
+                        if (Runner.shot()?.let { Screen.atDailyEntry(it) } == true) break
+                    }
+                }
+            }
 
             results.add(name + " " + (if (fought > 0) fought.toString() + "판" else "열쇠 없음"))
             Runner.lastResult = results.joinToString(" · ")

@@ -427,15 +427,19 @@ object Screen {
     val DAILY_TAB         = intArrayOf(850, 2835)    // '일일 던전' 서브탭 (눈대중보다 아래다)
     // ⚠️ 옛 `DAILY_FIRST (700,830)` 는 지웠다 — 목록이 스크롤되면 배너 사이 검은 띠를 누른다.
     //    지금은 `findDailyBanner` 로 화면을 보고 배너를 찾아 누른다.
-    val DAILY_CHALLENGE   = intArrayOf(733, 2590)    // 도전하기!
-    val DAILY_CONT_CHK    = intArrayOf(1076, 2574)   // 연속 도전 체크박스
+    // ── 던전 화면 (2026-09-06 실기 스크린샷에서 전부 다시 잼) ──
+    val DAILY_CHALLENGE   = intArrayOf(715, 2600)    // 도전하기!
+    val DAILY_CONT_CHK    = intArrayOf(1078, 2645)   // 연속 도전 체크박스 (옛 값은 71px 위였다)
+    val DAILY_PREV        = intArrayOf(64, 1400)     // ◀ 이전 던전 (쓰지 않는다, 기록용)
+    // 자동 편성 (1325,2600) · 편성하기 — **누르지 않는다.** 쿠키 편성 화면으로 빠진다.
     // ▶ 다음 던전 — **던전 화면 안**의 화살표다(목록 화면이 아니다).
     // ⚠️ 목록 화면에서 이 자리는 배너 한가운데라, 목록에 있는 동안 누르면 엉뚱한 던전이 열린다.
     //    반드시 `atDailyEntry` 가 참일 때만 누를 것.
-    val DAILY_NEXT        = intArrayOf(1400, 1470)   // ▶ 다음 던전 (던전 화면 안)
-    val DAILY_ACHIEVE     = intArrayOf(1350, 1580)   // 달성 보상 상자
-    val DAILY_CLAIM_ALL   = intArrayOf(710, 2840)    // 모두 받기
-    val DAILY_MODAL_CLOSE = intArrayOf(720, 430)     // 모달 바깥(닫기)
+    val DAILY_NEXT        = intArrayOf(1375, 1400)   // ▶ 다음 던전 (실측 x1359~1392, y1378~1423)
+    val DAILY_ACHIEVE     = intArrayOf(1339, 1610)   // 달성 보상 상자 (실측 x1240~1438, y1531~1690)
+    // ⚠️ 옛 `DAILY_CLAIM_ALL (710,2840)` · `DAILY_MODAL_CLOSE (720,430)` 는 지웠다.
+    //    실측해 보니 (710,2840) 은 **하단 '일일 던전' 서브탭**이었다 — 달성 보상 창은 안 닫히고
+    //    탭만 건드렸다. 달성 보상 창의 좌표는 아직 못 쟀다(창 스크린샷이 필요하다).
     // ⚠️ 아래 소탕 좌표 셋은 **쓰지 않는다.** 소탕은 '지금 스테이지' 기준으로 보상을 주는데
     //    스테이지가 계속 올라가므로 지금 태우면 손해다(사용자 판단, 2026-09-06).
     //    실측값이라 지우지 않고 남겨 둔다 — 다시 재지 말 것. 다만 **부르는 곳이 있으면 안 된다.**
@@ -452,7 +456,11 @@ object Screen {
         val tab = px(b, 720, 2840)
         if (!(Color.red(tab) < 60 && Color.green(tab) > 140 && Color.blue(tab) > 150)) return false
         val right = px(b, 1150, 2840)
-        return Color.red(right) < 45 && Color.green(right) < 45 && Color.blue(right) < 45
+        if (!(Color.red(right) < 45 && Color.green(right) < 45 && Color.blue(right) < 45)) return false
+        // ⚠️ 여기까지는 던전 화면도 똑같이 통과한다(하단 서브탭 줄이 공용이다).
+        //    던전 화면이 아닐 때만 목록이다 — 이걸 빠뜨려서 던전 화면을 목록으로 오인하고
+        //    **쿠키 카드를 눌러 편성 화면으로 빠지는** 사고가 났다.
+        return !atDailyEntry(b)
     }
 
     /**
@@ -506,27 +514,39 @@ object Screen {
         return diff < a.size * 26
     }
 
-    /** 일일 던전 '진입 화면'인가? 소탕 버튼 자리가 여기서는 늘 청록이다. */
+    /**
+     * 던전 **안** 화면인가? (도전하기·소탕·자동 편성이 있는 화면)
+     *
+     * ⚠️ 하단 서브탭 줄(도전 던전 / 일일 던전 / 쟁탈전)은 **목록 화면과 던전 화면에 똑같이 있다.**
+     *    실측으로 확인했다 — 두 화면 모두 (720,2840)=(3,167,179), (1150,2840)=(0,0,0).
+     *    그래서 그 줄만으로는 둘을 절대 못 가른다. 던전 화면에만 있는 **하단 버튼 줄**을 본다:
+     *    소탕(밝은 청록) + 자동 편성(초록). 실측 던전 (82,193,204)/(6,199,142) · 목록 (18,54,66)/(53,149,163).
+     */
     fun atDailyEntry(b: Bitmap): Boolean {
-        val c = px(b, 150, 2560)
-        return Color.red(c) < 40 && Color.green(c) > 100 && Color.blue(c) > 120
+        val sweep = px(b, 210, 2600)
+        if (!(Color.red(sweep) < 130 && Color.green(sweep) > 150 && Color.blue(sweep) > 160)) return false
+        val auto = px(b, 1325, 2600)
+        return Color.red(auto) < 90 && Color.green(auto) > 160 && Color.blue(auto) in 100..190
     }
 
-    /** 도전하기가 주황 = 기회가 남았다. */
+    // 도전하기 버튼의 **바탕색**을 보는 자리. 글자(흰색)를 피해 왼쪽 안쪽을 고른다.
+    private val DAILY_CH_PT = intArrayOf(560, 2600)
+
+    /** 도전하기가 주황 = 아직 남은 열쇠가 있다. */
     fun dailyChallengeOpen(b: Bitmap): Boolean {
-        val c = px(b, 733, 2560)
-        return Color.red(c) > 200 && Color.green(c) > 100 && Color.blue(c) < 60
+        val c = px(b, DAILY_CH_PT[0], DAILY_CH_PT[1])
+        return Color.red(c) > 200 && Color.green(c) in 90..190 && Color.blue(c) < 80
     }
 
-    /** 도전하기가 청록 = 기회를 다 썼다(0/3). 이 던전은 끝. */
+    /** 도전하기가 청록 = 열쇠를 다 썼다. 이 던전은 끝. */
     fun dailyChallengeDone(b: Bitmap): Boolean {
-        val c = px(b, 733, 2560)
-        return Color.red(c) < 60 && Color.green(c) > 140 && Color.blue(c) > 140
+        val c = px(b, DAILY_CH_PT[0], DAILY_CH_PT[1])
+        return Color.red(c) < 80 && Color.green(c) > 140 && Color.blue(c) > 150
     }
 
     /** '연속 도전' 이 켜져 있나(노란 체크)? 켜져 있으면 꺼야 한다 — 아래 Daily 주석 참고. */
     fun dailyContChecked(b: Bitmap): Boolean {
-        val c = px(b, 1080, 2610)
+        val c = px(b, DAILY_CONT_CHK[0], DAILY_CONT_CHK[1])
         return Color.red(c) > 230 && Color.green(c) > 200 && Color.blue(c) < 120
     }
 
