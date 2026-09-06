@@ -49,11 +49,7 @@ class MainActivity : ListActivity() {
     private lateinit var rowAcc: LinearLayout
     private lateinit var rowCap: LinearLayout
     private lateinit var rowOverlay: LinearLayout
-    private lateinit var rowCapOff: LinearLayout
-    private lateinit var capOffSep: View
     private lateinit var logView: TextView
-    private lateinit var rowUpdate: LinearLayout
-    private lateinit var rowGame: LinearLayout
     private var lastProgress = -1
     private var setupShown = false      // 이번에 켠 뒤로 안내를 한 번 띄웠나
 
@@ -91,11 +87,15 @@ class MainActivity : ListActivity() {
                 layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
             })
             // 이모지 대신 글리프 하나. 이미지를 안 쓴다는 원칙을 지킨다.
-            addView(text("⚙", 26f, t.label2).apply {
-                setPadding(dp(14), dp(14), dp(20), dp(10))
-                background = t.rippleRound(t.cell, dpf(22f))
+            // 게임 UI 의 동그란 버튼처럼 — 정사각 + 두툼한 테두리 + 아래 그림자.
+            addView(text("⚙", 22f, t.label, medium).apply {
+                gravity = Gravity.CENTER
+                background = t.chunky(t.cell, dpf(21f), dp(2), dp(3))
                 isClickable = true
                 setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
+                layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                    rightMargin = dp(18); topMargin = dp(14)
+                }
             })
         })
         lblSubtitle = text("", 15f, t.label2).apply { setPadding(dp(20), dp(2), dp(20), 0) }
@@ -199,38 +199,6 @@ class MainActivity : ListActivity() {
         setupSection.addView(g2)
         root.addView(setupSection)
 
-        // ── 도구 ──
-        root.addView(sectionHeader("도구"))
-        val g3 = group()
-        rowGame = row("게임 앱", subtitle = "스토어마다 이름이 달라서 여기서 고를 수 있어요") { pickGame() }
-        g3.addView(rowGame); g3.addView(separator())
-        g3.addView(row("게임 켜기") { launchGame() })
-        capOffSep = separator()
-        rowCapOff = row("화면 읽기 끄기", tint = t.red) { CaptureService.stop(applicationContext) }
-        g3.addView(capOffSep); g3.addView(rowCapOff)
-        g3.addView(separator())
-        rowUpdate = row("업데이트") { onUpdate() }
-        g3.addView(rowUpdate)
-        root.addView(g3)
-
-        // ── 점검 ──
-        // 태블릿에서 좌표가 안 맞던 일을 겪으며 하나씩 늘어난 것들이다. 평소엔 쓸 일이 없어
-        // 도구에서 떼어내 따로 모았다. 넷 다 **아무것도 진행시키지 않는다**(재화를 안 쓴다).
-        root.addView(sectionHeader("점검"))
-        root.addView(text("잘 안 될 때만 쓰면 돼요. 아래 넷 다 게임을 진행시키지 않아요.",
-            13f, t.label2).apply { setPadding(dp(20), 0, dp(20), dp(8)) })
-        val g5 = group()
-        g5.addView(row("화면 점검", subtitle = "게임을 띄워 좌표와 판정값을 한 번에 재요") {
-            Overlay.show(applicationContext); Runner.checkCoords(applicationContext)
-        })
-        g5.addView(separator())
-        g5.addView(row("탭 점검", subtitle = "게임을 띄워 눌러 봐요 — 탭이 먹는지 확인") { tapTest() })
-        g5.addView(separator())
-        g5.addView(row("진단 보내기", value = "글", subtitle = "기기 정보와 최근 기록") { sendDiag() })
-        g5.addView(separator())
-        g5.addView(row("화면 보내기", value = "그림", subtitle = "게임을 띄워 5초 뒤 찍어요") { sendShot() })
-        root.addView(g5)
-
         // ── 기록 ──
         root.addView(sectionHeader("기록"))
         logView = text("", 12f, t.label2, Typeface.MONOSPACE).apply { setLineSpacing(dpf(2f), 1f) }
@@ -260,8 +228,14 @@ class MainActivity : ListActivity() {
         tick()
     }
 
+    override fun onPause() {
+        super.onPause()
+        Overlay.onAppForeground(false)
+    }
+
     override fun onResume() {
         super.onResume()
+        Overlay.onAppForeground(true)
         // 켤 것이 남아 있으면 안내부터 보여 준다. 목록만 던져 두면 무엇부터 눌러야 할지 알 수 없다.
         // 한 번 띄우고 나면 다시 강요하지 않는다(목록의 '차근차근 안내 받기' 로 언제든 다시 열 수 있다).
         if (!setupShown && (!TapService.isReady || CaptureService.instance == null)) {
@@ -283,8 +257,6 @@ class MainActivity : ListActivity() {
         rowCap.setValue(if (capOk) "켜짐" else "필요", if (capOk) t.green else t.orange)
         rowOverlay.setValue(if (ovOk) "켜짐" else "권장", if (ovOk) t.green else t.label2)
         setupSection.visibility = if (accOk && capOk && ovOk) View.GONE else View.VISIBLE
-        rowCapOff.visibility = if (capOk) View.VISIBLE else View.GONE
-        capOffSep.visibility = rowCapOff.visibility
 
         lblSubtitle.text = when {
             !Coords.ratioOk && !Coords.detected ->
@@ -331,26 +303,7 @@ class MainActivity : ListActivity() {
             (runRows.getChildAt(i) as? LinearLayout)?.enable(!running && ready && coordsOk)
         }
 
-        rowGame.setValue(GameApp.label(this) ?: "못 찾음", if (GameApp.pkg(this) == null) t.orange else t.label2)
-
-        // 업데이트 줄 — 상태가 곧 값이다(최신 / 새 버전 1.12 있음 / 받는 중 47% …)
-        rowUpdate.setValue(
-            when {
-                Updater.progress >= 0 -> Updater.state + " " + Updater.progress + "%"
-                Updater.state.isNotEmpty() -> Updater.state
-                else -> "v" + Updater.currentName(this)
-            },
-            if (Updater.latestCode > Updater.currentCode(this)) t.blue else t.label2
-        )
-
         ui.postDelayed({ tick() }, 1000)
-    }
-
-    /** 새 판이 있으면 바로 받고, 아직 모르면 먼저 확인한다. */
-    private fun onUpdate() {
-        if (Updater.busy) return
-        if (Updater.latestCode > Updater.currentCode(this)) Updater.update(applicationContext)
-        else Updater.check(applicationContext)
     }
 
     private fun askProjection() {
@@ -358,178 +311,6 @@ class MainActivity : ListActivity() {
         startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAP)
     }
 
-    /**
-     * **탭이 실제로 게임에 들어가는가**를 가린다. 게임을 메인 화면에 두고 누른다.
-     *
-     * 화면이 안 바뀔 때 원인은 셋인데 로그만으로는 못 가른다:
-     *   ① 탭이 아예 안 들어감  ② 들어갔는데 엉뚱한 자리  ③ 판정이 틀림(화면은 바뀜)
-     * 그래서 ⑴ 기준점 색을 찍고 ⑵ 결과를 받는 탭을 넣고 ⑶ 바뀌었는지 다시 본다.
-     * 60ms 로 안 먹으면 200ms 로 한 번 더 — 느린 기기에서 짧은 탭을 흘리는 경우가 있다.
-     *
-     * 폰에서도 같은 걸 찍어 나란히 놓으면 좌표가 맞는지 바로 보인다.
-     */
-    private fun tapTest() {
-        if (CaptureService.instance == null) { Bot.log("화면 읽기를 먼저 켜 주세요"); return }
-        if (!TapService.isReady) { Bot.log("접근성을 먼저 켜 주세요"); return }
-
-        // ⚠️ 게임을 먼저 띄운다. 이 앱이 앞에 있는 채로 누르면 **이 앱을 누른다**(문서 함정 5번).
-        val gi = GameApp.launchIntent(this)
-        if (gi == null) { Bot.log("게임을 찾지 못했어요 - '게임 앱'에서 골라 주세요"); pickGame(); return }
-        gi.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(gi)
-        Toast.makeText(this, "게임을 띄우고 시험해요 — 15초쯤 걸려요", Toast.LENGTH_LONG).show()
-
-        Thread {
-            Bot.log("── 탭 점검 ──")
-            Runner.sleep(5000)
-            var b = Runner.shot()
-            if (b == null) { Bot.log("화면을 읽지 못했어요"); return@Thread }
-            Bot.log("전: " + Screen.debugLine(b))
-            Bot.log("기준점: " + Screen.landmarks(b))
-
-            for (ms in longArrayOf(60, 200)) {
-                Bot.log("미션 아이콘 탭(" + ms + "ms): " +
-                    TapService.tapChecked(Screen.ICON_MISSION[0], Screen.ICON_MISSION[1], ms))
-                Runner.sleep(2800)
-                b = Runner.shot()
-                if (b == null) { Bot.log("후: 화면을 읽지 못했어요"); return@Thread }
-                Bot.log("후(" + ms + "ms): " + Screen.debugLine(b))
-                if (!Screen.atMain(b)) {
-                    Bot.log("→ 화면이 바뀌었습니다. 탭은 잘 들어갑니다. 닫고 끝냅니다")
-                    TapService.back(); Runner.sleep(1500)
-                    return@Thread
-                }
-            }
-            Bot.log("→ 두 번 다 화면이 그대로입니다 (탭이 안 먹거나 좌표가 다른 곳)")
-        }.start()
-    }
-
-    /**
-     * **봇이 지금 보고 있는 화면 그대로**를 PNG 로 만들어 공유창에 넘긴다.
-     *
-     * 값(비율·색)만으로는 좌표가 어디로 어긋났는지 못 잰다. 결국 한 장을 봐야 하는데,
-     * 스크린샷을 찍어 보내는 건 번거롭고 **게임이 아니라 봇 화면을 찍기 십상**이다.
-     * 이건 캡처 그대로라 잘릴 일도, 배율이 달라질 일도 없다.
-     */
-    private fun sendShot() {
-        if (CaptureService.instance == null) { Bot.log("화면 읽기를 먼저 켜 주세요"); return }
-        val f = java.io.File(java.io.File(cacheDir, "shots").apply { mkdirs() }, "screen.png")
-
-        // ⚠️ 캡처는 **실시간**이라, 이 앱을 보고 있으면 이 앱이 찍힌다.
-        //    그래서 게임을 먼저 띄우고 찍는다. 방금 찍어 둔 게 있으면 그걸 바로 보낸다
-        //    (게임에서 돌아온 뒤 한 번 더 누르면 공유창이 뜨는 길 — 배경에서 창을 못 띄우는
-        //     기기가 있어 안전망으로 남긴다).
-        if (f.exists() && System.currentTimeMillis() - f.lastModified() < 3 * 60_000L) {
-            Bot.log("방금 찍어 둔 게임 화면을 보냅니다 (다시 찍으려면 3분 뒤에 눌러 주세요)")
-            shareShot(f); return
-        }
-
-        Toast.makeText(this, "게임을 띄우고 5초 뒤에 찍어요", Toast.LENGTH_LONG).show()
-        val gi = GameApp.launchIntent(this)
-        if (gi == null) { Bot.log("게임을 찾지 못했어요 - '게임 앱'에서 골라 주세요"); pickGame(); return }
-        gi.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(gi)
-
-        Thread {
-            Runner.sleep(5000)
-
-            val b = Runner.shot()
-            if (b == null) { Bot.log("화면을 읽지 못했어요"); return@Thread }
-            try {
-                java.io.FileOutputStream(f).use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            } catch (e: Throwable) { Bot.log("화면 저장 실패: " + e); return@Thread }
-            Bot.log("게임 화면 한 장 저장: " + b.width + "x" + b.height)
-            runOnUiThread { shareShot(f) }
-        }.start()
-    }
-
-    /** 저장해 둔 화면을 공유창으로. 배경에서 창이 안 뜨면 안내만 하고 파일은 남겨 둔다. */
-    private fun shareShot(f: java.io.File) {
-        try {
-            val uri = androidx.core.content.FileProvider.getUriForFile(this, packageName + ".files", f)
-            val i = android.content.Intent(android.content.Intent.ACTION_SEND)
-            i.type = "image/png"
-            i.putExtra(android.content.Intent.EXTRA_STREAM, uri)
-            i.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(android.content.Intent.createChooser(i, "게임 화면 보내기")
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (e: Throwable) {
-            Bot.log("공유창을 못 열었어요: " + e)
-            Bot.log("  봇으로 돌아와 [화면 보내기]를 한 번 더 눌러 주세요 (찍어 둔 걸 그대로 보냅니다)")
-        }
-    }
-
-    /** 기기 정보 + 최근 기록 한 덩어리. 스크린샷을 찍어 보낼 일이 없게 하려는 것이다. */
-    private fun diagText(): String {
-        val t = StringBuilder()
-        t.append("크럼블 폰봇 ").append(Updater.currentName(this)).append("\n")
-        t.append(Build.MANUFACTURER).append(" ").append(Build.MODEL)
-            .append(" · 안드로이드 ").append(Build.VERSION.RELEASE).append("\n")
-        t.append(Coords.summary()).append("\n")
-        t.append("게임 앱: ").append(GameApp.pkg(this) ?: "못 찾음").append("\n")
-        t.append("접근성 ").append(if (TapService.isReady) "켜짐" else "꺼짐")
-            .append(" · 화면 읽기 ").append(if (CaptureService.instance != null) "켜짐" else "꺼짐").append("\n")
-        t.append("--- 최근 기록 ---\n").append(Bot.recentText())
-        return t.toString()
-    }
-
-    /**
-     * 진단을 클립보드에 넣고 **공유창**까지 띄운다.
-     *
-     * 왜 앱이 직접 어딘가로 올리지 않나 — 두 번 검토했지만 지금은 길이 없다.
-     *   · 서버(Firebase 등)로 올리게 하려면 앱에 쓰기 권한이 들어가야 한다. 저장소가 공개라
-     *     APK 를 뜯으면 누구나 그 권한을 갖는다. **토큰을 넣어 해결하려 하지 말 것.**
-     *   · 올려 둔 걸 내가 읽으려 해도, 작업 환경 밖으로 나가는 통신이 GitHub 말고는 막혀 있다.
-     * 그래서 '사람이 한 번 누르는' 경로가 제일 짧다. 복사→앱 전환→붙여넣기 3동작이던 걸
-     * 공유창에서 채팅 앱 고르기 1동작으로 줄였다. 클립보드에도 같이 넣어 두어, 원하는 앱이
-     * 공유창에 없으면 예전처럼 붙여넣으면 된다.
-     */
-    private fun sendDiag() {
-        val text = diagText()
-        try {
-            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            cm.setPrimaryClip(android.content.ClipData.newPlainText("크럼블 폰봇 진단", text))
-        } catch (e: Throwable) { Bot.log("클립보드 복사 실패: " + e) }
-
-        val i = android.content.Intent(android.content.Intent.ACTION_SEND)
-        i.type = "text/plain"
-        i.putExtra(android.content.Intent.EXTRA_SUBJECT, "크럼블 폰봇 진단")
-        i.putExtra(android.content.Intent.EXTRA_TEXT, text)
-        try {
-            startActivity(android.content.Intent.createChooser(i, "진단 보내기"))
-        } catch (e: Throwable) {
-            Toast.makeText(this, "복사했어요 — 채팅에 붙여넣으면 됩니다", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private fun launchGame() {
-        val i = GameApp.launchIntent(this)
-        if (i == null) { Bot.log("게임을 찾지 못했습니다 - '게임 앱'에서 골라 주세요"); pickGame() }
-        else startActivity(i)
-    }
-
-    /**
-     * 게임 앱을 손으로 고른다. 스토어마다 패키지가 달라서 자동 탐지가 빗나갈 수 있다
-     * (구글 플레이로 깔았다가 갤럭시 스토어로 다시 깐 경우 등).
-     */
-    private fun pickGame() {
-        val list = GameApp.candidates(this)
-        if (list.isEmpty()) {
-            android.app.AlertDialog.Builder(this)
-                .setTitle("게임을 찾지 못했어요")
-                .setMessage("이 폰에 쿠키런: 크럼블이 설치돼 있는지 확인해 주세요.\n" +
-                            "설치했는데도 안 보이면 알려 주세요 — 스토어판마다 이름이 다를 수 있습니다.")
-                .setPositiveButton("확인", null)
-                .show()
-            return
-        }
-        val names = list.map { it.second + "\n" + it.first }.toTypedArray()
-        android.app.AlertDialog.Builder(this)
-            .setTitle("게임 앱 고르기")
-            .setItems(names) { _, i -> GameApp.set(this, list[i].first) }
-            .show()
-    }
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {

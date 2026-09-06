@@ -49,6 +49,18 @@ object Overlay {
     private var dismissed = false
 
     /**
+     * 봇 앱 화면이 앞에 나와 있나. 앞에 있으면 알약을 접는다 —
+     * 관제 화면 제목 위에 알약이 겹쳐 앉아 있으면 볼썽사납고, 그 자리에 알약이 있을 이유도 없다
+     * (알약은 **게임을 보는 중에** 쓰라고 있는 것이다).
+     */
+    @Volatile private var appForeground = false
+
+    fun onAppForeground(v: Boolean) {
+        appForeground = v
+        if (v) hide()
+    }
+
+    /**
      * 이 시각까지는 화면을 원래 밝기로 둔다(알약을 탭하면 늘어난다).
      * 어둡게 해 두면 **알약이 유일한 조작점**이라, 만져서 되돌릴 길이 반드시 있어야 한다.
      */
@@ -319,7 +331,7 @@ object Overlay {
      * 알약이 **여기서 콘텐츠를 시작하는 조작 패널**이 된 뒤로는 그러면 안 된다 —
      * 쉬는 중에 쓰라고 있는 것인데 그때만 사라졌다. 지우고 싶으면 패널의 [알약 숨기기] 로 지운다.
      */
-    fun ensure(ctx: Context) { if (!dismissed) create(ctx) }
+    fun ensure(ctx: Context) { if (!dismissed && !appForeground) create(ctx) }
 
     /** 1초마다 글자만 갈아 끼운다. 돌고 있지 않으면 알약을 접어 둔다. */
     private fun tick() {
