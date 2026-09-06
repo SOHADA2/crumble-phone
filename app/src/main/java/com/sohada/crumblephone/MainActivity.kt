@@ -352,7 +352,7 @@ class MainActivity : AppCompatActivity() {
         g3.addView(separator())
         g3.addView(row("탭 시험", subtitle = "게임 메인 화면에 두고 눌러요 — 탭이 먹는지 봅니다") { tapTest() })
         g3.addView(separator())
-        g3.addView(row("화면 보내기", subtitle = "봇이 보고 있는 화면 그대로 — 좌표를 다시 잴 때") { sendShot() })
+        g3.addView(row("화면 보내기", subtitle = "게임을 띄워 5초 뒤 찍어요 — 좌표를 다시 잴 때") { sendShot() })
         g3.addView(separator())
         g3.addView(row("진단 보내기", subtitle = "복사 + 공유창 — 채팅 앱을 골라 바로 보내요") { sendDiag() })
         capOffSep = separator()
@@ -559,32 +559,51 @@ class MainActivity : AppCompatActivity() {
      */
     private fun sendShot() {
         if (CaptureService.instance == null) { Bot.log("화면 읽기를 먼저 켜 주세요"); return }
+        val f = java.io.File(java.io.File(cacheDir, "shots").apply { mkdirs() }, "screen.png")
+
+        // ⚠️ 캡처는 **실시간**이라, 이 앱을 보고 있으면 이 앱이 찍힌다.
+        //    그래서 게임을 먼저 띄우고 찍는다. 방금 찍어 둔 게 있으면 그걸 바로 보낸다
+        //    (게임에서 돌아온 뒤 한 번 더 누르면 공유창이 뜨는 길 — 배경에서 창을 못 띄우는
+        //     기기가 있어 안전망으로 남긴다).
+        if (f.exists() && System.currentTimeMillis() - f.lastModified() < 3 * 60_000L) {
+            Bot.log("방금 찍어 둔 게임 화면을 보냅니다 (다시 찍으려면 3분 뒤에 눌러 주세요)")
+            shareShot(f); return
+        }
+
+        Toast.makeText(this, "게임을 띄우고 5초 뒤에 찍어요", Toast.LENGTH_LONG).show()
+        val gi = GameApp.launchIntent(this)
+        if (gi == null) { Bot.log("게임을 찾지 못했어요 - '게임 앱'에서 골라 주세요"); pickGame(); return }
+        gi.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(gi)
+
         Thread {
+            Runner.sleep(5000)
+
             val b = Runner.shot()
             if (b == null) { Bot.log("화면을 읽지 못했어요"); return@Thread }
-            val f = try {
-                val dir = java.io.File(cacheDir, "shots").apply { mkdirs() }
-                val out = java.io.File(dir, "screen.png")
-                java.io.FileOutputStream(out).use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                out
+            try {
+                java.io.FileOutputStream(f).use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
             } catch (e: Throwable) { Bot.log("화면 저장 실패: " + e); return@Thread }
-
-            Bot.log("화면 한 장 저장: " + b.width + "x" + b.height)
-            runOnUiThread {
-                try {
-                    val uri = androidx.core.content.FileProvider.getUriForFile(
-                        this, packageName + ".files", f)
-                    val i = android.content.Intent(android.content.Intent.ACTION_SEND)
-                    i.type = "image/png"
-                    i.putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                    i.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    startActivity(android.content.Intent.createChooser(i, "화면 보내기"))
-                } catch (e: Throwable) {
-                    Bot.log("공유창을 못 열었어요: " + e)
-                    Toast.makeText(this, "화면을 못 보냈어요 - 기록을 확인해 주세요", Toast.LENGTH_LONG).show()
-                }
-            }
+            Bot.log("게임 화면 한 장 저장: " + b.width + "x" + b.height)
+            runOnUiThread { shareShot(f) }
         }.start()
+    }
+
+    /** 저장해 둔 화면을 공유창으로. 배경에서 창이 안 뜨면 안내만 하고 파일은 남겨 둔다. */
+    private fun shareShot(f: java.io.File) {
+        try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, packageName + ".files", f)
+            val i = android.content.Intent(android.content.Intent.ACTION_SEND)
+            i.type = "image/png"
+            i.putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            i.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(android.content.Intent.createChooser(i, "게임 화면 보내기")
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: Throwable) {
+            Bot.log("공유창을 못 열었어요: " + e)
+            Bot.log("  봇으로 돌아와 [화면 보내기]를 한 번 더 눌러 주세요 (찍어 둔 걸 그대로 보냅니다)")
+        }
     }
 
     /** 기기 정보 + 최근 기록 한 덩어리. 스크린샷을 찍어 보낼 일이 없게 하려는 것이다. */
