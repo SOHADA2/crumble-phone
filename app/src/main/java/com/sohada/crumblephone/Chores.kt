@@ -1,6 +1,7 @@
 package com.sohada.crumblephone
 
 import android.content.Context
+import android.graphics.Bitmap
 import kotlin.concurrent.thread
 
 /**
@@ -95,12 +96,16 @@ object Chores {
         var bossWaitUntil = 0L    // 내가 소환한 보스전이 끝날 때까지
         var probeAllowedAt = 0L   // 조합을 다 써서 쉬는 중이면 이 시각까지 탐색을 미룬다
         var nextRewardAt = System.currentTimeMillis()      // 시작하자마자 한 번 받는다
+        var loggedFirst = false   // 시작 화면 판정값을 한 번만 남기려고
 
         while (Runner.running) {
             if (maxQuests > 0 && quests >= maxQuests) { Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요"); break }
 
             val b = Runner.shot()
             if (b == null) { Runner.set("화면을 못 읽었어요", "다시 시도 중"); Runner.sleep(5000); continue }
+
+            // 시작 화면의 판정값을 한 번 남긴다 — 새 기기에서 무엇이 어긋났는지 스크린샷 없이 보려고.
+            if (!loggedFirst) { loggedFirst = true; Bot.log("시작 화면: " + Screen.debugLine(b)) }
 
             // ── 화면이 '평평'하면 절전이거나 공지 팝업이 독을 덮은 것이다 ──
             // 두 값이 너무 붙어 있어(절전 mean31·cv0.23 / 공지 mean44·cv0.37) 하나로 못 가른다.
@@ -210,7 +215,7 @@ object Chores {
             if (System.currentTimeMillis() < probeAllowedAt) { Runner.sleep(8000); continue }
 
             // 행동형(뽑기·상자·오븐)이면 대신 해 준다.
-            val r = probe(ratio)
+            val r = probe(b, ratio)
             if (r == PROBE_DID) { handled++; Runner.sleep(3000); continue }
             if (r == PROBE_CLAIMED) {
                 // 탐색으로 누른 게 사실은 '보상 받기'였다 = 이 기기에서는 완료가 0.85 밑으로 읽힌다.
@@ -265,16 +270,28 @@ object Chores {
      *   화면이 그대로면    → 오븐 장비 뽑기 (한 번 해 보고 아니면 다음부터 지나간다)
      * 성공적으로 대신 해 줬으면 true.
      */
-    private fun probe(before: Double): Int {
+    private fun probe(pre: Bitmap, before: Double): Int {
         Runner.set("다음 할 일 찾는 중")
         Runner.tap(Screen.QUEST_BAR, 2500)
         val b = Runner.shot() ?: return PROBE_NONE
+        Bot.log("  누른 뒤 화면: " + Screen.debugLine(b))
 
+        // ⚠️ '뽑기 화면인가'는 **탭 전후를 비교해서** 본다.
+        // 절대 판정으로 하면, 다른 기기에서 메인 화면이 우연히 3점을 다 통과할 때(색·좌표가
+        // 조금만 달라도 생긴다) 탐색이 매번 "뽑기 화면"으로 새고 아무것도 진행되지 않는다.
+        // 실제로 갤럭시 탭에서 '뽑기 화면 -> 10회' 뒤 "화면이 그대로"로 끝났다.
         val hits = Screen.gachaHits(b)
-        if (hits == 3) { Bot.log("  뽑기 화면 -> 10회 수행"); return if (gacha10()) PROBE_DID else PROBE_NONE }
+        if (hits == 3) {
+            if (Screen.gachaHits(pre) == 3) {
+                Bot.log("  누르기 전에도 뽑기 버튼 3/3 - 뽑기 화면이 아닙니다(오탐)")
+            } else {
+                Bot.log("  뽑기 화면 -> 10회 수행")
+                return if (gacha10()) PROBE_DID else PROBE_NONE
+            }
+        }
 
         // 가방은 하단에만 열려서 '보스 소환'이 그대로 보인다 → 메인 판정보다 먼저 봐야 한다.
-        if (Screen.isBottomPanel(b)) {
+        if (hits < 3 && Screen.isBottomPanel(b)) {
             // 뽑기 화면도 하단 청록 패널이라 이 판정을 통과한다. 버튼이 2개만 주황이면
             // 뽑기 화면이 거의 확실하니(하나가 가려졌거나 UI 가 바뀐 것) 손대지 않는다.
             if (hits >= 2) {
@@ -410,12 +427,30 @@ object Chores {
     // ══════════════════════════════════════════════════════════
 
     /** 미션 창을 열어 일일·주간·도전 탭에서 각각 '모두 받기'. 이미 받았으면 회색이라 눌러도 무해하다. */
+    /**
+     * 아이콘을 눌렀는데 창이 열렸나. 느린 기기에서 2.5초로 모자랄 수 있어 한 번 더 기다려 준다.
+     * (여기서 아이콘을 다시 누르면 안 된다 — 이미 열려 있으면 창 **안**을 누르는 꼴이 된다.)
+     * 끝내 안 열리면 그 화면의 판정값을 남긴다. 좌표가 어긋난 기기를 스크린샷 없이 가려내려는 것.
+     */
+    private fun waitPanel(name: String): Boolean {
+        var chk = Runner.shot()
+        if (chk != null && Screen.atMain(chk)) {
+            Runner.sleep(2500)
+            chk = Runner.shot()
+        }
+        if (chk != null && Screen.atMain(chk)) {
+            Bot.log("  [보상] " + name + " 창이 안 열렸어요 - 건너뜁니다")
+            Bot.log("    화면: " + Screen.debugLine(chk))
+            return false
+        }
+        return true
+    }
+
     private fun claimMissions() {
         Runner.set("보상 받기", "미션")
         Runner.setProgress(0, REWARD_STEPS)
         Runner.tap(Screen.ICON_MISSION, 2500)
-        val chk = Runner.shot()
-        if (chk != null && Screen.atMain(chk)) { Bot.log("  [보상] 미션 창이 안 열렸어요 - 건너뜁니다"); return }
+        if (!waitPanel("미션")) return
         var step = 0
         for (tab in Screen.MISSION_TABS) {
             if (!Runner.running) return
@@ -438,8 +473,7 @@ object Chores {
         Runner.set("보상 받기", "출석")
         Runner.setProgress(3, REWARD_STEPS)      // 미션 세 탭을 이미 지나왔다
         Runner.tap(Screen.ICON_CALENDAR, 2500)
-        val chk = Runner.shot()
-        if (chk != null && Screen.atMain(chk)) { Bot.log("  [보상] 이벤트 창이 안 열렸어요 - 건너뜁니다"); return }
+        if (!waitPanel("이벤트")) return
         Runner.tap(Screen.ATT_MIRACLE, 1800)     // 기적의 출석 탭
         Runner.tap(Screen.ATT_CLAIM, 1800)
         Runner.tap(Screen.ATT_CLAIM, 1200)
