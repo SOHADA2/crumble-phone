@@ -349,7 +349,7 @@ class MainActivity : AppCompatActivity() {
         // 스크린샷을 찍어 보내는 건 번거롭다. 글로 복사하면 채팅에 그냥 붙여넣을 수 있다.
         g3.addView(row("지금 화면 재기", subtitle = "게임을 원하는 화면에 두고 눌러요") { measureNow() })
         g3.addView(separator())
-        g3.addView(row("진단 결과 복사", subtitle = "기기 정보와 최근 기록을 글로 복사해요") { copyDiag() })
+        g3.addView(row("진단 보내기", subtitle = "복사 + 공유창 — 채팅 앱을 골라 바로 보내요") { sendDiag() })
         capOffSep = separator()
         rowCapOff = row("화면 읽기 끄기", tint = t.red) { CaptureService.stop(applicationContext) }
         g3.addView(capOffSep); g3.addView(rowCapOff)
@@ -504,11 +504,11 @@ class MainActivity : AppCompatActivity() {
             if (b == null) Bot.log("화면을 읽지 못했어요")
             else Bot.log("판정값: " + Screen.debugLine(b) + " · 완료기준=" + String.format("%.2f", Chores.doneRatioNow()))
         }.start()
-        Toast.makeText(this, "기록에 남겼어요 — [진단 결과 복사]로 보내 주세요", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "기록에 남겼어요 — [진단 보내기]를 눌러 주세요", Toast.LENGTH_LONG).show()
     }
 
-    /** 기기 정보 + 최근 기록을 클립보드로. 스크린샷 대신 붙여넣기만 하면 되게. */
-    private fun copyDiag() {
+    /** 기기 정보 + 최근 기록 한 덩어리. 스크린샷을 찍어 보낼 일이 없게 하려는 것이다. */
+    private fun diagText(): String {
         val t = StringBuilder()
         t.append("크럼블 폰봇 ").append(Updater.currentName(this)).append("\n")
         t.append(Build.MANUFACTURER).append(" ").append(Build.MODEL)
@@ -518,9 +518,36 @@ class MainActivity : AppCompatActivity() {
         t.append("접근성 ").append(if (TapService.isReady) "켜짐" else "꺼짐")
             .append(" · 화면 읽기 ").append(if (CaptureService.instance != null) "켜짐" else "꺼짐").append("\n")
         t.append("--- 최근 기록 ---\n").append(Bot.recentText())
-        val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
-        cm.setPrimaryClip(android.content.ClipData.newPlainText("크럼블 폰봇 진단", t.toString()))
-        Toast.makeText(this, "복사했어요 — 채팅에 붙여넣으면 됩니다", Toast.LENGTH_LONG).show()
+        return t.toString()
+    }
+
+    /**
+     * 진단을 클립보드에 넣고 **공유창**까지 띄운다.
+     *
+     * 왜 앱이 직접 어딘가로 올리지 않나 — 두 번 검토했지만 지금은 길이 없다.
+     *   · 서버(Firebase 등)로 올리게 하려면 앱에 쓰기 권한이 들어가야 한다. 저장소가 공개라
+     *     APK 를 뜯으면 누구나 그 권한을 갖는다. **토큰을 넣어 해결하려 하지 말 것.**
+     *   · 올려 둔 걸 내가 읽으려 해도, 작업 환경 밖으로 나가는 통신이 GitHub 말고는 막혀 있다.
+     * 그래서 '사람이 한 번 누르는' 경로가 제일 짧다. 복사→앱 전환→붙여넣기 3동작이던 걸
+     * 공유창에서 채팅 앱 고르기 1동작으로 줄였다. 클립보드에도 같이 넣어 두어, 원하는 앱이
+     * 공유창에 없으면 예전처럼 붙여넣으면 된다.
+     */
+    private fun sendDiag() {
+        val text = diagText()
+        try {
+            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("크럼블 폰봇 진단", text))
+        } catch (e: Throwable) { Bot.log("클립보드 복사 실패: " + e) }
+
+        val i = android.content.Intent(android.content.Intent.ACTION_SEND)
+        i.type = "text/plain"
+        i.putExtra(android.content.Intent.EXTRA_SUBJECT, "크럼블 폰봇 진단")
+        i.putExtra(android.content.Intent.EXTRA_TEXT, text)
+        try {
+            startActivity(android.content.Intent.createChooser(i, "진단 보내기"))
+        } catch (e: Throwable) {
+            Toast.makeText(this, "복사했어요 — 채팅에 붙여넣으면 됩니다", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun launchGame() {
