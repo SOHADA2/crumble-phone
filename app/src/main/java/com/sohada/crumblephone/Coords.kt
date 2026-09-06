@@ -50,27 +50,32 @@ object Coords {
         detected = false
     }
 
-    private fun applyRect(x: Int, y: Int, w: Int, h: Int, why: String) {
+    private fun applyRect(x: Int, y: Int, w: Int, h: Int, why: String?) {
         ox = x; oy = y; cw = w; ch = h
         sx = w.toDouble() / W
         sy = h.toDouble() / H
         val r = h.toDouble() / w
         // 2% 안이면 같은 비율로 본다. 1440x3120 · 1080x2340 · 720x1560 이 모두 여기 든다.
         ratioOk = Math.abs(r - RATIO) / RATIO <= 0.02
-        Bot.log(why + (if (exact) " (설계 그대로)" else " · 배율 " + String.format("%.3f", sx)) +
-                (if (ratioOk) "" else " ⚠️ 비율이 달라요"))
+        if (why != null) {
+            Bot.log(why + (if (exact) " (설계 그대로)" else " · 배율 " + String.format("%.3f", sx)) +
+                    (if (ratioOk) "" else " ⚠️ 비율이 달라요"))
+        }
     }
 
     /**
-     * **게임 화면을 실제로 보고** 그려진 영역을 찾는다(레터박스 제거).
+     * **게임 화면을 실제로 보고** 게임이 그려진 영역을 찾는다.
      *
-     * 태블릿처럼 화면이 넓으면 두 경우가 있다:
-     *   ① 게임이 9:19.5 를 유지하고 남는 자리를 검은 띠로 채운다 → 그 안쪽만 쓰면 **그대로 돈다**
-     *   ② 게임이 넓은 화면을 실제로 활용해 UI 를 재배치한다 → 좌표를 새로 재야 한다
-     * 검은 띠를 찾아 ①이면 자동으로 맞추고, 아니면 ②로 보고 `ratioOk = false` 를 남긴다.
+     * 검은 띠만 찾던 방식으로는 부족했다. 게임이 남는 자리를 자기 배경 그림으로 채우기도 하고,
+     * 아예 UI 를 늘려 버리기도 한다. 그래서 **후보를 몇 개 만들어 각각으로 화면을 읽어 보고,
+     * 아는 화면(메인·토벌 로비·결과창…)이 알아보이는 매핑을 채택한다.**
+     * 매핑이 맞으면 알아보이고 틀리면 아무것도 안 걸리므로, 이 검증이 곧 정답 판정이다.
      *
-     * 게임 화면 자체가 어두울 수 있으므로 **거의 완전한 검정**만 띠로 인정하고,
-     * 잘라 낸 결과의 비율이 설계와 맞을 때만 받아들인다. 아니면 화면 전체로 되돌린다.
+     * 후보 순서(먼저 맞는 것을 쓴다):
+     *   ① 화면 전체 — 비율이 이미 맞을 때만. 폰은 여기서 끝난다
+     *   ② 균일한 띠를 걷어낸 영역 — 검정이든 무슨 색이든 한 색으로 채워진 가장자리
+     *   ③ 높이에 맞춘 가운데 정렬(좌우 띠) — 넓은 화면에서 세로 게임의 전형
+     *   ④ 너비에 맞춘 가운데 정렬(위아래 띠)
      */
     fun detect(b: android.graphics.Bitmap) {
         if (detected) return
@@ -79,67 +84,70 @@ object Coords {
         if (w <= 0 || h <= 0) return
         screenW = w; screenH = h
 
-        val left = scanX(b, 0, 1)
-        val right = scanX(b, w - 1, -1)
-        val top = scanY(b, 0, 1)
-        val bottom = scanY(b, h - 1, -1)
-        val rx = left
-        val ry = top
-        val rw = (right - left + 1)
-        val rh = (bottom - top + 1)
+        val cands = ArrayList<IntArray>()
+        if (ratioOf(w, h)) cands.add(intArrayOf(0, 0, w, h))
+        trimUniform(b)?.let { cands.add(it) }
+        val fitW = Math.round(h / RATIO).toInt()
+        if (fitW in 1..w) cands.add(intArrayOf((w - fitW) / 2, 0, fitW, h))
+        val fitH = Math.round(w * RATIO).toInt()
+        if (fitH in 1..h) cands.add(intArrayOf(0, (h - fitH) / 2, w, fitH))
 
-        // 무엇을 봤는지 숫자로 남긴다. 태블릿에서 안 될 때 이 줄만 있으면 원인을 가릴 수 있다
-        // (띠를 못 찾은 건지, 찾았는데 비율이 여전히 다른 건지).
-        Bot.log("좌표 판단: 화면 " + w + "x" + h +
-                " · 찾은 영역 " + rw + "x" + rh + " @(" + rx + "," + ry + ")" +
-                " · 비율 " + String.format("%.3f", rh.toDouble() / rw) +
-                " (설계 " + String.format("%.3f", RATIO) + ")")
-
-        // 띠를 찾았어도 결과가 말이 안 되면(너무 작거나 비율이 여전히 다르면) 쓰지 않는다.
-        if (rw >= w / 2 && rh >= h / 2) {
-            val r = rh.toDouble() / rw
-            if (Math.abs(r - RATIO) / RATIO <= 0.02) {
-                if (rw != w || rh != h) {
-                    applyRect(rx, ry, rw, rh, "게임 영역 " + rw + "x" + rh + " (검은 띠 제외)")
-                } else {
-                    applyRect(0, 0, w, h, "화면 " + w + "x" + h)
-                }
+        for (c in cands) {
+            if (!ratioOf(c[2], c[3])) continue
+            applyRect(c[0], c[1], c[2], c[3], null)          // 조용히 걸어 보고
+            if (Screen.looksLikeGame(b)) {                    // 아는 화면이 보이면 이게 정답이다
+                applyRect(c[0], c[1], c[2], c[3],
+                    "게임 영역 " + c[2] + "x" + c[3] + " @(" + c[0] + "," + c[1] + ") — 아는 화면이 보여요")
                 return
             }
         }
-        applyRect(0, 0, w, h, "화면 " + w + "x" + h)
+        applyRect(0, 0, w, h, "화면 " + w + "x" + h + " — 아는 화면을 못 찾았어요")
     }
 
-    /** 세로줄 하나가 통째로 (거의) 검정인가를 보며 안쪽으로 훑는다. */
-    private fun scanX(b: android.graphics.Bitmap, from: Int, step: Int): Int {
-        var x = from
-        val limit = b.width / 4          // 화면의 1/4 넘게 잘라내는 일은 없다
-        var moved = 0
-        while (moved < limit && x >= 0 && x < b.width) {
-            if (!lineBlack(b, x, true)) break
-            x += step; moved++
+    private fun ratioOf(w: Int, h: Int): Boolean {
+        if (w <= 0) return false
+        val r = h.toDouble() / w
+        return Math.abs(r - RATIO) / RATIO <= 0.02
+    }
+
+    /**
+     * 가장자리에서 **한 색으로 균일하게 채워진 띠**를 걷어낸 영역.
+     * 검정만 보면 안 된다 — 게임이 남는 자리를 자기 배경색·그림으로 채우기도 한다.
+     */
+    private fun trimUniform(b: android.graphics.Bitmap): IntArray? {
+        val left = scan(b, 0, 1, true)
+        val right = scan(b, b.width - 1, -1, true)
+        val top = scan(b, 0, 1, false)
+        val bottom = scan(b, b.height - 1, -1, false)
+        val rw = right - left + 1
+        val rh = bottom - top + 1
+        if (rw < b.width / 2 || rh < b.height / 2) return null
+        if (rw == b.width && rh == b.height) return null      // 걷어낼 게 없었다
+        return intArrayOf(left, top, rw, rh)
+    }
+
+    private fun scan(b: android.graphics.Bitmap, from: Int, step: Int, vertical: Boolean): Int {
+        val max = if (vertical) b.width else b.height
+        val limit = max / 4                                   // 1/4 넘게는 안 걷어낸다
+        var at = from; var moved = 0
+        while (moved < limit && at >= 0 && at < max) {
+            if (!lineUniform(b, at, vertical)) break
+            at += step; moved++
         }
-        return x.coerceIn(0, b.width - 1)
+        return at.coerceIn(0, max - 1)
     }
 
-    private fun scanY(b: android.graphics.Bitmap, from: Int, step: Int): Int {
-        var y = from
-        val limit = b.height / 4
-        var moved = 0
-        while (moved < limit && y >= 0 && y < b.height) {
-            if (!lineBlack(b, y, false)) break
-            y += step; moved++
-        }
-        return y.coerceIn(0, b.height - 1)
-    }
-
-    /** 그 줄이 거의 완전한 검정인가. 게임 화면도 어두울 수 있어 문턱을 아주 낮게 잡는다. */
-    private fun lineBlack(b: android.graphics.Bitmap, at: Int, vertical: Boolean): Boolean {
+    /** 그 줄 전체가 (거의) 한 색인가. */
+    private fun lineUniform(b: android.graphics.Bitmap, at: Int, vertical: Boolean): Boolean {
         val n = if (vertical) b.height else b.width
-        var i = 0
+        val first = if (vertical) b.getPixel(at, 0) else b.getPixel(0, at)
+        val fr = (first shr 16) and 0xFF; val fg = (first shr 8) and 0xFF; val fb = first and 0xFF
+        var i = 8
         while (i < n) {
             val c = if (vertical) b.getPixel(at, i) else b.getPixel(i, at)
-            if (((c shr 16) and 0xFF) > 12 || ((c shr 8) and 0xFF) > 12 || (c and 0xFF) > 12) return false
+            if (Math.abs(((c shr 16) and 0xFF) - fr) > 10) return false
+            if (Math.abs(((c shr 8) and 0xFF) - fg) > 10) return false
+            if (Math.abs((c and 0xFF) - fb) > 10) return false
             i += 8
         }
         return true

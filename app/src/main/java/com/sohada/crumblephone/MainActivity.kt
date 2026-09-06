@@ -345,6 +345,9 @@ class MainActivity : AppCompatActivity() {
         g3.addView(row("화면 좌표 확인", subtitle = "게임을 띄워 한 장만 보고 판단해요") {
             Overlay.show(applicationContext); Runner.checkCoords(applicationContext)
         })
+        g3.addView(separator())
+        // 스크린샷을 찍어 보내는 건 번거롭다. 글로 복사하면 채팅에 그냥 붙여넣을 수 있다.
+        g3.addView(row("진단 결과 복사", subtitle = "기기 정보와 최근 기록을 글로 복사해요") { copyDiag() })
         capOffSep = separator()
         rowCapOff = row("화면 읽기 끄기", tint = t.red) { CaptureService.stop(applicationContext) }
         g3.addView(capOffSep); g3.addView(rowCapOff)
@@ -486,6 +489,22 @@ class MainActivity : AppCompatActivity() {
     private fun askProjection() {
         val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAP)
+    }
+
+    /** 기기 정보 + 최근 기록을 클립보드로. 스크린샷 대신 붙여넣기만 하면 되게. */
+    private fun copyDiag() {
+        val t = StringBuilder()
+        t.append("크럼블 폰봇 ").append(Updater.currentName(this)).append("\n")
+        t.append(Build.MANUFACTURER).append(" ").append(Build.MODEL)
+            .append(" · 안드로이드 ").append(Build.VERSION.RELEASE).append("\n")
+        t.append(Coords.summary()).append("\n")
+        t.append("게임 앱: ").append(GameApp.pkg(this) ?: "못 찾음").append("\n")
+        t.append("접근성 ").append(if (TapService.isReady) "켜짐" else "꺼짐")
+            .append(" · 화면 읽기 ").append(if (CaptureService.instance != null) "켜짐" else "꺼짐").append("\n")
+        t.append("--- 최근 기록 ---\n").append(Bot.recentText())
+        val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("크럼블 폰봇 진단", t.toString()))
+        Toast.makeText(this, "복사했어요 — 채팅에 붙여넣으면 됩니다", Toast.LENGTH_LONG).show()
     }
 
     private fun launchGame() {

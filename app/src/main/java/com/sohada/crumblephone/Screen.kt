@@ -220,6 +220,13 @@ object Screen {
      */
     fun isBottomPanel(b: Bitmap): Boolean = dockRatio(b) <= -0.2
 
+    /**
+     * 지금 화면이 **우리가 아는 게임 화면 중 하나로 보이나?**
+     * 좌표 매핑이 맞는지 검증하는 데 쓴다 — 매핑이 맞으면 알아보이고, 틀리면 아무것도 안 걸린다.
+     */
+    fun looksLikeGame(b: Bitmap): Boolean =
+        atMain(b) || atTobolLobby(b) || isBattleOver(b) || atDailyEntry(b) || atGuild(b)
+
     // ── 길드 화면 ──
     // 바탕이 청록인지 볼 네 점. 길드·로비 둘 다 4/4, 메인은 0/4 였다(실측).
     private val TEAL_PTS = arrayOf(
