@@ -1,7 +1,6 @@
 package com.sohada.crumblephone
 
 import android.content.Context
-import android.graphics.Bitmap
 import kotlin.concurrent.thread
 
 /**
@@ -215,7 +214,9 @@ object Chores {
             if (System.currentTimeMillis() < probeAllowedAt) { Runner.sleep(8000); continue }
 
             // 행동형(뽑기·상자·오븐)이면 대신 해 준다.
-            val r = probe(b, ratio)
+            // ⚠️ 비트맵을 probe 안까지 들고 가면 안 된다 - Runner.shot() 이 이전 장을 recycle 한다.
+            //    필요한 값(뽑기 버튼 수)만 여기서 미리 재서 숫자로 넘긴다.
+            val r = probe(Screen.gachaHits(b), ratio)
             if (r == PROBE_DID) { handled++; Runner.sleep(3000); continue }
             if (r == PROBE_CLAIMED) {
                 // 탐색으로 누른 게 사실은 '보상 받기'였다 = 이 기기에서는 완료가 0.85 밑으로 읽힌다.
@@ -270,7 +271,7 @@ object Chores {
      *   화면이 그대로면    → 오븐 장비 뽑기 (한 번 해 보고 아니면 다음부터 지나간다)
      * 성공적으로 대신 해 줬으면 true.
      */
-    private fun probe(pre: Bitmap, before: Double): Int {
+    private fun probe(preHits: Int, before: Double): Int {
         Runner.set("다음 할 일 찾는 중")
         Runner.tap(Screen.QUEST_BAR, 2500)
         val b = Runner.shot() ?: return PROBE_NONE
@@ -282,7 +283,7 @@ object Chores {
         // 실제로 갤럭시 탭에서 '뽑기 화면 -> 10회' 뒤 "화면이 그대로"로 끝났다.
         val hits = Screen.gachaHits(b)
         if (hits == 3) {
-            if (Screen.gachaHits(pre) == 3) {
+            if (preHits == 3) {
                 Bot.log("  누르기 전에도 뽑기 버튼 3/3 - 뽑기 화면이 아닙니다(오탐)")
             } else {
                 Bot.log("  뽑기 화면 -> 10회 수행")

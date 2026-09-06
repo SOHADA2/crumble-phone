@@ -26,8 +26,12 @@ object Runner {
     @Volatile var bestScore = 0L           // 이번 세션 최고 점수
 
     /** 화면 한 장.
-     *  ⚠️ 다음에 shot() 을 부르면 앞 장은 버려진다(한 장이 18MB 라 들고 있을 수 없다).
-     *     받은 그 자리에서 판정까지 끝낼 것. */
+     *  ⚠️ 다음에 shot() 을 부르면 앞 장은 **recycle 된다**(한 장이 18MB 라 들고 있을 수 없다).
+     *     받은 그 자리에서 판정까지 끝낼 것.
+     *
+     *  이 경고를 v1.33 에서 실제로 어겼다 — '탭 전 화면'을 함수 인자로 넘겼는데 그 안에서
+     *  shot() 을 부르는 바람에 `Can't call getPixel() on a recycled bitmap` 으로 앱이 멈췄다.
+     *  **비트맵을 함수 밖으로 넘기지 말 것. 필요한 값(비율·개수)만 재서 숫자로 넘긴다.** */
     private var last: Bitmap? = null
     fun shot(): Bitmap? {
         val cap = CaptureService.instance ?: return null
