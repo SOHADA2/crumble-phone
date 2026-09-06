@@ -502,7 +502,7 @@ class MainActivity : AppCompatActivity() {
         Thread {
             val b = Runner.shot()
             if (b == null) Bot.log("화면을 읽지 못했어요")
-            else Bot.log("판정값: " + Screen.debugLine(b))
+            else Bot.log("판정값: " + Screen.debugLine(b) + " · 완료기준=" + String.format("%.2f", Chores.doneRatioNow()))
         }.start()
         Toast.makeText(this, "기록에 남겼어요 — [진단 결과 복사]로 보내 주세요", Toast.LENGTH_LONG).show()
     }

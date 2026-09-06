@@ -22,6 +22,19 @@ object Chores {
 
     private const val POWERSAVE_CV = 0.4          // 독의 변동계수가 이보다 낮으면 절전(평평한 화면)
     private const val COMPLETE_RATIO = 0.85       // 퀘스트 띠가 이 이상이면 완료
+    private const val COMPLETE_FLOOR = 0.45       // 학습으로도 이 밑으로는 안 내린다
+    private const val BAR_CHANGED = 0.35          // 띠 비율이 이만큼 달라지면 '다른 퀘스트로 바뀐 것'
+
+    /**
+     * 이 기기에서 '완료'로 볼 띠 비율. 폰 실측은 완료 1.11~1.28 / 미완료 0.16~0.58 이라
+     * 0.85 가 한가운데지만, 화면이 작거나 색이 다른 기기에서는 완료가 0.85 밑으로 읽힐 수 있다.
+     * 탐색이 실제로 보상을 받아 낸 것을 확인하면(띠가 바뀜) 그때 본 값에 맞춰 낮춘다.
+     */
+    private var doneRatio = COMPLETE_RATIO
+
+    private const val PROBE_NONE = 0      // 아무것도 못 함
+    private const val PROBE_DID = 1       // 뽑기·상자·오븐을 대신 해 줬다
+    private const val PROBE_CLAIMED = 2   // 누르고 보니 완료 퀘스트였다(보상을 받았다)
     private const val REWARD_MINUTES = 20L        // 보상 자동 받기 주기
     private const val BOSS_WAIT_SEC = 35L         // 보스 소환 후 결과 대기 (실측: 전투 ~30초에 종료)
     private const val BOSS_PRESETS = 5            // 쿠키 조합 1~5 를 하나씩 바꿔 가며 도전한다
@@ -175,7 +188,7 @@ object Chores {
             }
             covered = 0
 
-            if (ratio >= COMPLETE_RATIO) {
+            if (ratio >= doneRatio) {
                 quests++
                 Runner.set("퀘스트 보상 받는 중", "지금까지 " + quests + "개")
                 Bot.log("퀘스트 수령 (" + fmt(ratio) + ")")
@@ -197,7 +210,24 @@ object Chores {
             if (System.currentTimeMillis() < probeAllowedAt) { Runner.sleep(8000); continue }
 
             // 행동형(뽑기·상자·오븐)이면 대신 해 준다.
-            if (probe()) { handled++; Runner.sleep(3000); continue }
+            val r = probe(ratio)
+            if (r == PROBE_DID) { handled++; Runner.sleep(3000); continue }
+            if (r == PROBE_CLAIMED) {
+                // 탐색으로 누른 게 사실은 '보상 받기'였다 = 이 기기에서는 완료가 0.85 밑으로 읽힌다.
+                // 다음부터는 탐색을 거치지 않도록 기준을 이 값에 맞춰 낮춘다.
+                val lowered = Math.max(COMPLETE_FLOOR, ratio - 0.05)
+                if (lowered < doneRatio) {
+                    doneRatio = lowered
+                    Bot.log("완료 기준을 " + fmt(doneRatio) + " 로 낮췄어요 (이 기기 화면에 맞춤)")
+                }
+                quests++
+                Runner.set("퀘스트 보상 받는 중", "지금까지 " + quests + "개")
+                ovenTried = false
+                bossTries = 0
+                probeAllowedAt = 0L
+                Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
+                Runner.sleep(3000); continue
+            }
 
             // 탐색으로도 안 풀렸다 = 스테이지 클리어형. 보스를 깨야 넘어간다.
             // 이때 게임이 '보스만 눌리는 락'을 건다(빈 곳이나 퀘스트를 눌러도 안 풀리고 보스 버튼만
@@ -235,13 +265,13 @@ object Chores {
      *   화면이 그대로면    → 오븐 장비 뽑기 (한 번 해 보고 아니면 다음부터 지나간다)
      * 성공적으로 대신 해 줬으면 true.
      */
-    private fun probe(): Boolean {
+    private fun probe(before: Double): Int {
         Runner.set("다음 할 일 찾는 중")
         Runner.tap(Screen.QUEST_BAR, 2500)
-        val b = Runner.shot() ?: return false
+        val b = Runner.shot() ?: return PROBE_NONE
 
         val hits = Screen.gachaHits(b)
-        if (hits == 3) { Bot.log("  뽑기 화면 -> 10회 수행"); return gacha10() }
+        if (hits == 3) { Bot.log("  뽑기 화면 -> 10회 수행"); return if (gacha10()) PROBE_DID else PROBE_NONE }
 
         // 가방은 하단에만 열려서 '보스 소환'이 그대로 보인다 → 메인 판정보다 먼저 봐야 한다.
         if (Screen.isBottomPanel(b)) {
@@ -250,27 +280,39 @@ object Chores {
             if (hits >= 2) {
                 Bot.log("  하단 패널인데 뽑기 버튼이 " + hits + "/3 만 주황 - 건드리지 않음")
                 Runner.tap(Screen.NAV_CLOSE, 2000)
-                return false
+                return PROBE_NONE
             }
             Bot.log("  가방 열림 -> 상자 사용")
-            return useBox()
+            return if (useBox()) PROBE_DID else PROBE_NONE
         }
 
         if (Screen.dockRatio(b) >= 0.1) {
+            // ⚠️ 여기서 바로 오븐을 돌리면 안 된다.
+            // 탐색은 '완료 퀘스트를 받는 것'과 똑같은 자리를 누른다. 그래서 완료였는데 띠 비율이
+            // 기준보다 낮게 읽힌 기기에서는, 이 탭이 보상을 받아 버리고 화면은 메인 그대로다
+            // → 옛 코드는 그걸 '안 바뀜'으로 보고 오븐(재화 소모)을 돌렸다. 실제로 태블릿에서
+            //   '보상 받을 때인데 딴 걸 한다'로 나타난 증상이 이것이다.
+            // 띠 비율을 다시 재서 크게 달라졌으면 새 퀘스트로 넘어간 것 = 보상을 받은 것이다.
+            val now = Screen.questBarRatio(b)
+            if (Math.abs(now - before) >= BAR_CHANGED) {
+                Bot.log("  띠가 바뀜 (" + fmt(before) + " -> " + fmt(now) + ") = 보상을 받은 것")
+                return PROBE_CLAIMED
+            }
+
             // 화면이 안 바뀌는 유형 = 메인의 무언가를 가리키는 손가락 힌트(오븐) 또는 스테이지 클리어형.
             // 퀘스트 순환에서 재화를 쓰는 건 오븐뿐이다. 시험 모드면 그것만 건너뛴다.
-            if (Prefs.testMode) { Bot.log("  화면이 안 바뀜 - 시험 모드라 오븐은 건너뜁니다"); return false }
-            if (ovenTried) { Bot.log("  화면이 안 바뀜 - 오븐은 이미 해 봤어요(오븐 퀘스트가 아닙니다)"); return false }
+            if (Prefs.testMode) { Bot.log("  화면이 안 바뀜 - 시험 모드라 오븐은 건너뜁니다"); return PROBE_NONE }
+            if (ovenTried) { Bot.log("  화면이 안 바뀜 - 오븐은 이미 해 봤어요(오븐 퀘스트가 아닙니다)"); return PROBE_NONE }
             ovenTried = true
-            Bot.log("  화면이 안 바뀜 -> 오븐 처리")
-            return Oven.run()
+            Bot.log("  화면이 안 바뀜 -> 오븐 처리 (띠 " + fmt(before) + " -> " + fmt(now) + ")")
+            return if (Oven.run()) PROBE_DID else PROBE_NONE
         }
 
         Bot.log("  모르는 화면 - 되돌아 나감")
         Runner.tap(Screen.NAV_CLOSE, 2000)
         val after = Runner.shot()
         if (after != null && !Screen.atMain(after)) { TapService.back(); Runner.sleep(3000) }
-        return false
+        return PROBE_NONE
     }
 
     /**
@@ -412,4 +454,7 @@ object Chores {
     }
 
     private fun fmt(v: Double): String = String.format("%.2f", v)
+
+    /** 지금 쓰고 있는 완료 기준(진단 표시용). 기기에 맞춰 낮아졌으면 그 값이 나온다. */
+    fun doneRatioNow(): Double = doneRatio
 }
