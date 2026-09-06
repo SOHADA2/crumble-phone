@@ -1,5 +1,6 @@
 package com.sohada.crumblephone
 
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
@@ -14,6 +15,8 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.LinearInterpolator
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -38,6 +41,9 @@ object Overlay {
     private var stopBtn: TextView? = null
     private var dotView: View? = null
     private var arrow: TextView? = null
+    private var scrollHost: FrameLayout? = null
+    private var ticker: ValueAnimator? = null
+    private var shownText = ""
     private var panel: LinearLayout? = null
     private var appCtx: Context? = null
     private val contentBtns = ArrayList<TextView>()
@@ -73,6 +79,11 @@ object Overlay {
     private const val DIM = 0.03f
     private val ui = Handler(Looper.getMainLooper())
 
+    /** 두 벌 사이에 넣는 사이. 이게 없으면 끝 글자와 첫 글자가 붙어 한 단어처럼 읽힌다. */
+    private const val GAP = "     ·     "
+    private var maxTextW = 0
+    private var dpf = 1f
+
     fun canDraw(ctx: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(ctx)
 
@@ -86,6 +97,7 @@ object Overlay {
         if (view != null || !canDraw(ctx)) return
         wakeUntil = 0L
         appCtx = ctx.applicationContext
+        dpf = ctx.resources.displayMetrics.density
         val w = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val th = Theme()
 
@@ -122,22 +134,19 @@ object Overlay {
             text = "쉬는 중"; setTextColor(Color.parseColor("#E8D9C8"))   // 크림
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-            // ⚠️ 창이 WRAP_CONTENT 라, 글자가 길면 알약이 화면 밖까지 커지고
-            //    **오른쪽 끝의 [멈추기] 가 잘려 나간다**(빨간 조각만 보였다).
-            //    글자 쪽에 상한을 둬서 버튼 자리를 먼저 확보한다.
-            maxWidth = Math.max(dp(ctx, 130),
-                ctx.resources.displayMetrics.widthPixels - dp(ctx, 190))
-
-            // 넘치는 글자는 잘라내지 않고 **흘려 보여 준다**(marquee).
-            // 안드로이드 marquee 가 도는 조건이 까다롭다 — 넷을 다 맞춰야 한다:
-            //   ① 한 줄일 것(여러 줄이면 아예 안 돈다)  ② ellipsize = MARQUEE
-            //   ③ 반복 제한을 풀 것(-1, 기본은 3번 돌고 멈춘다)
-            //   ④ isSelected = true — 보통은 포커스가 있어야 도는데, 알약 창은
-            //      FLAG_NOT_FOCUSABLE 이라 포커스를 못 받는다. 이걸로 대신한다.
+            // 자르지 않는다. 넘치면 아래 `flow()` 가 왼쪽으로 흘려 보낸다.
             isSingleLine = true
-            ellipsize = android.text.TextUtils.TruncateAt.MARQUEE
-            marqueeRepeatLimit = -1
-            isSelected = true
+            includeFontPadding = false
+        }
+        // 글자를 담아 **잘라 내는 창**. 이 안에서 글자판이 왼쪽으로 미끄러진다.
+        // ⚠️ 창이 WRAP_CONTENT 라 글자가 길면 알약이 화면 밖까지 커지고
+        //    **오른쪽 끝의 [멈추기] 가 잘려 나간다**(빨간 조각만 보였다).
+        //    그래서 이 창의 너비에 상한을 두어 버튼 자리를 먼저 확보한다.
+        val host = FrameLayout(ctx).apply {
+            clipChildren = true
+            addView(txt, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+            layoutParams = LinearLayout.LayoutParams(dp(ctx, 130), LinearLayout.LayoutParams.WRAP_CONTENT)
         }
         // [멈추기] 는 **늘 보인다.** 예전엔 알약을 탭해야 나왔는데, 그러면 있는 줄도 모른다.
         // 게다가 그 탭에 밝기 깨우기까지 얹혀 있어서 한 동작이 두 가지 일을 했다.
@@ -177,7 +186,7 @@ object Overlay {
             isClickable = true
             setOnClickListener { togglePanel() }
         }
-        pill.addView(dot); pill.addView(txt); pill.addView(stop); pill.addView(arw)
+        pill.addView(dot); pill.addView(host); pill.addView(stop); pill.addView(arw)
 
         // ── 펼침 패널: 여기서 바로 콘텐츠를 시작할 수 있다 ──
         // 게임을 보는 중에 관제 화면으로 나갔다 오지 않아도 되게.
@@ -286,7 +295,10 @@ object Overlay {
 
         try { w.addView(box, p) } catch (e: Exception) { Bot.log("오버레이 실패: ${e.message}"); return }
         wm = w; view = box; lp = p; label = txt; stopBtn = stop; dotView = dot
-        arrow = arw; panel = pnl
+        arrow = arw; panel = pnl; scrollHost = host
+        maxTextW = Math.max(dp(ctx, 130),
+            ctx.resources.displayMetrics.widthPixels - dp(ctx, 190))
+        shownText = ""
         tick()
     }
 
@@ -295,6 +307,55 @@ object Overlay {
         ui.post { if (w != null && v != null) try { w.removeView(v) } catch (_: Exception) {} }
         wm = null; view = null; lp = null; label = null; stopBtn = null; dotView = null
         arrow = null; panel = null; contentBtns.clear()
+        ticker?.cancel(); ticker = null; scrollHost = null; shownText = ""
+    }
+
+    /**
+     * 글자가 창보다 길면 **끊기지 않고 계속 흐르게** 한다.
+     *
+     * 안드로이드 marquee 는 쓰지 않는다 — 끝까지 갔다가 **되돌아 튀는** 방식이라 순환이 아니고,
+     * 1초마다 글자를 갈아 끼우면 그때마다 처음부터 다시 시작해 툭툭 끊긴다(실제로 그렇게 보였다).
+     *
+     * 대신 **같은 글을 두 벌 이어 붙여** 놓고 한 벌 너비만큼 왼쪽으로 민다.
+     * 한 벌을 다 밀면 화면에 보이는 그림이 처음과 똑같아지므로 **이음매가 안 보인다.**
+     * 글자가 바뀌어도 흐르던 진행률을 그대로 물려받아(`currentPlayTime`) 튀지 않는다.
+     */
+    private fun flow(s: String) {
+        val l = label ?: return
+        val host = scrollHost ?: return
+        if (s == shownText) return
+        shownText = s
+
+        val frac = ticker?.let { if (it.duration > 0) it.animatedFraction else 0f } ?: 0f
+        ticker?.cancel(); ticker = null
+        l.translationX = 0f
+
+        val one = l.paint.measureText(s + GAP)
+        val plain = l.paint.measureText(s)
+        val boxW = Math.min(Math.ceil(plain.toDouble()).toInt() + 2, maxTextW)
+        (host.layoutParams as LinearLayout.LayoutParams).width = boxW
+        host.requestLayout()
+
+        if (plain <= boxW) {                    // 다 들어간다 — 흐를 필요가 없다
+            l.text = s
+            l.layoutParams.width = FrameLayout.LayoutParams.WRAP_CONTENT
+            return
+        }
+
+        l.text = s + GAP + s + GAP              // 두 벌
+        l.layoutParams.width = Math.ceil((one * 2).toDouble()).toInt()
+        l.requestLayout()
+
+        val a = ValueAnimator.ofFloat(0f, -one)
+        // 초당 60dp 로 흐른다. 너무 빠르면 못 읽고 너무 느리면 안 움직이는 것 같다.
+        a.duration = (one / dpf * 1000f / 60f).toLong().coerceIn(4000L, 40000L)
+        a.interpolator = LinearInterpolator()
+        a.repeatCount = ValueAnimator.INFINITE
+        a.repeatMode = ValueAnimator.RESTART
+        a.addUpdateListener { label?.translationX = it.animatedValue as Float }
+        a.start()
+        a.currentPlayTime = (a.duration * frac).toLong()
+        ticker = a
     }
 
     private fun togglePanel() {
@@ -335,7 +396,7 @@ object Overlay {
 
     /** 1초마다 글자만 갈아 끼운다. 돌고 있지 않으면 알약을 접어 둔다. */
     private fun tick() {
-        val l = label ?: return
+        if (label == null) return
         // 무엇이 도는지(퀘스트·토벌전…)를 맨 앞에 둔다. 게임을 보는 중에는 이게 제일 궁금하다.
         val s = if (Runner.running) {
             val pct = Runner.progress
@@ -345,11 +406,7 @@ object Overlay {
                 (if (pct >= 0) " " + pct + "%" else "") +
                 (if (Runner.detail.isNotEmpty()) " · " + Runner.detail else "")
         } else "쉬는 중"
-        if (l.text != s) {
-            l.text = s
-            // 글자를 갈아 끼우면 흐르기가 멈춘다. 매번 다시 걸어 준다.
-            l.isSelected = true
-        }
+        flow(s)
         (dotView?.background as? GradientDrawable)?.setColor(
             if (Runner.running) Color.parseColor("#7CC24A") else Color.parseColor("#8A7565"))
         applyBrightness()
