@@ -166,7 +166,14 @@ class CaptureService : Service() {
     private fun startTicker() {
         ui.removeCallbacksAndMessages(null)
         ui.post(object : Runnable {
-            override fun run() { refreshNoti(); ui.postDelayed(this, 1000) }
+            override fun run() {
+                refreshNoti()
+                // 봇이 도는 동안에는 알약이 떠 있어야 한다. 관제 화면에서만 띄우면
+                // 앱을 최근목록에서 밀어냈을 때 봇은 도는데 알약만 사라진다.
+                // 여기는 서비스라 앱이 닫혀도 살아 있고, 이 핸들러는 메인 스레드다.
+                Overlay.ensure(applicationContext)
+                ui.postDelayed(this, 1000)
+            }
         })
     }
 

@@ -49,6 +49,10 @@ object Overlay {
 
     fun show(ctx: Context) {
         if (view != null || !canDraw(ctx)) return
+        // ★ 반드시 0 으로 되돌린다. 안 그러면 **두 번째부터는 뜨자마자 사라진다.**
+        //   show() 는 콘텐츠를 시작하기 '전에' 불리므로 첫 tick 때 아직 running 이 false 다.
+        //   지난 번에 쉬면서 7 까지 세어 둔 값이 남아 있으면 그 한 번으로 임계를 넘어 바로 hide 된다.
+        idleTicks = 0
         val w = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
         // 게임 위에 뜨는 것이라 게임이 밝든 어둡든 읽혀야 한다 → 관제 화면의 라이트/다크와
@@ -99,7 +103,8 @@ object Overlay {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = dp(ctx, 12); y = dp(ctx, 90)
+            // ⚠️ 여기 단위는 **픽셀**이다(dp 가 아니다). 아래 Y_MIN/Y_MAX 안전 띠와 같은 자다.
+            x = 40; y = 300
         }
 
         // 탭하면 [멈추기] 가 나왔다 들어간다. 끌면 위치가 옮겨진다(단, 안전한 세로 띠 안에서만).
@@ -137,6 +142,11 @@ object Overlay {
         val w = wm; val v = view
         ui.post { if (w != null && v != null) try { w.removeView(v) } catch (_: Exception) {} }
         wm = null; view = null; lp = null; label = null; stopBtn = null; dotView = null; expanded = false
+    }
+
+    /** 봇이 도는 동안에는 알약이 떠 있어야 한다. 이미 떠 있으면 아무 일도 안 한다. */
+    fun ensure(ctx: Context) {
+        if (Runner.running) show(ctx)
     }
 
     /** 1초마다 글자만 갈아 끼운다. 돌고 있지 않으면 알약을 접어 둔다. */
