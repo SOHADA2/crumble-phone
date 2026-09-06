@@ -37,7 +37,6 @@ object Overlay {
     private var label: TextView? = null
     private var stopBtn: TextView? = null
     private var dotView: View? = null
-    private var expanded = false
     private var idleTicks = 0
 
     /**
@@ -97,13 +96,25 @@ object Overlay {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         }
+        // [멈추기] 는 **늘 보인다.** 예전엔 알약을 탭해야 나왔는데, 그러면 있는 줄도 모른다.
+        // 게다가 그 탭에 밝기 깨우기까지 얹혀 있어서 한 동작이 두 가지 일을 했다.
+        // 이제 버튼은 버튼대로, 나머지 영역은 '깨우기 + 드래그' 로 나눈다.
         val stop = TextView(ctx).apply {
-            text = "멈추기"; setTextColor(Color.parseColor("#FF453A"))
+            text = "멈추기"
+            setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-            setPadding(dp(ctx, 14), 0, 0, 0)
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#FF453A"))
+                cornerRadius = dp(ctx, 100).toFloat()
+            }
+            setPadding(dp(ctx, 13), dp(ctx, 5), dp(ctx, 13), dp(ctx, 5))
             visibility = View.GONE
+            isClickable = true
             setOnClickListener { Runner.stop() }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { leftMargin = dp(ctx, 12) }
         }
         box.addView(dot); box.addView(txt); box.addView(stop)
 
@@ -140,11 +151,10 @@ object Overlay {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
+                    // 본문을 탭하면 '잠깐 깨우기'. 어둡게 해 뒀어도 이걸로 원래 밝기가 돌아온다.
+                    // (오른쪽 [멈추기] 는 자기가 먼저 탭을 가져가므로 여기까지 안 온다.)
                     if (!moved) {
-                        // 탭 = '잠깐 깨우기'. 어둡게 해 뒀어도 이걸로 원래 밝기가 돌아온다.
                         wakeUntil = System.currentTimeMillis() + WAKE_MS
-                        expanded = !expanded
-                        stop.visibility = if (expanded) View.VISIBLE else View.GONE
                         applyBrightness()
                     }
                     true
@@ -161,7 +171,7 @@ object Overlay {
     fun hide() {
         val w = wm; val v = view
         ui.post { if (w != null && v != null) try { w.removeView(v) } catch (_: Exception) {} }
-        wm = null; view = null; lp = null; label = null; stopBtn = null; dotView = null; expanded = false
+        wm = null; view = null; lp = null; label = null; stopBtn = null; dotView = null
     }
 
     /**
@@ -200,8 +210,9 @@ object Overlay {
         (dotView?.background as? GradientDrawable)?.setColor(
             if (Runner.running) Color.parseColor("#30D158") else Color.parseColor("#8E8E93"))
         applyBrightness()
+        // 돌고 있을 때만 [멈추기] 를 보여 준다. 쉬는 중에 눌러 봐야 할 일이 없다.
+        stopBtn?.visibility = if (Runner.running) View.VISIBLE else View.GONE
         if (!Runner.running) {
-            if (expanded) { expanded = false; stopBtn?.visibility = View.GONE }
             // 다 끝났으면 결과를 잠깐 보여 준 뒤 알아서 사라진다(게임 화면을 가리지 않게).
             if (++idleTicks > 6) { hide(); return }
         } else idleTicks = 0
