@@ -37,6 +37,15 @@ object Prefs {
         set(v) { sp?.edit()?.putBoolean("dailySweep", v)?.apply() }
 
     /**
+     * 봇이 도는 동안 화면을 아주 어둡게 할지.
+     * **화면 읽기는 백라이트가 아니라 프레임버퍼를 읽으므로 봇에는 아무 영향이 없다.**
+     * (검은 판을 덮어씌우는 방식은 안 된다 — 그건 캡처에 같이 찍혀 게임을 못 읽는다.)
+     */
+    var dimScreen: Boolean
+        get() = sp?.getBoolean("dimScreen", false) ?: false
+        set(v) { sp?.edit()?.putBoolean("dimScreen", v)?.apply() }
+
+    /**
      * 고른 게임 앱의 패키지. 비어 있으면 `GameApp` 이 자동으로 찾아 채운다.
      * 같은 게임이라도 스토어마다 패키지가 달라서(구글 플레이 / 갤럭시 스토어) 기억해 둬야 한다.
      */

@@ -56,6 +56,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rowGame: LinearLayout
     private lateinit var swTest: Switch
     private lateinit var swSweep: Switch
+    private lateinit var swDim: Switch
     private lateinit var rowArenaCount: LinearLayout
     private var lastProgress = -1
     private var setupShown = false      // 이번에 켠 뒤로 안내를 한 번 띄웠나
@@ -310,9 +311,25 @@ class MainActivity : AppCompatActivity() {
             Prefs.dailySweep = it
         }
         swSweep = sSweep
+        // 화면은 끌 수 없다(화면 읽기도 탭도 화면이 켜져 있어야 한다). 대신 백라이트만 내린다 —
+        // 화면 읽기는 프레임버퍼를 읽으므로 봇에는 아무 영향이 없다.
+        val (rDim, sDim) = switchRow("화면 어둡게",
+            "봇이 도는 동안만. 알약을 탭하면 15초 밝아져요", Prefs.dimScreen) {
+            Prefs.dimScreen = it
+            if (it && !Overlay.canDraw(this)) {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("'게임 위에 표시'가 필요해요")
+                    .setMessage("화면을 어둡게 하는 것도 게임 위에 띄우는 창으로 합니다.\n" +
+                                "준비 → '게임 위에 표시'를 먼저 허용해 주세요.")
+                    .setPositiveButton("확인", null)
+                    .show()
+            }
+        }
+        swDim = sDim
         g4.addView(rTest); g4.addView(separator())
         g4.addView(rowArenaCount); g4.addView(separator())
-        g4.addView(rSweep)
+        g4.addView(rSweep); g4.addView(separator())
+        g4.addView(rDim)
         root.addView(g4)
 
         // ── 도구 ──

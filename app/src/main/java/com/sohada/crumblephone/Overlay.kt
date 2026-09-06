@@ -39,6 +39,18 @@ object Overlay {
     private var dotView: View? = null
     private var expanded = false
     private var idleTicks = 0
+
+    /**
+     * 이 시각까지는 화면을 원래 밝기로 둔다(알약을 탭하면 늘어난다).
+     * 어둡게 해 두면 **알약이 유일한 조작점**이라, 만져서 되돌릴 길이 반드시 있어야 한다.
+     */
+    private var wakeUntil = 0L
+    private const val WAKE_MS = 15_000L
+    /**
+     * 어두울 때의 밝기. **0(완전 최소)으로 두면 안 된다** — 알약이 안 보여서 되돌릴 수가 없다.
+     * 아주 어둡되 손으로 찾을 수는 있는 값으로 둔다.
+     */
+    private const val DIM = 0.03f
     private val ui = Handler(Looper.getMainLooper())
 
     fun canDraw(ctx: Context): Boolean =
@@ -53,6 +65,7 @@ object Overlay {
         //   show() 는 콘텐츠를 시작하기 '전에' 불리므로 첫 tick 때 아직 running 이 false 다.
         //   지난 번에 쉬면서 7 까지 세어 둔 값이 남아 있으면 그 한 번으로 임계를 넘어 바로 hide 된다.
         idleTicks = 0
+        wakeUntil = 0L
         val w = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
         // 게임 위에 뜨는 것이라 게임이 밝든 어둡든 읽혀야 한다 → 관제 화면의 라이트/다크와
@@ -60,6 +73,9 @@ object Overlay {
         val bg = GradientDrawable().apply {
             setColor(Color.parseColor("#E61C1C1E"))
             cornerRadius = dp(ctx, 100).toFloat()      // 완전한 알약 모양
+            // 화면을 어둡게 해 두면 이 알약이 **유일한 조작점**이다. 찾을 수 있어야 하므로
+            // 옅은 테두리를 둬서 어두운 화면에서도 윤곽이 보이게 한다.
+            setStroke(dp(ctx, 1), Color.parseColor("#66FFFFFF"))
         }
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -105,6 +121,7 @@ object Overlay {
             gravity = Gravity.TOP or Gravity.START
             // ⚠️ 여기 단위는 **픽셀**이다(dp 가 아니다). 아래 Y_MIN/Y_MAX 안전 띠와 같은 자다.
             x = 40; y = 300
+            screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         }
 
         // 탭하면 [멈추기] 가 나왔다 들어간다. 끌면 위치가 옮겨진다(단, 안전한 세로 띠 안에서만).
@@ -124,8 +141,11 @@ object Overlay {
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!moved) {
+                        // 탭 = '잠깐 깨우기'. 어둡게 해 뒀어도 이걸로 원래 밝기가 돌아온다.
+                        wakeUntil = System.currentTimeMillis() + WAKE_MS
                         expanded = !expanded
                         stop.visibility = if (expanded) View.VISIBLE else View.GONE
+                        applyBrightness()
                     }
                     true
                 }
@@ -142,6 +162,22 @@ object Overlay {
         val w = wm; val v = view
         ui.post { if (w != null && v != null) try { w.removeView(v) } catch (_: Exception) {} }
         wm = null; view = null; lp = null; label = null; stopBtn = null; dotView = null; expanded = false
+    }
+
+    /**
+     * 화면 밝기를 지금 상태에 맞춘다.
+     * 어둡게 하는 건 **봇이 도는 동안** + **설정을 켰을 때** + **최근에 탭하지 않았을 때** 뿐이다.
+     * 셋 중 하나라도 아니면 원래 밝기로 되돌린다(`BRIGHTNESS_OVERRIDE_NONE`).
+     */
+    private fun applyBrightness() {
+        val w = wm ?: return
+        val v = view ?: return
+        val p = lp ?: return
+        val dim = Prefs.dimScreen && Runner.running && System.currentTimeMillis() >= wakeUntil
+        val want = if (dim) DIM else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        if (p.screenBrightness == want) return
+        p.screenBrightness = want
+        try { w.updateViewLayout(v, p) } catch (_: Exception) {}
     }
 
     /** 봇이 도는 동안에는 알약이 떠 있어야 한다. 이미 떠 있으면 아무 일도 안 한다. */
@@ -163,6 +199,7 @@ object Overlay {
         if (l.text != s) l.text = s
         (dotView?.background as? GradientDrawable)?.setColor(
             if (Runner.running) Color.parseColor("#30D158") else Color.parseColor("#8E8E93"))
+        applyBrightness()
         if (!Runner.running) {
             if (expanded) { expanded = false; stopBtn?.visibility = View.GONE }
             // 다 끝났으면 결과를 잠깐 보여 준 뒤 알아서 사라진다(게임 화면을 가리지 않게).
