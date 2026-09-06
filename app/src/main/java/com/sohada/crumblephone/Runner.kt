@@ -156,20 +156,41 @@ object Runner {
 
     /**
      * 게임을 띄워 한 장 찍고 **좌표가 맞는 기기인지**만 확인한다. 아무것도 누르지 않는다.
-     * 새 기기(태블릿 등)에서 안 될 때, 무엇이 문제인지 한 줄로 알려 주려고 둔 것이다.
+     *
+     * ⚠️ 여기서 `waitGameReady()` 를 쓰면 안 된다. 그건 '아는 화면이 보이나'로 판단하는데,
+     *    그 판단이 바로 좌표를 쓴다 — **좌표가 맞는지 확인하려고 좌표를 쓰는 순환**이 된다.
+     *    좌표가 안 맞는 기기에서는 영영 준비가 안 된 것으로 보고 **찍기도 전에 포기**하고,
+     *    그러면 화면 크기만 그대로 보고해 '게임을 봤다'고 착각하게 만든다(실제로 그랬다).
+     *    그래서 여기서는 **시간만 기다렸다가 무조건 한 장 찍는다.**
      */
     fun checkCoords(ctx: Context) {
         if (!guard()) return
         running = true; task = "좌표 확인"
         thread(name = "coords") {
             try {
-                set("좌표 확인", "게임 화면을 보는 중")
-                // bringGameToFront 가 게임을 띄우고 detect 까지 한다(안 맞으면 거기서 이유를 남긴다).
-                bringGameToFront(ctx)
-                val s = Coords.summary()
-                Bot.log("좌표 확인 결과: " + s)
-                set(if (Coords.ratioOk) "좌표가 맞아요" else "좌표가 안 맞아요", s)
-                lastResult = s
+                val i = GameApp.launchIntent(ctx)
+                if (i == null) {
+                    set("좌표 확인 못 함", "게임을 찾지 못했어요 — 도구 → [게임 앱] 에서 골라 주세요")
+                    return@thread
+                }
+                set("좌표 확인", "게임을 여는 중")
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                ctx.startActivity(i)
+                // 화면 판정을 못 쓰므로 시간으로만 기다린다. 로딩이 길 수 있어 넉넉히.
+                for (t in 1..12) {
+                    if (!running) return@thread
+                    setProgress(t, 12)
+                    detail = "게임이 뜨기를 기다리는 중"
+                    sleep(1000)
+                }
+                Coords.redetect()
+                val b = shot()
+                if (b == null) { set("좌표 확인 못 함", "화면을 읽지 못했어요"); return@thread }
+                Coords.detect(b)
+                val sum = Coords.summary()
+                Bot.log("좌표 확인 결과: " + sum)
+                set(if (Coords.ratioOk) "좌표가 맞아요" else "좌표가 안 맞아요", sum)
+                lastResult = sum
             }
             catch (e: Exception) { set("오류", e.message ?: "알 수 없음") }
             finally { running = false; task = "" }
