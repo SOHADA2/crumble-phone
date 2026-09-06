@@ -262,7 +262,12 @@ object Runner {
         }
     }
 
-    fun startTobol(ctx: Context, maxAttempts: Int = if (Prefs.testMode) 0 else 300) {
+    /**
+     * 토벌전 — **멈추기를 누를 때까지 계속 돈다.**
+     * 많이 도전할수록 좋은 콘텐츠라 횟수를 따로 두지 않는다(사용자 방침).
+     * `maxAttempts = 0` 은 시험 모드용으로, 진입만 확인하고 끝낸다.
+     */
+    fun startTobol(ctx: Context, maxAttempts: Int = if (Prefs.testMode) 0 else -1) {
         if (!guard()) return
         running = true; task = "토벌전"; lastScore = 0L; bestScore = 0L
         thread(name = "tobol") {
@@ -379,9 +384,15 @@ object Runner {
         }
         if (!enterTobolLobby()) return
 
+        if (maxAttempts == 0) {           // 시험 모드 — 진입만 확인하고 끝낸다(재화를 안 쓴다)
+            set("토벌전", "진입까지만 확인했어요")
+            lastResult = "토벌전 진입 확인"
+            return
+        }
+
         var attempts = 0
-        for (n in 1..maxAttempts) {
-            if (!running) break
+        // maxAttempts < 0 이면 상한 없음 — [멈추기] 를 누를 때까지 돈다.
+        while (running && (maxAttempts < 0 || attempts < maxAttempts)) {
             var atLobby = shot()?.let { Screen.atTobolLobby(it) } ?: false
             if (!atLobby) {
                 sleep(2000)
@@ -430,6 +441,7 @@ object Runner {
             lastResult = if (bestScore > 0) "토벌전 " + attempts + "회 · 최고 " + Ocr.comma(bestScore) else "토벌전 " + attempts + "회 도전함"
         }
         if (running) set("토벌전 끝", attempts.toString() + "회 도전했어요") else set("멈췄어요", "토벌전 " + attempts + "회까지 했어요")
+        // (여기 오는 길은 셋뿐이다: [멈추기] · 로비 이탈(시즌 종료) · 결과창을 못 닫음)
         lastResult = "토벌전 " + attempts + "회 도전함"
     }
 

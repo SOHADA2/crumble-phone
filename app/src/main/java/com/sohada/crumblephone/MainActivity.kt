@@ -196,7 +196,7 @@ class MainActivity : ListActivity() {
         val rBoss = row("보스전", subtitle = "막힌 보스를 쿠키 조합 1~5 로 도전") {
             Overlay.show(applicationContext); Boss.start(applicationContext)
         }
-        val rTobol = row("토벌전", subtitle = "반복 도전하고 점수 기록") {
+        val rTobol = row("토벌전", subtitle = "멈출 때까지 계속 도전 · 최고 점수 기록") {
             Overlay.show(applicationContext); Runner.startTobol(applicationContext)
         }
         val rDaily = row("일일 던전", value = "입장권", subtitle = "기회 다 쓰고 달성 보상까지") {
