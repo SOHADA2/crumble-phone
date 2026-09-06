@@ -94,6 +94,15 @@ object Oven {
                 val cur = Runner.shot()
                 if (cur == null) { Runner.sleep(2000); continue }
 
+                // 장비가 꽉 차면 '정리하기' 창이 뜨고 그때부터 아무것도 안 뽑힌다(장비 30개쯤).
+                // 여기서 안 풀어 주면 남은 시간 내내 헛돈다.
+                if (Screen.isOvenCleanupDialog(cur)) {
+                    Bot.log("  오븐: '정리하기' 창 - 오른쪽을 누릅니다(장비가 꽉 찼어요)")
+                    Runner.tap(Screen.OVEN_CLEANUP, 2500)
+                    lastMove = System.currentTimeMillis()
+                    continue
+                }
+
                 // 뱃지가 오르고 있으면 아직 도는 중이다.
                 val badge = Screen.ovenBadge(cur)
                 if (badge != lastBadge) { lastBadge = badge; lastMove = System.currentTimeMillis() }
@@ -156,16 +165,26 @@ object Oven {
     /**
      * 확인창이 떠 있으면 **왼쪽(안전한 쪽)** 으로 닫는다. 치웠으면 true.
      *
-     * ⚠️ PC 봇(`oven.ps1`)은 여기서 오븐이 꽉 찼을 때의 '자동 정리' 확인창을 보고
-     *    **오른쪽 주황 [정리하기]** 를 눌렀다. 폰에서는 그렇게 하지 않는다.
-     *    - 확인창은 전투 종료·게임 종료·다이아 새로고침이 **전부 같은 배치**라 색만으로는 못 가른다.
-     *      잘못 누르면 전투 강제 종료 / 게임 종료 / 크리스탈 300 소모다.
-     *    - PC 쪽 [정리하기] 좌표부터가 스크린샷 기준 **추정치**라 실측된 적이 없다.
-     *    오븐 퀘스트 하나를 건너뛰는 손해가 훨씬 싸다. 오븐이 꽉 차면 한 번 손으로 정리해 주면 된다.
+     * ⚠️ **오른쪽(주황)을 누르는 곳은 이 파일의 여기 한 곳뿐이다.** 확인창은 전투 종료·게임 종료·
+     *    크리스탈 새로고침이 **전부 같은 배치**라, 잘못 누르면 전투 강제 종료 / 게임 종료 /
+     *    크리스탈 300 소모다. 그래서 문을 세 겹으로 잠갔다:
+     *      ① `isConfirmDialog` — 청록/주황 배치가 맞고
+     *      ② `isOvenCleanupDialog` — 가로로 거의 꽉 찬 청록 판이 **두 줄** 있고
+     *         (위험한 확인창은 가운데 작은 모달이라 이게 없다)
+     *      ③ **오븐이 도는 중일 때만** — 이 파일 밖에서는 절대 오른쪽을 누르지 않는다
+     *    좌표 `(990,2812)` 도 실기 화면에서 잰 값이다(PC 쪽 값은 추정치였다).
+     *
+     *    안 누르면 장비 30개쯤에서 창이 떠 오븐이 막히고, 남은 시간 내내 헛돈다.
      */
     private fun clearDialog(): Boolean {
-        for (k in 1..3) {
+        for (k in 1..4) {
             val s = Runner.shot() ?: return false
+            if (Screen.isOvenCleanupDialog(s)) {
+                // 오븐이 꽉 찼다. 이건 오른쪽을 눌러야 풀린다 — 아래 주석 참고.
+                Bot.log("  오븐: '정리하기' 창 - 오른쪽을 누릅니다(장비가 꽉 찼어요)")
+                Runner.tap(Screen.OVEN_CLEANUP, 2500)
+                continue
+            }
             if (!Screen.isConfirmDialog(s)) return true
             Bot.log("  오븐: 확인창 - 왼쪽(안전한 쪽)으로 닫습니다")
             Runner.tap(Screen.DLG_SAFE, 2500)

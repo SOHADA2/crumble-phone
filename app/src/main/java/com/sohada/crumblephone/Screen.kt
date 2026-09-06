@@ -165,6 +165,40 @@ object Screen {
     fun gameIsUp(b: Bitmap): Boolean =
         atMain(b) || atTobolLobby(b) || isBattleOver(b) || isConfirmDialog(b) || hasCloseButton(b)
 
+    val OVEN_CLEANUP = intArrayOf(990, 2812)         // '자동 열기 결과'의 오른쪽 [정리하기]
+
+    // 그 창의 **넓은 청록 패널** 두 줄. 가운데 안내문 판과 버튼 바로 위 띠다.
+    // 실측(폰 1440x3120): x 100~1340 중 청록 비율 y2450 = 86~90% · y2730 = 95%.
+    private val OVEN_CLEAN_BANDS = intArrayOf(2450, 2730)
+
+    /**
+     * **오븐 '자동 열기 결과 → 정리하기'** 창인가?
+     *
+     * ⚠️ 이 창은 위험한 확인창(전투 종료·게임 종료·크리스탈 새로고침)과 **버튼 자리가 똑같다** —
+     *    둘 다 y2780~2845 에 왼쪽 청록 / 오른쪽 주황이다. 그래서 `isConfirmDialog` 가 그대로 걸리고,
+     *    안전 규칙대로 왼쪽([그만두기])을 눌러 왔다. 그러면 오븐이 꽉 찬 채로 막힌다(장비 30개쯤에서).
+     *
+     * 가르는 신호는 **창의 넓이**다. 위험한 확인창은 가운데 작은 모달이라 화면 폭을 채우지 않는다.
+     * 이 창은 오븐 패널 위에 떠서 **가로로 거의 꽉 찬 청록 판**을 두 줄 갖는다.
+     *
+     * 그리고 이 판정을 통과해도 **오븐이 도는 중에만** 오른쪽을 누른다(`Oven.kt`).
+     * 신호 둘 + 문맥 하나가 다 맞을 때만 여는 문이다.
+     */
+    fun isOvenCleanupDialog(b: Bitmap): Boolean {
+        if (!isConfirmDialog(b)) return false
+        for (y in OVEN_CLEAN_BANDS) {
+            var hit = 0; var n = 0
+            var x = 100
+            while (x <= 1340) {
+                val c = px(b, x, y); n++
+                if (Color.red(c) < 120 && Color.green(c) > 130 && Color.blue(c) > 140) hit++
+                x += 10
+            }
+            if (n == 0 || hit * 100 / n < 70) return false
+        }
+        return true
+    }
+
     /**
      * 게임의 확인창(예/아니오)이 떠 있나?
      * 전투 종료 · 게임 종료 · 다이아 새로고침 창이 모두 같은 배치라, 왼쪽이 언제나 안전한 쪽이다.
