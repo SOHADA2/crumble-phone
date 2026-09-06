@@ -72,7 +72,7 @@ class SetupActivity : AppCompatActivity() {
     private fun button(label: String, fill: Int, fg: Int, onClick: () -> Unit) =
         text(label, 16f, fg, medium).apply {
             gravity = Gravity.CENTER
-            background = t.rippleRound(fill, dpf(11f))
+            background = t.chunky(fill, dpf(16f), dp(2), dp(4))
             isClickable = true
             setOnClickListener { onClick() }
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(46)).apply { topMargin = dp(12) }
@@ -160,7 +160,7 @@ class SetupActivity : AppCompatActivity() {
 
     /** 조심할 것을 노랗게 한 덩어리. 여기서 실제로 넘어지는 자리에만 쓴다. */
     private fun warn(s: String) = text(s, 14f, t.orange).apply {
-        background = t.round(if (t.dark) Color.parseColor("#2A2113") else Color.parseColor("#FFF6E5"), dpf(10f))
+        background = t.round(Color.parseColor("#3A2C18"), dpf(12f))
         setPadding(dp(14), dp(12), dp(14), dp(12))
         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) }
     }
@@ -190,7 +190,7 @@ class SetupActivity : AppCompatActivity() {
 
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = t.round(t.cell, dpf(14f))
+            background = t.card(dpf(18f), Math.max(1, dp(2)))
             setPadding(dp(18), dp(18), dp(18), dp(18))
             addView(head); addView(body)
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {

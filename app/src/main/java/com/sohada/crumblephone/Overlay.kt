@@ -67,14 +67,14 @@ object Overlay {
         wakeUntil = 0L
         val w = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-        // 게임 위에 뜨는 것이라 게임이 밝든 어둡든 읽혀야 한다 → 관제 화면의 라이트/다크와
-        // 무관하게 언제나 어두운 반투명 알약으로 둔다(iOS 의 다크 재질과 같은 결).
+        // 게임 위에 뜨는 것이라 게임이 밝든 어둡든 읽혀야 한다 → 언제나 어두운 알약이다.
+        // 색은 게임 하단 독에서 딴 갈색(#231A18)이라 게임 화면 위에 얹혀도 이물감이 없다.
+        // 화면을 어둡게 해 두면 이 알약이 **유일한 조작점**이라, 게임 패널처럼
+        // **탄색 테두리를 두툼하게** 둘러 어두운 화면에서도 윤곽이 보이게 한다.
         val bg = GradientDrawable().apply {
-            setColor(Color.parseColor("#E61C1C1E"))
+            setColor(Color.parseColor("#F2231A18"))
             cornerRadius = dp(ctx, 100).toFloat()      // 완전한 알약 모양
-            // 화면을 어둡게 해 두면 이 알약이 **유일한 조작점**이다. 찾을 수 있어야 하므로
-            // 옅은 테두리를 둬서 어두운 화면에서도 윤곽이 보이게 한다.
-            setStroke(dp(ctx, 1), Color.parseColor("#66FFFFFF"))
+            setStroke(dp(ctx, 2), Color.parseColor("#8A6A52"))
         }
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -85,15 +85,16 @@ object Overlay {
         }
         val dot = View(ctx).apply {
             background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL; setColor(Color.parseColor("#30D158"))
+                shape = GradientDrawable.OVAL; setColor(Color.parseColor("#7CC24A"))
+                setStroke(dp(ctx, 1), Color.parseColor("#3A2C18"))
             }
-            layoutParams = LinearLayout.LayoutParams(dp(ctx, 7), dp(ctx, 7)).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(ctx, 9), dp(ctx, 9)).apply {
                 rightMargin = dp(ctx, 8)
             }
         }
         val txt = TextView(ctx).apply {
-            text = "쉬는 중"; setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            text = "쉬는 중"; setTextColor(Color.parseColor("#E8D9C8"))   // 크림
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             // ⚠️ 창이 WRAP_CONTENT 라, 글자가 길면 알약이 화면 밖까지 커지고
             //    **오른쪽 끝의 [멈추기] 가 잘려 나간다**(빨간 조각만 보였다).
@@ -120,9 +121,12 @@ object Overlay {
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            // 게임 버튼처럼 두툼하게 — 짙은 외곽선 + 위가 밝은 그라데이션.
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#FF453A"))
+                colors = intArrayOf(Color.parseColor("#F06A58"), Color.parseColor("#E8503C"))
+                orientation = GradientDrawable.Orientation.TOP_BOTTOM
                 cornerRadius = dp(ctx, 100).toFloat()
+                setStroke(dp(ctx, 2), Color.parseColor("#7A2418"))
             }
             setPadding(dp(ctx, 13), dp(ctx, 5), dp(ctx, 13), dp(ctx, 5))
             // 글자가 아무리 길어도 이 버튼은 절대 줄어들지 않는다.
@@ -234,7 +238,7 @@ object Overlay {
             l.isSelected = true
         }
         (dotView?.background as? GradientDrawable)?.setColor(
-            if (Runner.running) Color.parseColor("#30D158") else Color.parseColor("#8E8E93"))
+            if (Runner.running) Color.parseColor("#7CC24A") else Color.parseColor("#8A7565"))
         applyBrightness()
         // 돌고 있을 때만 [멈추기] 를 보여 준다. 쉬는 중에 눌러 봐야 할 일이 없다.
         stopBtn?.visibility = if (Runner.running) View.VISIBLE else View.GONE

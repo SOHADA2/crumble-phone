@@ -49,26 +49,27 @@ open class ListActivity : AppCompatActivity() {
     // ── iOS 묶음 목록 조각들 ──────────────────────────────────
 
     /** 구역 이름. 목록 위에 작게 붙는 회색 글씨. */
-    protected fun sectionHeader(title: String) = text(title, 13f, t.label2, medium).apply {
-        setPadding(dp(20), dp(24), dp(20), dp(7))
-        letterSpacing = 0.02f
+    protected fun sectionHeader(title: String) = text(title, 14f, t.gold, medium).apply {
+        setPadding(dp(22), dp(26), dp(20), dp(8))
+        letterSpacing = 0.06f
     }
 
     /** 셀들을 담는 둥근 카드. 모서리 클리핑은 여기서 한 번만 한다. */
     protected fun group(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        background = t.round(t.cell, dpf(12f))
+        // 게임 패널처럼 두툼한 테두리를 두른다.
+        background = t.card(dpf(18f), Math.max(1, dp(2)))
         clipToOutline = true
         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
             leftMargin = dp(16); rightMargin = dp(16)
         }
     }
 
-    /** 셀 사이 가는 선. 왼쪽은 글자 시작점까지 들여쓴다(iOS 방식). */
+    /** 셀 사이 선. 게임 패널의 홈처럼 살짝 굵게 판다. */
     protected fun separator(): View = View(this).apply {
         setBackgroundColor(t.separator)
-        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, Math.max(1, (dpf(0.5f)).toInt())).apply {
-            leftMargin = dp(16)
+        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, Math.max(1, dp(1))).apply {
+            leftMargin = dp(14); rightMargin = dp(14)
         }
     }
 
@@ -106,7 +107,7 @@ open class ListActivity : AppCompatActivity() {
             setPadding(dp(16), dp(12), dp(16), dp(12))
             addView(lbl)
             addView(v)
-            if (chevron) addView(text("›", 20f, t.label3).apply {
+            if (chevron) addView(text("›", 24f, t.borderDim, medium).apply {
                 layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(6) }
             })
             isClickable = true

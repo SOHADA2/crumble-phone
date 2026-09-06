@@ -93,7 +93,7 @@ class MainActivity : ListActivity() {
             // 이모지 대신 글리프 하나. 이미지를 안 쓴다는 원칙을 지킨다.
             addView(text("⚙", 26f, t.label2).apply {
                 setPadding(dp(14), dp(14), dp(20), dp(10))
-                background = t.rippleRound(t.bg, dpf(22f))
+                background = t.rippleRound(t.cell, dpf(22f))
                 isClickable = true
                 setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
             })
@@ -126,13 +126,13 @@ class MainActivity : ListActivity() {
         // 진행률 막대. 너비를 직접 바꾸면 애니메이션이 안 되므로,
         // 꽉 찬 막대를 왼쪽 기준으로 scaleX 만 줄여 둔다(그건 부드럽게 움직인다).
         fill = View(this).apply {
-            background = t.round(t.blue, dpf(2f))
+            background = t.round(t.gold, dpf(4f))
             layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
             pivotX = 0f
             scaleX = 0f
         }
         track = FrameLayout(this).apply {
-            background = t.round(t.separator, dpf(2f))
+            background = t.round(t.bgDeep, dpf(4f))
             addView(fill)
             visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(4)).apply { topMargin = dp(14) }
@@ -144,7 +144,7 @@ class MainActivity : ListActivity() {
         // 무엇을 시작할지는 아래 '자동 실행' 목록에서 고른다. 콘텐츠가 늘어도 구조가 그대로다.
         btnPrimary = text("멈추기", 17f, Color.WHITE, medium).apply {
             gravity = Gravity.CENTER
-            background = t.rippleRound(t.red, dpf(12f))
+            background = t.chunky(t.red, dpf(16f), dp(2), dp(4))
             visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(50)).apply {
                 leftMargin = dp(16); rightMargin = dp(16); topMargin = dp(16)
