@@ -51,26 +51,56 @@ object Daily {
             return
         }
 
-        val sigs = ArrayList<IntArray>()
+        val visited = ArrayList<IntArray>()   // 이미 해 본 줄의 지문
         val results = ArrayList<String>()
         var battled = 0
+        var scrolls = 0                       // 목록을 몇 번 밀어 내렸는지
 
         for (d in 1..maxDungeons) {
             if (!Runner.running) break
-            var b = Runner.shot() ?: break
-            if (!Screen.atDailyEntry(b)) { Runner.sleep(1200); continue }
 
-            // 한 바퀴 종료 판정은 **첫 던전으로 되돌아왔을 때만** 한다.
-            // 중간 던전끼리는 서로 비슷해서 그걸로 끊으면 일찍 멈춘다.
-            val sig = Screen.dailySig(b)
-            if (sigs.isNotEmpty() && Screen.dailySigMatch(sigs[0], sig)) {
-                Bot.log("첫 던전으로 되돌아옴 - 한 바퀴 완료"); break
+            // ── 목록으로 돌아온다 ──
+            // ⚠️ 예전엔 던전을 하나 끝내고 ▶ '다음 던전'(1400,1470)을 눌렀다. 그런데 지금 UI 에는
+            //    그런 화살표가 없고, 목록 화면에서 그 자리는 **배너 한가운데**다 —
+            //    엉뚱한 던전이 열리며 순서가 통째로 어긋났다. 목록으로 돌아와 줄을 골라 들어간다.
+            if (!backToList()) { Bot.log("일일 던전 목록으로 돌아가지 못했어요 - 종료"); break }
+            var b = Runner.shot() ?: break
+
+            // ── 아직 안 해 본 줄 고르기 ──
+            var pick = -1
+            for (y in Screen.findDailyBanners(b)) {
+                val sig = Screen.dailyRowSig(b, y)
+                if (visited.none { Screen.dailyRowMatch(it, sig) }) { pick = y; break }
             }
-            sigs.add(sig)
-            val idx = sigs.size
+
+            if (pick < 0) {
+                // 보이는 줄은 다 해 봤다. 밀어 내려 더 있는지 본다.
+                if (scrolls >= 3) { Bot.log("더 볼 던전이 없어요 - 한 바퀴 완료"); break }
+                scrolls++
+                Runner.set("일일 던전", "목록을 밀어 내리는 중 (" + scrolls + ")")
+                TapService.swipe(720, 2200, 720, 1100, 450)
+                Runner.sleep(1200)
+                continue
+            }
+
+            visited.add(Screen.dailyRowSig(b, pick))
+            val idx = visited.size
             val name = nameOf(idx)
-            Runner.set("일일 던전 " + idx + "번째", name + " · 준비 중")
-            Runner.setProgress(1, 4)      // 이 던전 안에서의 단계다(전체 진행률이 아니다)
+            Runner.set("일일 던전 " + idx + "번째", name + " · 들어가는 중")
+            Runner.setProgress(1, 4)
+            Bot.log("일일 던전 " + idx + ": 배너(y=" + pick + ") 로 들어갑니다")
+            Runner.tap(intArrayOf(700, pick), 2200)
+
+            var opened = false
+            for (w in 1..5) {
+                if (Runner.shot()?.let { Screen.atDailyEntry(it) } == true) { opened = true; break }
+                Runner.sleep(700)
+            }
+            if (!opened) {
+                Bot.log("  들어가지 못했어요 - 다음 줄로")
+                results.add(name + " 진입실패")
+                continue
+            }
 
             // ── '연속 도전'은 끈다 ──
             // 켜면 게임이 봇과 상관없이 자동으로 다음 판을 이어가서 화면이 어긋난다
@@ -82,9 +112,9 @@ object Daily {
                 Runner.tap(Screen.DAILY_CONT_CHK, 1200)
             }
 
-            // ── 전투: 도전하기가 주황이면 누르고, 청록(0/3)이 되면 이 던전 끝 ──
+            // ── 전투: 도전하기가 주황이면 누르고, 청록이 되면 이 던전 끝 ──
             var fought = false
-            var idle = 0     // 진입 화면인데 도전도 완료도 아닌 상태가 연속 몇 번인지
+            var idle = 0
             val deadline = System.currentTimeMillis() + 260_000   // 던전당 안전 상한
             while (System.currentTimeMillis() < deadline && Runner.running) {
                 val s = Runner.shot()
@@ -99,9 +129,8 @@ object Daily {
                         fought = true
                         continue
                     }
-                    // 도전도 안 되고 완료도 아니다 = **열쇠(기회)가 없다.**
-                    // 예전엔 여기서 260초 상한까지 그냥 기다렸다. 기다려도 열쇠는 안 생기니
-                    // 6초만 지켜보고(전환 중일 수 있다) 바로 다음 던전을 보러 간다.
+                    // 도전도 완료도 아니다 = **열쇠(기회)가 없다.** 기다려도 안 생기니
+                    // 6초만 지켜보고(전환 중일 수 있다) 다음 던전을 보러 간다.
                     idle++
                     if (idle >= 5) {
                         Bot.log("던전 " + idx + ": 도전할 수 없어요(열쇠 없음) - 다음 던전으로")
@@ -119,37 +148,50 @@ object Daily {
             if (!Runner.running) break
 
             // ── 수령 전에 진입 화면이 '안정'됐는지 본다 ──
-            // 비동기 결과 화면이 남아 있을 수 있다. 진입 화면이 두 번 연속 보일 때까지 기다린다.
+            // 비동기 결과 화면이 남아 있을 수 있다. 두 번 연속 보일 때까지 기다린다.
             var stable = 0
             var w = 0
             while (w < 8 && stable < 2 && Runner.running) {
                 stable = if (Runner.shot()?.let { Screen.atDailyEntry(it) } == true) stable + 1 else 0
-                Runner.sleep(1200); w++
+                Runner.sleep(1000); w++
             }
             b = Runner.shot() ?: break
             if (!Screen.atDailyEntry(b)) {
                 // 엉뚱한 화면에서 마구 누르지 않는다. 수령은 건너뛰고 순환만 이어간다.
                 Bot.log("던전 " + idx + ": 진입 화면이 안정되지 않아 수령을 건너뜁니다(안전)")
                 results.add(name + " 확인불가")
-                Runner.tap(Screen.DAILY_NEXT, 2200)
                 continue
             }
 
             // ── 달성 보상 수령 ──
             Runner.set("일일 던전 " + idx + "번째", name + " · 달성 보상 수령")
             Runner.setProgress(4, 4)
-            Runner.tap(Screen.DAILY_ACHIEVE, 2000)
-            Runner.tap(Screen.DAILY_CLAIM_ALL, 2000)
-            Runner.tap(Screen.DAILY_MODAL_CLOSE, 1500)
+            Runner.tap(Screen.DAILY_ACHIEVE, 1600)
+            Runner.tap(Screen.DAILY_CLAIM_ALL, 1600)
+            Runner.tap(Screen.DAILY_MODAL_CLOSE, 1200)
 
-            results.add(name + " " + (if (fought) "기회 소진" else "이미 완료"))
+            results.add(name + " " + (if (fought) "기회 소진" else "기회 없음"))
             Runner.lastResult = results.joinToString(" · ")
-            Runner.tap(Screen.DAILY_NEXT, 2200)
         }
 
-        val head = if (battled == 0) "모두 완료 (더 누를 필요 없어요)" else battled.toString() + "개 던전 진행함"
+        val head = if (battled == 0) "돌 수 있는 던전이 없었어요" else battled.toString() + "개 던전 진행함"
         if (Runner.running) Runner.set("일일 던전 끝", head) else Runner.set("멈췄어요", head)
         Runner.lastResult = if (results.isEmpty()) head else head + " — " + results.joinToString(" · ")
+    }
+
+    /**
+     * 던전 안에 있으면 **목록으로 돌아온다**. 이미 목록이면 아무것도 안 한다.
+     * 뒤로가기만 쓴다 — 무엇도 시작시키지 않는 유일하게 안전한 조작이다.
+     */
+    private fun backToList(): Boolean {
+        for (k in 1..4) {
+            if (!Runner.running) return false
+            val b = Runner.shot() ?: return false
+            if (Screen.atDailyList(b)) return true
+            TapService.back()
+            Runner.sleep(1400)
+        }
+        return Runner.shot()?.let { Screen.atDailyList(it) } == true
     }
 
     /**
@@ -171,6 +213,7 @@ object Daily {
             Runner.set("일일 던전으로 이동 중", t.toString() + "/3")
 
             var b = Runner.shot()
+            if (b != null && Screen.atDailyList(b)) return true   // 목록까지만 가면 된다
             if (b != null && Screen.atDailyEntry(b)) return true
 
             // 목록이 아니면 그때만 던전 탭으로 이동한다.
@@ -180,20 +223,7 @@ object Daily {
                 b = Runner.shot()
             }
 
-            if (b != null && Screen.atDailyList(b)) {
-                val y = Screen.findDailyBanner(b)
-                if (y > 0) {
-                    Bot.log("일일 던전 목록 - 배너(y=" + y + ")를 눌러 들어갑니다")
-                    Runner.tap(intArrayOf(700, y), 2800)
-                    for (w in 1..5) {
-                        if (Runner.shot()?.let { Screen.atDailyEntry(it) } == true) return true
-                        Runner.sleep(900)
-                    }
-                    Runner.shot()?.let { Bot.log("  들어가지 못했어요: " + Screen.debugLine(it)) }
-                } else {
-                    Bot.log("일일 던전 목록인데 배너를 못 찾았어요")
-                }
-            }
+            if (b != null && Screen.atDailyList(b)) return true
 
             // 목록도 아니고 진입도 안 됐다. 그때만 팝업을 치우고 메인부터 다시 간다.
             if (t < 3) { Runner.clearPopups(); Runner.resetToMain() }

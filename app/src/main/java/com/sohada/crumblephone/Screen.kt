@@ -429,7 +429,9 @@ object Screen {
     //    지금은 `findDailyBanner` 로 화면을 보고 배너를 찾아 누른다.
     val DAILY_CHALLENGE   = intArrayOf(733, 2590)    // 도전하기!
     val DAILY_CONT_CHK    = intArrayOf(1076, 2574)   // 연속 도전 체크박스
-    val DAILY_NEXT        = intArrayOf(1400, 1470)   // ▶ 다음 던전
+    // ⚠️ 옛 `DAILY_NEXT (1400,1470)` 는 지웠다 — 지금 UI 에는 ▶ 화살표가 없고,
+    //    목록 화면에서 그 자리는 **배너 한가운데**라 엉뚱한 던전이 열렸다.
+    //    던전을 하나 끝내면 뒤로가기로 목록에 돌아와 다음 줄을 고른다(`Daily.backToList`).
     val DAILY_ACHIEVE     = intArrayOf(1350, 1580)   // 달성 보상 상자
     val DAILY_CLAIM_ALL   = intArrayOf(710, 2840)    // 모두 받기
     val DAILY_MODAL_CLOSE = intArrayOf(720, 430)     // 모달 바깥(닫기)
@@ -453,7 +455,7 @@ object Screen {
     }
 
     /**
-     * 목록에서 **던전 배너 하나의 세로 중심**을 찾는다. 없으면 -1.
+     * 목록에 보이는 **모든** 던전 배너의 세로 중심. 위에서 아래 순서다.
      *
      * ⚠️ 고정 좌표로 첫 배너를 누르면 안 된다. 목록이 조금만 스크롤돼 있어도 **배너 사이 검은 띠**를
      *    누르게 되고, 탭이 헛돌아 '진입 실패'로 빠진다(실측: 옛 `DAILY_FIRST (700,830)` 자리가
@@ -462,7 +464,8 @@ object Screen {
      * 그래서 세로로 훑어 **밝은 구간(배너)** 을 찾는다. 배경 청록은 밝기 57~59, 배너 사이 검은 띠는
      * 29~43, 배너는 90~223 이라 78 로 자르면 깨끗하게 갈린다.
      */
-    fun findDailyBanner(b: Bitmap): Int {
+    fun findDailyBanners(b: Bitmap): IntArray {
+        val out = ArrayList<Int>()
         var start = -1
         var y = 560
         while (y <= 2560) {
@@ -470,13 +473,36 @@ object Screen {
             val on = (Color.red(c) + Color.green(c) + Color.blue(c)) / 3 > 78
             if (on && start < 0) start = y
             if (!on && start >= 0) {
-                if (y - start >= 100) return (start + y) / 2
+                if (y - start >= 100) out.add((start + y) / 2)
                 start = -1
             }
             y += 6
         }
-        if (start >= 0 && 2560 - start >= 100) return (start + 2560) / 2
-        return -1
+        if (start >= 0 && 2560 - start >= 100) out.add((start + 2560) / 2)
+        return out.toIntArray()
+    }
+
+    private val ROW_SIG_X = intArrayOf(260, 420, 580, 740, 900, 1060, 1220, 1330)
+
+    /**
+     * 목록의 **한 줄**을 알아보는 지문. 던전마다 그림 색이 뚜렷이 달라 이걸로 충분하다.
+     * (제목 글자는 게임 폰트라 OCR 이 안 된다 — 여러 번 확인된 사실이다.)
+     */
+    fun dailyRowSig(b: Bitmap, cy: Int): IntArray {
+        val out = IntArray(ROW_SIG_X.size * 3)
+        for ((i, x) in ROW_SIG_X.withIndex()) {
+            val c = px(b, x, cy)
+            out[i * 3] = Color.red(c); out[i * 3 + 1] = Color.green(c); out[i * 3 + 2] = Color.blue(c)
+        }
+        return out
+    }
+
+    /** 같은 줄인가? 애니메이션·반짝임이 있어 넉넉히 본다. */
+    fun dailyRowMatch(a: IntArray, b: IntArray): Boolean {
+        if (a.size != b.size) return false
+        var diff = 0
+        for (i in a.indices) diff += Math.abs(a[i] - b[i])
+        return diff < a.size * 26
     }
 
     /** 일일 던전 '진입 화면'인가? 소탕 버튼 자리가 여기서는 늘 청록이다. */
