@@ -126,6 +126,9 @@ object Daily {
                 val s = Runner.shot()
                 if (s == null) { Runner.sleep(900); continue }
                 if (Screen.atDailyEntry(s)) {
+                    // 빨간 점이 없으면 **할 게 없는 것**이다. 게임이 직접 알려 주는 신호라
+                    // 색 임계보다 깨끗하다 — 다 쓴 던전은 여기서 즉시 끊긴다(기다리지 않는다).
+                    if (!Screen.hasRedDot(s, Screen.DOT_CHALLENGE)) break
                     if (Screen.dailyChallengeDone(s)) break        // 청록 = 남은 열쇠 없음
                     if (Screen.dailyChallengeOpen(s)) {            // 주황 = 아직 남음
                         idle = 0
@@ -169,6 +172,18 @@ object Daily {
             // ── 달성 보상 수령 ──
             // 상자 → 창 → [모두 받기] → 뒤로가기로 닫기. 세 자리 모두 실측값이다.
             // 받을 게 없으면 [모두 받기] 가 회색이라 눌러도 아무 일이 없다(무해).
+            // 받을 게 없으면 우상단 빨간 점이 없다 → 창을 아예 열지 않는다.
+            // 던전마다 창을 여닫던 걸 없애서 한 바퀴가 눈에 띄게 빨라진다.
+            if (!Screen.hasRedDot(b, Screen.DOT_ACHIEVE)) {
+                Bot.log("던전 " + idx + ": 받을 달성 보상이 없어요(빨간 점 없음) - 건너뜁니다")
+                results.add(name + " " + (if (fought > 0) fought.toString() + "판" else "열쇠 없음"))
+                Runner.lastResult = results.joinToString(" · ")
+                Runner.shot()?.let {
+                    if (Screen.atDailyEntry(it)) Runner.tap(Screen.DAILY_NEXT, 2000)
+                }
+                continue
+            }
+
             Runner.set("일일 던전 " + idx + "번째", name + " · 달성 보상")
             Runner.setProgress(4, 4)
             Runner.tap(Screen.DAILY_ACHIEVE, 1500)

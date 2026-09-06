@@ -529,6 +529,34 @@ object Screen {
         return Color.red(auto) < 90 && Color.green(auto) > 160 && Color.blue(auto) in 100..190
     }
 
+    // ── 빨간 점(레드 닷) ──
+    // 게임은 '지금 할 수 있는 것' 우상단에 빨간 점을 찍는다. 색 임계로 애매하게 가르는 것보다
+    // 이게 훨씬 깨끗한 신호다. 세 던전을 대조해 확인했다:
+    //   경험치 0/4 → 도전 닷 없음 · 보상 닷 없음
+    //   반죽  3/4 → 도전 닷 **있음** · 보상 닷 **있음**
+    //   코인  4/4 → 도전 닷 **있음** · 보상 닷 없음
+    val DOT_CHALLENGE = intArrayOf(942, 2567)    // 도전하기 버튼 우상단 (실측 x922~964, y2546~2588)
+    val DOT_ACHIEVE   = intArrayOf(1410, 1547)   // 달성 보상 우상단 (실측 x1392~1428, y1528~1566)
+
+    /**
+     * 그 자리에 빨간 점이 있나?
+     * 한 점만 보면 반짝임·안티에일리어싱에 흔들리므로 **주변을 격자로 훑어** 여러 점을 본다.
+     */
+    fun hasRedDot(b: Bitmap, pt: IntArray): Boolean {
+        var hit = 0
+        var dx = -12
+        while (dx <= 12) {
+            var dy = -12
+            while (dy <= 12) {
+                val c = px(b, pt[0] + dx, pt[1] + dy)
+                if (Color.red(c) > 190 && Color.green(c) < 90 && Color.blue(c) in 40..130) hit++
+                dy += 6
+            }
+            dx += 6
+        }
+        return hit >= 8
+    }
+
     /**
      * **달성 보상 창**이 떠 있나?
      *
