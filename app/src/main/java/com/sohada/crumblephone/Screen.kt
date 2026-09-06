@@ -437,9 +437,9 @@ object Screen {
     //    반드시 `atDailyEntry` 가 참일 때만 누를 것.
     val DAILY_NEXT        = intArrayOf(1375, 1400)   // ▶ 다음 던전 (실측 x1359~1392, y1378~1423)
     val DAILY_ACHIEVE     = intArrayOf(1339, 1610)   // 달성 보상 상자 (실측 x1240~1438, y1531~1690)
-    // ⚠️ 옛 `DAILY_CLAIM_ALL (710,2840)` · `DAILY_MODAL_CLOSE (720,430)` 는 지웠다.
-    //    실측해 보니 (710,2840) 은 **하단 '일일 던전' 서브탭**이었다 — 달성 보상 창은 안 닫히고
-    //    탭만 건드렸다. 달성 보상 창의 좌표는 아직 못 쟀다(창 스크린샷이 필요하다).
+    // 달성 보상 창의 [모두 받기] — 실측 x370~1075, y2755~2880 의 한가운데.
+    // (옛 `(710,2840)` 은 창이 아니라 **하단 '일일 던전' 서브탭**이었다. 창은 안 닫히고 탭만 건드렸다.)
+    val DAILY_CLAIM_ALL   = intArrayOf(722, 2818)
     // ⚠️ 아래 소탕 좌표 셋은 **쓰지 않는다.** 소탕은 '지금 스테이지' 기준으로 보상을 주는데
     //    스테이지가 계속 올라가므로 지금 태우면 손해다(사용자 판단, 2026-09-06).
     //    실측값이라 지우지 않고 남겨 둔다 — 다시 재지 말 것. 다만 **부르는 곳이 있으면 안 된다.**
@@ -529,9 +529,25 @@ object Screen {
         return Color.red(auto) < 90 && Color.green(auto) > 160 && Color.blue(auto) in 100..190
     }
 
+    /**
+     * **달성 보상 창**이 떠 있나?
+     *
+     * 창의 짙은 청록 테두리를 좌우 두 점으로 본다. 실측(y=1150):
+     * 창 `(0,94,114)` / 던전 화면 `(236,107,6)` / 목록 `(226,136,22)` — 따뜻한 색과 확실히 갈린다.
+     */
+    fun isDailyAchieve(b: Bitmap): Boolean {
+        for (x in intArrayOf(150, 1300)) {
+            val c = px(b, x, 1150)
+            if (!(Color.red(c) < 50 && Color.green(c) in 60..130 && Color.blue(c) in 90..160)) return false
+        }
+        return true
+    }
+
     // 도전하기 버튼의 **바탕색**을 보는 자리. 글자(흰색)를 피해 왼쪽 안쪽을 고른다.
     private val DAILY_CH_PT = intArrayOf(560, 2600)
 
+    // 실측 확인: 열쇠 4/4 일 때 (560,2600) = (253,149,0) 주황 / 0/4 일 때 (20,174,184) 청록.
+    // 숫자 `4/4` 는 **남은 수 / 최대**다(다 쓰면 0/4 가 된다).
     /** 도전하기가 주황 = 아직 남은 열쇠가 있다. */
     fun dailyChallengeOpen(b: Bitmap): Boolean {
         val c = px(b, DAILY_CH_PT[0], DAILY_CH_PT[1])
