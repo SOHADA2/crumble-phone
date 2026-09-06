@@ -262,8 +262,11 @@ class MainActivity : AppCompatActivity() {
         // ── 자동 실행 ──
         root.addView(sectionHeader("자동 실행"))
         runRows = group()
-        val rQuest = row("퀘스트", subtitle = "보상 받고 · 뽑기 · 상자 · 오븐 · 보스") {
+        val rQuest = row("퀘스트", subtitle = "퀘스트 보상 받고 · 뽑기 · 상자 · 오븐") {
             Overlay.show(applicationContext); Chores.start(applicationContext)
+        }
+        val rBoss = row("보스전", subtitle = "막힌 보스를 쿠키 조합 1~5 로 도전") {
+            Overlay.show(applicationContext); Boss.start(applicationContext)
         }
         val rTobol = row("토벌전", subtitle = "반복 도전하고 점수 기록") {
             Overlay.show(applicationContext); Runner.startTobol(applicationContext)
@@ -274,10 +277,11 @@ class MainActivity : AppCompatActivity() {
         val rArena = row("아레나", value = "재화", subtitle = "약한 상대만 골라 도전") {
             Overlay.show(applicationContext); Arena.start(applicationContext)
         }
-        val rReward = row("보상만 받기", value = "안전", subtitle = "미션 · 출석 한 번만") {
+        val rReward = row("일일 보상", value = "안전", subtitle = "미션 · 출석 한 번만 받고 끝") {
             Overlay.show(applicationContext); Chores.startRewardsOnly(applicationContext)
         }
         runRows.addView(rQuest); runRows.addView(separator())
+        runRows.addView(rBoss); runRows.addView(separator())
         runRows.addView(rTobol); runRows.addView(separator())
         runRows.addView(rDaily); runRows.addView(separator())
         runRows.addView(rArena); runRows.addView(separator())

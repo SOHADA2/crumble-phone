@@ -416,6 +416,24 @@ object Screen {
 
     // ── 보스 소환 / 쿠키 조합(프리셋) ──
     val BOSS_SUMMON = intArrayOf(710, 406)           // 상단 '보스 소환' 빨간 배너 중앙
+
+    /**
+     * 상단 '보스 소환' 빨간 배너가 있나? = **아직 이 보스를 못 깼다**.
+     * 깨서 스테이지가 밀리면 이 자리는 하늘·배경이 되어 빨강이 아니다 — 승패를 이걸로 가른다.
+     * PC 봇 실측: (562,380) R245 G78 B34 / (620,410) R233 G108 B34.
+     *
+     * ⚠️ 전투 **중**에도 배너는 사라진다(PC 봇이 여기서 세 번 틀렸다). 그래서 소환 직후에 보면
+     *    안 되고, 전투가 끝날 만큼 기다렸다가 봐야 한다.
+     */
+    private val BOSS_PTS = arrayOf(intArrayOf(562, 380), intArrayOf(620, 410))
+
+    fun hasBossBanner(b: Bitmap): Boolean {
+        for (p in BOSS_PTS) {
+            val c = px(b, p[0], p[1])
+            if (!(Color.red(c) > 200 && Color.green(c) < 130 && Color.blue(c) < 90)) return false
+        }
+        return true
+    }
     val NAV_COOKIE  = intArrayOf(70, 2972)           // 하단 좌측 '쿠키' 탭 → 편성 화면
     val NAV_BATTLE  = intArrayOf(718, 2972)          // 하단 '전투/홈' 탭 → 메인 전투로 복귀
     val PRESET_TABS = arrayOf(                       // 쿠키 편성 화면의 프리셋 1~5 탭
