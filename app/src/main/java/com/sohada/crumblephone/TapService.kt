@@ -18,10 +18,10 @@ class TapService : AccessibilityService() {
 
         val isReady: Boolean get() = instance != null
 
-        /** 실좌표(1440x3120 기준 그대로) 한 점을 누른다. */
+        /** **설계 좌표(1440x3120)** 한 점을 누른다. 기기 해상도 환산은 `Coords` 가 한다. */
         fun tap(x: Int, y: Int, ms: Long = 60): Boolean {
             val s = instance ?: return false
-            val p = Path().apply { moveTo(x.toFloat(), y.toFloat()) }
+            val p = Path().apply { moveTo(Coords.x(x).toFloat(), Coords.y(y).toFloat()) }
             val stroke = GestureDescription.StrokeDescription(p, 0, ms)
             return s.dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null)
         }
@@ -30,8 +30,8 @@ class TapService : AccessibilityService() {
         fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, ms: Long = 900): Boolean {
             val s = instance ?: return false
             val p = Path().apply {
-                moveTo(x1.toFloat(), y1.toFloat())
-                lineTo(x2.toFloat(), y2.toFloat())
+                moveTo(Coords.x(x1).toFloat(), Coords.y(y1).toFloat())
+                lineTo(Coords.x(x2).toFloat(), Coords.y(y2).toFloat())
             }
             val stroke = GestureDescription.StrokeDescription(p, 0, ms)
             return s.dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null)

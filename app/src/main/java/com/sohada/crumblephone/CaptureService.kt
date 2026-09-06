@@ -94,6 +94,8 @@ class CaptureService : Service() {
                     .defaultDisplay.getRealMetrics(dm)
                 width = dm.widthPixels
                 height = dm.heightPixels
+                // 좌표 환산의 기준. 캡처가 실제로 만드는 크기라 제일 믿을 만하다.
+                Coords.set(width, height)
 
                 reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
                 display = p.createVirtualDisplay(

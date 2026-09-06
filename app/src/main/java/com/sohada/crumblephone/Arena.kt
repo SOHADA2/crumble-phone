@@ -21,9 +21,7 @@ object Arena {
     private const val SCAN = 8            // 상대를 몇 명까지 넘겨 볼지
 
     fun start(ctx: Context, maxFights: Int = if (Prefs.testMode) 0 else Prefs.arenaFights) {
-        if (Runner.running) { Bot.log("이미 무언가 돌고 있어요"); return }
-        if (!TapService.isReady) { Runner.set("시작 못 함", "접근성 서비스를 켜 주세요"); return }
-        if (CaptureService.instance == null) { Runner.set("시작 못 함", "화면 읽기를 허용해 주세요"); return }
+        if (!Runner.guard()) return
         Runner.running = true; Runner.task = "아레나"
         thread(name = "arena") {
             try {

@@ -182,6 +182,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
+        // 화면 읽기를 켜기 전에도 비율을 알 수 있게 미리 잡아 둔다(캡처가 시작되면 그 값으로 확정된다).
+        resources.displayMetrics.let { Coords.set(it.widthPixels, it.heightPixels) }
         t = Theme.of(this)
         window.statusBarColor = t.bg
         window.navigationBarColor = t.bg
@@ -410,6 +412,7 @@ class MainActivity : AppCompatActivity() {
         capOffSep.visibility = rowCapOff.visibility
 
         lblSubtitle.text = when {
+            !Coords.ratioOk -> "이 기기는 화면 비율이 달라 좌표가 안 맞아요"
             Runner.running -> "봇이 게임을 대신 하고 있어요"
             Prefs.testMode -> "시험 모드 · 재화를 쓰지 않고 진입까지만"
             ready          -> "무엇을 자동으로 돌릴지 골라 주세요"
@@ -444,8 +447,9 @@ class MainActivity : AppCompatActivity() {
         btnPrimary.visibility = if (running) View.VISIBLE else View.GONE
 
         // 도는 동안에는 다른 콘텐츠를 못 고르게 흐린다(한 번에 하나만 돈다).
+        // 비율이 다른 기기에서는 아예 못 고르게 한다 — 눌러 보다가 재화를 날리느니 막는 게 낫다.
         for (i in 0 until runRows.childCount) {
-            (runRows.getChildAt(i) as? LinearLayout)?.enable(!running && ready)
+            (runRows.getChildAt(i) as? LinearLayout)?.enable(!running && ready && Coords.ratioOk)
         }
 
         rowGame.setValue(GameApp.label(this) ?: "못 찾음", if (GameApp.pkg(this) == null) t.orange else t.label2)

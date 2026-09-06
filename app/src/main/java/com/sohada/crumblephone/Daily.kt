@@ -21,9 +21,7 @@ object Daily {
     private fun nameOf(i: Int) = if (i in 1..NAMES.size) NAMES[i - 1] else "던전$i"
 
     fun start(ctx: Context, maxDungeons: Int = if (Prefs.testMode) 0 else 8) {
-        if (Runner.running) { Bot.log("이미 무언가 돌고 있어요"); return }
-        if (!TapService.isReady) { Runner.set("시작 못 함", "접근성 서비스를 켜 주세요"); return }
-        if (CaptureService.instance == null) { Runner.set("시작 못 함", "화면 읽기를 허용해 주세요"); return }
+        if (!Runner.guard()) return
         Runner.running = true; Runner.task = "일일 던전"
         thread(name = "daily") {
             try {

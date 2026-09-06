@@ -48,8 +48,11 @@ object Screen {
     private val DLG_L = intArrayOf(330, 540, 2780, 2845)
     private val DLG_R = intArrayOf(890, 1100, 2780, 2845)
 
-    private fun px(b: Bitmap, x: Int, y: Int): Int =
-        if (x in 0 until b.width && y in 0 until b.height) b.getPixel(x, y) else Color.BLACK
+    /** 설계 좌표로 한 점을 읽는다. 기기 해상도 환산은 `Coords` 가 여기서 한 번만 한다. */
+    private fun px(b: Bitmap, dx: Int, dy: Int): Int {
+        val x = Coords.x(dx); val y = Coords.y(dy)
+        return if (x in 0 until b.width && y in 0 until b.height) b.getPixel(x, y) else Color.BLACK
+    }
 
     /** 독을 한 번 훑어 세 값을 같이 낸다. 셋 다 밝기와 무관하다. */
     class Dock(val mean: Double, val ratio: Double, val cv: Double)
@@ -437,11 +440,16 @@ object Shortcut {
     private const val NEED = 1000
 
     fun findTobol(b: android.graphics.Bitmap): IntArray? {
-        val w = X2 - X1
-        val h = Y2 - Y1
-        if (b.width < X2 || b.height < Y2) return null
+        // 설계 좌표를 이 기기 화면으로 환산해서 창을 잡는다.
+        val x1 = Coords.x(X1); val y1 = Coords.y(Y1)
+        val w = Coords.x(X2) - x1
+        val h = Coords.y(Y2) - y1
+        val half = Coords.y(HALF)
+        // 넓이에 비례하는 임계값이라 배율의 제곱으로 줄어든다(Coords.area 가 그 계산이다).
+        val need = Coords.area(NEED)
+        if (w <= 0 || h <= 0 || b.width < x1 + w || b.height < y1 + h) return null
         val buf = IntArray(w * h)
-        b.getPixels(buf, 0, w, X1, Y1, w, h)
+        b.getPixels(buf, 0, w, x1, y1, w, h)
 
         // 줄마다 청록 픽셀 수를 세어 두고, 슬롯 높이만큼 훑어 가장 진한 곳을 고른다.
         val rows = IntArray(h)
@@ -456,14 +464,16 @@ object Shortcut {
             rows[y] = c
         }
         var best = -1; var bestY = -1
-        var y = HALF
-        while (y < h - HALF) {
+        var y = half
+        while (y < h - half) {
             var s = 0
-            for (k in y - HALF until y + HALF) s += rows[k]
+            for (k in y - half until y + half) s += rows[k]
             if (s > best) { best = s; bestY = y }
             y += 10
         }
-        if (best < NEED) return null
-        return intArrayOf((X1 + X2) / 2, Y1 + bestY)
+        if (best < need) return null
+        // 돌려주는 값은 다시 **설계 좌표**다. 탭은 TapService 가 또 환산한다.
+        val cy = if (Coords.sy == 0.0) Y1 + bestY else Y1 + Math.round(bestY / Coords.sy).toInt()
+        return intArrayOf((X1 + X2) / 2, cy)
     }
 }

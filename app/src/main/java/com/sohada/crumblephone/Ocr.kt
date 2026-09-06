@@ -18,8 +18,10 @@ object Ocr {
      * 잘라낸 영역에서 숫자만 뽑는다. 자릿수가 모자라면 오독으로 보고 버린다.
      * ⚠️ 결과를 기다리므로 반드시 작업 스레드에서 부를 것(메인 스레드에서 부르면 멈춘다).
      */
-    fun readNumber(bmp: Bitmap, x: Int, y: Int, w: Int, h: Int, minDigits: Int = 4): Long? {
-        if (x < 0 || y < 0 || x + w > bmp.width || y + h > bmp.height) return null
+    fun readNumber(bmp: Bitmap, dx: Int, dy: Int, dw: Int, dh: Int, minDigits: Int = 4): Long? {
+        val x = Coords.x(dx); val y = Coords.y(dy)
+        val w = Coords.x(dx + dw) - x; val h = Coords.y(dy + dh) - y
+        if (x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > bmp.width || y + h > bmp.height) return null
         var crop: Bitmap? = null
         return try {
             crop = Bitmap.createBitmap(bmp, x, y, w, h)
@@ -34,8 +36,10 @@ object Ocr {
     }
 
     /** 잘라낸 영역의 글자를 그대로. 단위(K·M·G)까지 봐야 할 때 쓴다. */
-    fun readText(bmp: Bitmap, x: Int, y: Int, w: Int, h: Int): String? {
-        if (x < 0 || y < 0 || x + w > bmp.width || y + h > bmp.height) return null
+    fun readText(bmp: Bitmap, dx: Int, dy: Int, dw: Int, dh: Int): String? {
+        val x = Coords.x(dx); val y = Coords.y(dy)
+        val w = Coords.x(dx + dw) - x; val h = Coords.y(dy + dh) - y
+        if (x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > bmp.width || y + h > bmp.height) return null
         var crop: Bitmap? = null
         return try {
             crop = Bitmap.createBitmap(bmp, x, y, w, h)

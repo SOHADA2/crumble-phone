@@ -91,6 +91,19 @@ object Runner {
         return false to "stuck"
     }
 
+    /**
+     * 시작해도 되나? 안 되면 이유를 상태에 적고 false 를 준다.
+     * 콘텐츠마다 같은 검사를 베껴 두면 새 검사를 넣을 때 한 군데를 빠뜨린다 — 여기 하나로 모은다.
+     */
+    internal fun guard(): Boolean {
+        if (running) { Bot.log("이미 무언가 돌고 있어요"); return false }
+        if (!TapService.isReady) { set("시작 못 함", "접근성 서비스를 켜 주세요"); return false }
+        if (CaptureService.instance == null) { set("시작 못 함", "화면 읽기를 허용해 주세요"); return false }
+        // 비율이 다르면 좌표가 통째로 어긋난다. 눌러 보다가 재화를 날리느니 시작을 막는다.
+        if (!Coords.ratioOk) { set("시작 못 함", Coords.mismatchReason()); return false }
+        return true
+    }
+
     fun stop() {
         running = false
         set("멈추는 중")
@@ -129,9 +142,7 @@ object Runner {
     }
 
     fun startTobol(ctx: Context, maxAttempts: Int = if (Prefs.testMode) 0 else 300) {
-        if (running) { Bot.log("이미 무언가 돌고 있어요"); return }
-        if (!TapService.isReady) { set("시작 못 함", "접근성 서비스를 켜 주세요"); return }
-        if (CaptureService.instance == null) { set("시작 못 함", "화면 읽기를 허용해 주세요"); return }
+        if (!guard()) return
         running = true; task = "토벌전"; lastScore = 0L; bestScore = 0L
         thread(name = "tobol") {
             try {

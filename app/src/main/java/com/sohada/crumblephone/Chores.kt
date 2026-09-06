@@ -36,9 +36,7 @@ object Chores {
     private var ovenTried = false
 
     fun start(ctx: Context, maxQuests: Int = 0) {
-        if (Runner.running) { Bot.log("이미 무언가 돌고 있어요"); return }
-        if (!TapService.isReady) { Runner.set("시작 못 함", "접근성 서비스를 켜 주세요"); return }
-        if (CaptureService.instance == null) { Runner.set("시작 못 함", "화면 읽기를 허용해 주세요"); return }
+        if (!Runner.guard()) return
         Runner.running = true; Runner.task = "퀘스트"
         ovenTried = false
         thread(name = "chores") {
@@ -53,9 +51,7 @@ object Chores {
 
     /** 보상만 한 번 받고 끝낸다(제일 안전해서 처음 시험할 때 쓴다). */
     fun startRewardsOnly(ctx: Context) {
-        if (Runner.running) { Bot.log("이미 무언가 돌고 있어요"); return }
-        if (!TapService.isReady) { Runner.set("시작 못 함", "접근성 서비스를 켜 주세요"); return }
-        if (CaptureService.instance == null) { Runner.set("시작 못 함", "화면 읽기를 허용해 주세요"); return }
+        if (!Runner.guard()) return
         Runner.running = true; Runner.task = "보상 받기"
         thread(name = "rewards") {
             try {
