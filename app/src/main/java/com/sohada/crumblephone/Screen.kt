@@ -429,9 +429,10 @@ object Screen {
     //    지금은 `findDailyBanner` 로 화면을 보고 배너를 찾아 누른다.
     val DAILY_CHALLENGE   = intArrayOf(733, 2590)    // 도전하기!
     val DAILY_CONT_CHK    = intArrayOf(1076, 2574)   // 연속 도전 체크박스
-    // ⚠️ 옛 `DAILY_NEXT (1400,1470)` 는 지웠다 — 지금 UI 에는 ▶ 화살표가 없고,
-    //    목록 화면에서 그 자리는 **배너 한가운데**라 엉뚱한 던전이 열렸다.
-    //    던전을 하나 끝내면 뒤로가기로 목록에 돌아와 다음 줄을 고른다(`Daily.backToList`).
+    // ▶ 다음 던전 — **던전 화면 안**의 화살표다(목록 화면이 아니다).
+    // ⚠️ 목록 화면에서 이 자리는 배너 한가운데라, 목록에 있는 동안 누르면 엉뚱한 던전이 열린다.
+    //    반드시 `atDailyEntry` 가 참일 때만 누를 것.
+    val DAILY_NEXT        = intArrayOf(1400, 1470)   // ▶ 다음 던전 (던전 화면 안)
     val DAILY_ACHIEVE     = intArrayOf(1350, 1580)   // 달성 보상 상자
     val DAILY_CLAIM_ALL   = intArrayOf(710, 2840)    // 모두 받기
     val DAILY_MODAL_CLOSE = intArrayOf(720, 430)     // 모달 바깥(닫기)
