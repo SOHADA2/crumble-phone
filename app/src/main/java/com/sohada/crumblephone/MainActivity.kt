@@ -57,10 +57,6 @@ class MainActivity : ListActivity() {
     private var lastProgress = -1
     private var setupShown = false      // 이번에 켠 뒤로 안내를 한 번 띄웠나
 
-    private fun LinearLayout.setValue(s: String, color: Int) {
-        (findViewWithTag<TextView>("value"))?.let { it.text = s; it.setTextColor(color) }
-    }
-
     private fun LinearLayout.enable(on: Boolean) {
         isEnabled = on; alpha = if (on) 1f else 0.35f
     }
