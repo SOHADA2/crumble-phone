@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 진단용 화면 한 장을 공유창으로 넘기기 위한 경로. 캐시라 앱을 지우면 같이 사라진다. -->
+<paths>
+    <cache-path name="shots" path="shots/" />
+</paths>

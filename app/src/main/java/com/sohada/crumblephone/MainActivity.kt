@@ -1,6 +1,7 @@
 package com.sohada.crumblephone
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -351,6 +352,8 @@ class MainActivity : AppCompatActivity() {
         g3.addView(separator())
         g3.addView(row("탭 시험", subtitle = "게임 메인 화면에 두고 눌러요 — 탭이 먹는지 봅니다") { tapTest() })
         g3.addView(separator())
+        g3.addView(row("화면 보내기", subtitle = "봇이 보고 있는 화면 그대로 — 좌표를 다시 잴 때") { sendShot() })
+        g3.addView(separator())
         g3.addView(row("진단 보내기", subtitle = "복사 + 공유창 — 채팅 앱을 골라 바로 보내요") { sendDiag() })
         capOffSep = separator()
         rowCapOff = row("화면 읽기 끄기", tint = t.red) { CaptureService.stop(applicationContext) }
@@ -545,6 +548,43 @@ class MainActivity : AppCompatActivity() {
             Bot.log("→ 두 번 다 화면이 그대로입니다 (탭이 안 먹거나 좌표가 다른 곳)")
         }.start()
         Toast.makeText(this, "시험 중… 5초 뒤 [진단 보내기]를 눌러 주세요", Toast.LENGTH_LONG).show()
+    }
+
+    /**
+     * **봇이 지금 보고 있는 화면 그대로**를 PNG 로 만들어 공유창에 넘긴다.
+     *
+     * 값(비율·색)만으로는 좌표가 어디로 어긋났는지 못 잰다. 결국 한 장을 봐야 하는데,
+     * 스크린샷을 찍어 보내는 건 번거롭고 **게임이 아니라 봇 화면을 찍기 십상**이다.
+     * 이건 캡처 그대로라 잘릴 일도, 배율이 달라질 일도 없다.
+     */
+    private fun sendShot() {
+        if (CaptureService.instance == null) { Bot.log("화면 읽기를 먼저 켜 주세요"); return }
+        Thread {
+            val b = Runner.shot()
+            if (b == null) { Bot.log("화면을 읽지 못했어요"); return@Thread }
+            val f = try {
+                val dir = java.io.File(cacheDir, "shots").apply { mkdirs() }
+                val out = java.io.File(dir, "screen.png")
+                java.io.FileOutputStream(out).use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                out
+            } catch (e: Throwable) { Bot.log("화면 저장 실패: " + e); return@Thread }
+
+            Bot.log("화면 한 장 저장: " + b.width + "x" + b.height)
+            runOnUiThread {
+                try {
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        this, packageName + ".files", f)
+                    val i = android.content.Intent(android.content.Intent.ACTION_SEND)
+                    i.type = "image/png"
+                    i.putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    i.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    startActivity(android.content.Intent.createChooser(i, "화면 보내기"))
+                } catch (e: Throwable) {
+                    Bot.log("공유창을 못 열었어요: " + e)
+                    Toast.makeText(this, "화면을 못 보냈어요 - 기록을 확인해 주세요", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
     }
 
     /** 기기 정보 + 최근 기록 한 덩어리. 스크린샷을 찍어 보낼 일이 없게 하려는 것이다. */
