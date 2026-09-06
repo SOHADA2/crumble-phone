@@ -102,14 +102,27 @@ class SetupActivity : AppCompatActivity() {
         val s1 = step(1, "접근성 서비스", "봇이 화면을 대신 눌러 주려면 필요해요.\n목록에서 '크럼블 폰봇 조작'을 찾아 켜 주세요.",
             { TapService.isReady }) { body ->
             body.addView(button("접근성 설정 열기", t.blue, Color.WHITE) { openAccessibility() })
-            body.addView(text("스위치가 회색이라 안 켜지나요?", 14f, t.label, medium).apply {
+
+            body.addView(text("'보안을 위해…' 라며 막히나요?", 14f, t.label, medium).apply {
                 setPadding(0, dp(18), 0, dp(2))
             })
             body.addView(text(
-                "안드로이드 13부터는 스토어 밖에서 설치한 앱의 접근성을 막아 둡니다. " +
-                "앱 정보 화면 오른쪽 위 ⋮ 를 눌러 '제한된 설정 허용'을 켠 뒤 다시 오세요.",
-                14f, t.label2))
-            body.addView(button("제한된 설정 풀러 가기", t.fill, t.label) { openAppInfo() })
+                "안드로이드 13부터는 스토어 밖에서 설치한 앱의 접근성을 막아 둡니다. 푸는 방법이 있는데, " +
+                "순서가 중요해요.", 14f, t.label2))
+            // 여기서 실제로 헤맸다. '제한된 설정 허용' 은 **막히기 전에는 메뉴에 아예 없다.**
+            // 그 사실을 안 적어 두면 앱 정보만 열어 보고 "그런 항목이 없다" 로 끝난다.
+            body.addView(warn("먼저 위 버튼으로 들어가 **켜기를 시도해야** 합니다.\n" +
+                "한 번 막히기 전에는 '제한된 설정 허용' 메뉴가 아예 나타나지 않아요."))
+            body.addView(text(
+                "① 위 [접근성 설정 열기] → '크럼블 폰봇 조작' 스위치를 눌러 본다 (여기서 막힘)\n" +
+                "② 아래 버튼 → 오른쪽 위 ⋮ → '제한된 설정 허용' (지문·PIN 확인)\n" +
+                "③ 다시 ① 로 가서 켠다",
+                14f, t.label2).apply { setPadding(0, dp(10), 0, 0) })
+            body.addView(button("앱 정보 열기 (② 단계)", t.fill, t.label) { openAppInfo() })
+            body.addView(text(
+                "①에서 그냥 켜졌다면 이 과정은 필요 없습니다. PC 가 있다면 " +
+                "adb install -r -g 로 깔면 이 제한 자체가 안 걸려요.",
+                13f, t.label3).apply { setPadding(0, dp(10), 0, 0) })
         }
 
         val s2 = step(2, "화면 읽기", "게임 화면을 읽어서 지금 무슨 화면인지 판단해요.",

@@ -88,6 +88,13 @@ object Coords {
         val rw = (right - left + 1)
         val rh = (bottom - top + 1)
 
+        // 무엇을 봤는지 숫자로 남긴다. 태블릿에서 안 될 때 이 줄만 있으면 원인을 가릴 수 있다
+        // (띠를 못 찾은 건지, 찾았는데 비율이 여전히 다른 건지).
+        Bot.log("좌표 판단: 화면 " + w + "x" + h +
+                " · 찾은 영역 " + rw + "x" + rh + " @(" + rx + "," + ry + ")" +
+                " · 비율 " + String.format("%.3f", rh.toDouble() / rw) +
+                " (설계 " + String.format("%.3f", RATIO) + ")")
+
         // 띠를 찾았어도 결과가 말이 안 되면(너무 작거나 비율이 여전히 다르면) 쓰지 않는다.
         if (rw >= w / 2 && rh >= h / 2) {
             val r = rh.toDouble() / rw
@@ -148,6 +155,7 @@ object Coords {
     fun area(v: Int): Int = if (sx == 1.0 && sy == 1.0) v else Math.round(v * sx * sy).toInt()
 
     fun mismatchReason(): String =
-        "이 기기는 게임 화면 비율이 달라요 (" + cw + "x" + ch + ").\n" +
-        "게임이 넓은 화면에 맞춰 UI 를 다시 배치해서 좌표가 안 맞습니다 — 좌표를 새로 재야 해요."
+        "이 기기는 게임 화면 비율이 달라요 (" + cw + "x" + ch + " · 설계는 " + W + "x" + H + ").\n" +
+        "게임이 넓은 화면에 맞춰 UI 를 다시 배치한 것으로 보입니다.\n" +
+        "기록의 '좌표 판단' 줄과 게임 화면 캡처가 있으면 맞출 수 있어요."
 }
