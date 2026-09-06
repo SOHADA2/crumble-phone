@@ -99,8 +99,8 @@ object Runner {
         if (running) { Bot.log("이미 무언가 돌고 있어요"); return false }
         if (!TapService.isReady) { set("시작 못 함", "접근성 서비스를 켜 주세요"); return false }
         if (CaptureService.instance == null) { set("시작 못 함", "화면 읽기를 허용해 주세요"); return false }
-        // 비율이 다르면 좌표가 통째로 어긋난다. 눌러 보다가 재화를 날리느니 시작을 막는다.
-        if (!Coords.ratioOk) { set("시작 못 함", Coords.mismatchReason()); return false }
+        // 화면 비율은 여기서 안 본다. 게임을 띄워 봐야 레터박스인지 재배치인지 알 수 있고,
+        // 그 판단은 bringGameToFront 가 게임 화면을 실제로 보고 한다.
         return true
     }
 
@@ -122,7 +122,20 @@ object Runner {
         set("게임 여는 중", "잠시만요")
         ctx.startActivity(i)
         sleep(6000)
-        return waitGameReady()
+        if (!waitGameReady()) return false
+
+        // ── 이제서야 좌표를 확정한다 ──
+        // 화면 크기만으로는 부족하다. 태블릿처럼 넓은 화면이면 게임이 검은 띠를 두르고
+        // 원래 비율을 지킬 수도(그러면 그대로 돈다), 넓은 화면에 맞춰 UI 를 재배치할 수도 있다.
+        // 그건 게임 화면을 실제로 봐야만 갈린다.
+        Coords.redetect()
+        shot()?.let { Coords.detect(it) }
+        if (!Coords.ratioOk) {
+            set("시작 못 함", Coords.mismatchReason())
+            lastResult = "이 기기에서는 좌표가 맞지 않아요"
+            return false
+        }
+        return true
     }
 
     /**

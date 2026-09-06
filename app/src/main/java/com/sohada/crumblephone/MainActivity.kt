@@ -412,7 +412,9 @@ class MainActivity : AppCompatActivity() {
         capOffSep.visibility = rowCapOff.visibility
 
         lblSubtitle.text = when {
-            !Coords.ratioOk -> "이 기기는 화면 비율이 달라 좌표가 안 맞아요"
+            !Coords.ratioOk && !Coords.detected ->
+                "화면 비율이 달라요 — 시작하면 게임 화면을 보고 다시 판단합니다"
+            !Coords.ratioOk -> "이 기기는 게임 UI 배치가 달라 좌표가 안 맞아요"
             Runner.running -> "봇이 게임을 대신 하고 있어요"
             Prefs.testMode -> "시험 모드 · 재화를 쓰지 않고 진입까지만"
             ready          -> "무엇을 자동으로 돌릴지 골라 주세요"
@@ -447,9 +449,11 @@ class MainActivity : AppCompatActivity() {
         btnPrimary.visibility = if (running) View.VISIBLE else View.GONE
 
         // 도는 동안에는 다른 콘텐츠를 못 고르게 흐린다(한 번에 하나만 돈다).
-        // 비율이 다른 기기에서는 아예 못 고르게 한다 — 눌러 보다가 재화를 날리느니 막는 게 낫다.
+        // 비율은 여기서 막지 않는다 — 게임 화면을 보고 판단한 뒤(detected) 안 맞을 때만 막는다.
+        // 미리 막으면 레터박스라서 사실은 잘 도는 기기까지 못 쓰게 된다.
+        val coordsOk = Coords.ratioOk || !Coords.detected
         for (i in 0 until runRows.childCount) {
-            (runRows.getChildAt(i) as? LinearLayout)?.enable(!running && ready && Coords.ratioOk)
+            (runRows.getChildAt(i) as? LinearLayout)?.enable(!running && ready && coordsOk)
         }
 
         rowGame.setValue(GameApp.label(this) ?: "못 찾음", if (GameApp.pkg(this) == null) t.orange else t.label2)
