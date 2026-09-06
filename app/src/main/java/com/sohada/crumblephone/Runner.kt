@@ -88,6 +88,12 @@ object Runner {
                 if (dlg >= 2) return false to "battle"
                 continue
             }
+            // '자동 사냥 보상'은 ✕ 로 닫지 말고 받는다(무료이고, 안 받으면 다음에 또 막는다).
+            // ✕ 판정보다 먼저 봐야 한다 — 이 팝업에도 하단 ✕ 가 있어서 그냥 닫힐 수 있다.
+            if (Screen.isIdleReward(b)) {
+                Bot.log("  자동 사냥 보상 팝업 - [보상 받기]")
+                tap(Screen.IDLE_CLAIM, 2500); continue
+            }
             if (i == maxBack) break
             // 서브 화면의 주황 ✕ 가 **실제로 보일 때만** 누른다. 화면을 안 보고 좌표를 누르지 않는다.
             if (Screen.hasCloseButton(b)) { tap(Screen.NAV_CLOSE, 1800); continue }
@@ -112,9 +118,16 @@ object Runner {
      */
     internal fun clearPopups() {
         set("가림막 치우는 중")
-        for (i in 1..4) {
+        for (i in 1..6) {
             if (!running) return
             val b = shot() ?: return
+            // '자동 사냥 보상'은 닫지 말고 받는다. 무료이고, 안 받으면 다음에 또 막는다.
+            if (Screen.isIdleReward(b)) {
+                set("자동 사냥 보상 받는 중")
+                Bot.log("자동 사냥 보상 팝업 - [보상 받기]")
+                tap(Screen.IDLE_CLAIM, 2500)
+                continue
+            }
             if (Screen.isConfirmDialog(b)) { tap(Screen.DLG_SAFE, 2000); continue }
             if (Screen.hasCloseButton(b)) { tap(Screen.NAV_CLOSE, 1800); continue }
             if (i % 2 == 1) { TapService.back(); sleep(1800) }
@@ -181,7 +194,11 @@ object Runner {
         val deadline = System.currentTimeMillis() + maxSec * 1000L
         while (System.currentTimeMillis() < deadline && running) {
             val b = shot()
-            if (b != null && (Screen.atMain(b) || Screen.atTobolLobby(b) || Screen.isBattleOver(b) || Screen.isConfirmDialog(b))) return true
+            // ⚠️ '아는 화면' 넷만 보면 안 된다. 게임에 오랜만에 들어가면 거의 항상
+            //    '자동 사냥 보상' 팝업이 떠 있는데, 그게 넷 중 아무것도 아니라 45초를
+            //    기다리다 포기했다(실기에서 첫 진입이 늘 실패). 게임이 떠 있기만 하면 통과시키고,
+            //    무엇이 떠 있든 정리는 뒤에 오는 clearPopups·resetToMain 이 한다.
+            if (b != null && Screen.gameIsUp(b)) return true
             set("게임 여는 중", "로딩을 기다리는 중")
             sleep(2000)
         }

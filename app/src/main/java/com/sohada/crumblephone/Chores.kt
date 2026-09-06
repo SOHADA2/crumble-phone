@@ -146,6 +146,13 @@ object Chores {
             // 쿠키런 공지는 닫기 X 자리가 제각각이라 좌표를 고정하면 위험하다.
             // 뒤로가기가 대부분을 닫아 주므로 그걸 주력으로, 단계별로 수단을 바꾼다.
             if (!atMain) {
+                // 아는 팝업이면 좌표를 더듬지 말고 바로 처리한다.
+                if (Screen.isIdleReward(b)) {
+                    Runner.set("자동 사냥 보상 받는 중")
+                    Bot.log("자동 사냥 보상 팝업 - [보상 받기]")
+                    Runner.tap(Screen.IDLE_CLAIM, 2500)
+                    offMain = 0; Runner.sleep(2000); continue
+                }
                 offMain++
                 if (offMain == 1) Runner.set("팝업·공지 닫는 중")
                 when (offMain) {

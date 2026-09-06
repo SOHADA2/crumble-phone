@@ -32,6 +32,7 @@ object Screen {
     val BAG_DISMISS = intArrayOf(712, 1600)          // 보상 화면 빈 곳
 
     // 보상 자동 받기(bot.ps1 의 Claim-Missions / Claim-Attendance)
+    val IDLE_CLAIM    = intArrayOf(715, 2788)        // '자동 사냥 보상' 팝업의 [보상 받기]
     val ICON_MISSION  = intArrayOf(1336, 1130)       // 우측 미션(클립보드) 아이콘
     val ICON_CALENDAR = intArrayOf(1336, 1300)       // 우측 달력(이벤트 허브) 아이콘
     val MISSION_TABS  = arrayOf(intArrayOf(274, 2700), intArrayOf(710, 2700), intArrayOf(1138, 2700)) // 일일·주간·도전
@@ -132,6 +133,37 @@ object Screen {
      * 독만 보면 안 된다 — 토벌전 BATTLE OVER 는 배경이 어두운 갈색이라 독 비율이 1.67 로 나와 메인으로 오판한다.
      */
     fun atMain(b: Bitmap): Boolean = dockRatio(b) >= 0.1 && !hasCloseButton(b)
+
+    /**
+     * **'자동 사냥 보상'** 팝업인가? (게임을 오래 켜 두지 않다가 들어가면 거의 항상 뜬다)
+     *
+     * 이게 첫 진입을 막고 있었다 — `waitGameReady` 가 아는 화면 넷 중 아무것도 못 찾아
+     * 45초를 기다리다 포기했다. 무료 보상이니 닫지 말고 **받는다**.
+     *
+     * 판정: 아래쪽의 **넓은 주황 [보상 받기] 띠**. 실측(폰 1440x3120, y=2788)
+     * x=430·570·715·860·1000 다섯 자리가 모두 `(255,173,1)` 이었다.
+     * 폭이 넓다는 게 요점이다 — 확인창의 주황 버튼은 오른쪽 절반에만 있어서 왼쪽 두 점이 안 걸린다.
+     *
+     * ⚠️ 왼쪽 아래 '행운의 보상'(주사위 x1/x2/x5)은 건드리지 않는다. 광고를 보는 쪽일 수 있다.
+     */
+    private val IDLE_PTS = intArrayOf(430, 570, 715, 860, 1000)
+
+    fun isIdleReward(b: Bitmap): Boolean {
+        if (!hasCloseButton(b)) return false        // 서브 화면일 때만
+        var hit = 0
+        for (x in IDLE_PTS) {
+            val c = px(b, x, 2788)
+            if (Color.red(c) > 210 && Color.green(c) in 110..205 && Color.blue(c) < 95) hit++
+        }
+        return hit >= 4
+    }
+
+    /**
+     * 게임 화면이 **떠 있나**(로딩이 아니라). 아는 화면이 아니어도 게임 UI 가 보이면 참이다.
+     * 하단 한가운데 주황 ✕ 는 게임이 다 뜬 서브 화면에만 있고 로딩 화면에는 없다.
+     */
+    fun gameIsUp(b: Bitmap): Boolean =
+        atMain(b) || atTobolLobby(b) || isBattleOver(b) || isConfirmDialog(b) || hasCloseButton(b)
 
     /**
      * 게임의 확인창(예/아니오)이 떠 있나?
