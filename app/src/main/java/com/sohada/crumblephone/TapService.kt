@@ -26,6 +26,31 @@ class TapService : AccessibilityService() {
             return s.dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null)
         }
 
+        /**
+         * 한 점을 누르고 **실제로 들어갔는지 결과를 받아 온다**(진단용).
+         * 보통 `tap` 은 결과를 안 본다 — 여기서만 콜백을 달아 완료/취소를 가린다.
+         * 화면이 안 바뀔 때 '탭이 안 들어간 것'과 '좌표가 틀린 것'을 가르는 유일한 방법이다.
+         */
+        fun tapChecked(x: Int, y: Int, ms: Long = 60): String {
+            val s = instance ?: return "접근성 꺼짐"
+            val dx = Coords.x(x); val dy = Coords.y(y)
+            val where = " · 기기좌표(" + dx + "," + dy + ") " + ms + "ms"
+            val p = Path().apply { moveTo(dx.toFloat(), dy.toFloat()) }
+            val latch = java.util.concurrent.CountDownLatch(1)
+            var res = "응답 없음"
+            val cb = object : AccessibilityService.GestureResultCallback() {
+                override fun onCompleted(g: GestureDescription?) { res = "완료"; latch.countDown() }
+                override fun onCancelled(g: GestureDescription?) { res = "취소됨"; latch.countDown() }
+            }
+            val sent = try {
+                val stroke = GestureDescription.StrokeDescription(p, 0, ms)
+                s.dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), cb, null)
+            } catch (e: Throwable) { return "예외 " + e + where }
+            if (!sent) return "거부됨(dispatch=false)" + where
+            latch.await(3, java.util.concurrent.TimeUnit.SECONDS)
+            return res + where
+        }
+
         /** 끌기. 게임의 '절전 해제(왕관 씌우기)' 처럼 드래그가 필요한 곳에 쓴다. */
         fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, ms: Long = 900): Boolean {
             val s = instance ?: return false

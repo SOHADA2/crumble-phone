@@ -32,6 +32,16 @@ object Chores {
      */
     private var doneRatio = COMPLETE_RATIO
 
+    /**
+     * 이 실행에서 **내 탭이 게임에 실제로 먹었다는 증거**를 한 번이라도 봤나.
+     * (미션 창이 열렸다 / 퀘스트 보상을 받았다 / 뽑기·가방이 열렸다)
+     *
+     * 증거가 없으면 오븐을 돌리지 않는다. 오븐은 재화를 쓰는 유일한 동작인데, 판정이 "화면이
+     * 안 바뀜"이라 **탭이 아예 안 먹는 기기에서도 똑같이 참**이 된다 — 갤럭시 탭에서 아무것도
+     * 진행되지 않는 채로 오븐만 돌던 게 이것이다.
+     */
+    private var tapsProven = false
+
     private const val PROBE_NONE = 0      // 아무것도 못 함
     private const val PROBE_DID = 1       // 뽑기·상자·오븐을 대신 해 줬다
     private const val PROBE_CLAIMED = 2   // 누르고 보니 완료 퀘스트였다(보상을 받았다)
@@ -96,6 +106,7 @@ object Chores {
         var probeAllowedAt = 0L   // 조합을 다 써서 쉬는 중이면 이 시각까지 탐색을 미룬다
         var nextRewardAt = System.currentTimeMillis()      // 시작하자마자 한 번 받는다
         var loggedFirst = false   // 시작 화면 판정값을 한 번만 남기려고
+        tapsProven = false        // 증거는 실행마다 새로 모은다
 
         while (Runner.running) {
             if (maxQuests > 0 && quests >= maxQuests) { Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요"); break }
@@ -104,7 +115,11 @@ object Chores {
             if (b == null) { Runner.set("화면을 못 읽었어요", "다시 시도 중"); Runner.sleep(5000); continue }
 
             // 시작 화면의 판정값을 한 번 남긴다 — 새 기기에서 무엇이 어긋났는지 스크린샷 없이 보려고.
-            if (!loggedFirst) { loggedFirst = true; Bot.log("시작 화면: " + Screen.debugLine(b)) }
+            if (!loggedFirst) {
+                loggedFirst = true
+                Bot.log("시작 화면: " + Screen.debugLine(b))
+                Bot.log("  기준점: " + Screen.landmarks(b))
+            }
 
             // ── 화면이 '평평'하면 절전이거나 공지 팝업이 독을 덮은 것이다 ──
             // 두 값이 너무 붙어 있어(절전 mean31·cv0.23 / 공지 mean44·cv0.37) 하나로 못 가른다.
@@ -287,6 +302,7 @@ object Chores {
                 Bot.log("  누르기 전에도 뽑기 버튼 3/3 - 뽑기 화면이 아닙니다(오탐)")
             } else {
                 Bot.log("  뽑기 화면 -> 10회 수행")
+                tapsProven = true
                 return if (gacha10()) PROBE_DID else PROBE_NONE
             }
         }
@@ -301,6 +317,7 @@ object Chores {
                 return PROBE_NONE
             }
             Bot.log("  가방 열림 -> 상자 사용")
+            tapsProven = true
             return if (useBox()) PROBE_DID else PROBE_NONE
         }
 
@@ -314,11 +331,19 @@ object Chores {
             val now = Screen.questBarRatio(b)
             if (Math.abs(now - before) >= BAR_CHANGED) {
                 Bot.log("  띠가 바뀜 (" + fmt(before) + " -> " + fmt(now) + ") = 보상을 받은 것")
+                tapsProven = true
                 return PROBE_CLAIMED
             }
 
             // 화면이 안 바뀌는 유형 = 메인의 무언가를 가리키는 손가락 힌트(오븐) 또는 스테이지 클리어형.
             // 퀘스트 순환에서 재화를 쓰는 건 오븐뿐이다. 시험 모드면 그것만 건너뛴다.
+            if (!tapsProven) {
+                // 아직 한 번도 '내 탭이 먹혔다'를 못 봤다 → 이 "안 바뀜"은 오븐 퀘스트가 아니라
+                // 탭 자체가 안 들어가는 것일 수 있다. 재화를 쓰기 전에 증거를 먼저 본다.
+                Bot.log("  화면이 안 바뀜 - 아직 탭이 먹힌 증거가 없어 오븐은 미룹니다")
+                Bot.log("    도구 → [탭 시험] 을 한 번 눌러 주세요")
+                return PROBE_NONE
+            }
             if (Prefs.testMode) { Bot.log("  화면이 안 바뀜 - 시험 모드라 오븐은 건너뜁니다"); return PROBE_NONE }
             if (ovenTried) { Bot.log("  화면이 안 바뀜 - 오븐은 이미 해 봤어요(오븐 퀘스트가 아닙니다)"); return PROBE_NONE }
             ovenTried = true
@@ -442,8 +467,10 @@ object Chores {
         if (chk != null && Screen.atMain(chk)) {
             Bot.log("  [보상] " + name + " 창이 안 열렸어요 - 건너뜁니다")
             Bot.log("    화면: " + Screen.debugLine(chk))
+            Bot.log("    기준점: " + Screen.landmarks(chk))
             return false
         }
+        tapsProven = true
         return true
     }
 

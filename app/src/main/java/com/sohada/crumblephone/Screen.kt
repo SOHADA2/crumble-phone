@@ -54,6 +54,32 @@ object Screen {
         return if (x in 0 until b.width && y in 0 until b.height) b.getPixel(x, y) else Color.BLACK
     }
 
+    /**
+     * 기기끼리 대 볼 기준점들. **폰에서 같은 걸 찍어 나란히 놓으면 좌표가 맞는지 바로 보인다.**
+     * 네 귀퉁이를 넣은 이유: 매핑이 틀리면 게임 밖 검은 띠가 잡혀 (0,0,0) 이 나온다.
+     */
+    private val LAND = arrayOf(
+        Triple("좌상", 40, 60), Triple("우상", 1400, 60),
+        Triple("좌하", 40, 3060), Triple("우하", 1400, 3060),
+        Triple("미션아이콘", 1336, 1130), Triple("달력아이콘", 1336, 1300),
+        Triple("퀘스트띠", 1140, 2020),
+        Triple("독좌", 320, 2900), Triple("독중", 720, 2900), Triple("독우", 1130, 2900),
+        Triple("뽑기1", 266, 2640), Triple("뽑기2", 712, 2640), Triple("뽑기3", 1158, 2640),
+        Triple("하단X", 711, 3030)
+    )
+
+    /** 기준점들의 색을 한 줄로. 기기 간 비교용이라 값만 그대로 낸다. */
+    fun landmarks(b: Bitmap): String {
+        val sb = StringBuilder()
+        for (t in LAND) {
+            val c = px(b, t.second, t.third)
+            if (sb.isNotEmpty()) sb.append(" · ")
+            sb.append(t.first).append("=")
+                .append(Color.red(c)).append(",").append(Color.green(c)).append(",").append(Color.blue(c))
+        }
+        return sb.toString()
+    }
+
     /** 독을 한 번 훑어 세 값을 같이 낸다. 셋 다 밝기와 무관하다. */
     class Dock(val mean: Double, val ratio: Double, val cv: Double)
 

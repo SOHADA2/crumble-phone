@@ -349,6 +349,8 @@ class MainActivity : AppCompatActivity() {
         // 스크린샷을 찍어 보내는 건 번거롭다. 글로 복사하면 채팅에 그냥 붙여넣을 수 있다.
         g3.addView(row("지금 화면 재기", subtitle = "게임을 원하는 화면에 두고 눌러요") { measureNow() })
         g3.addView(separator())
+        g3.addView(row("탭 시험", subtitle = "게임 메인 화면에 두고 눌러요 — 탭이 먹는지 봅니다") { tapTest() })
+        g3.addView(separator())
         g3.addView(row("진단 보내기", subtitle = "복사 + 공유창 — 채팅 앱을 골라 바로 보내요") { sendDiag() })
         capOffSep = separator()
         rowCapOff = row("화면 읽기 끄기", tint = t.red) { CaptureService.stop(applicationContext) }
@@ -505,6 +507,44 @@ class MainActivity : AppCompatActivity() {
             else Bot.log("판정값: " + Screen.debugLine(b) + " · 완료기준=" + String.format("%.2f", Chores.doneRatioNow()))
         }.start()
         Toast.makeText(this, "기록에 남겼어요 — [진단 보내기]를 눌러 주세요", Toast.LENGTH_LONG).show()
+    }
+
+    /**
+     * **탭이 실제로 게임에 들어가는가**를 가린다. 게임을 메인 화면에 두고 누른다.
+     *
+     * 화면이 안 바뀔 때 원인은 셋인데 로그만으로는 못 가른다:
+     *   ① 탭이 아예 안 들어감  ② 들어갔는데 엉뚱한 자리  ③ 판정이 틀림(화면은 바뀜)
+     * 그래서 ⑴ 기준점 색을 찍고 ⑵ 결과를 받는 탭을 넣고 ⑶ 바뀌었는지 다시 본다.
+     * 60ms 로 안 먹으면 200ms 로 한 번 더 — 느린 기기에서 짧은 탭을 흘리는 경우가 있다.
+     *
+     * 폰에서도 같은 걸 찍어 나란히 놓으면 좌표가 맞는지 바로 보인다.
+     */
+    private fun tapTest() {
+        if (CaptureService.instance == null) { Bot.log("화면 읽기를 먼저 켜 주세요"); return }
+        if (!TapService.isReady) { Bot.log("접근성을 먼저 켜 주세요"); return }
+        Thread {
+            Bot.log("── 탭 시험 ──")
+            var b = Runner.shot()
+            if (b == null) { Bot.log("화면을 읽지 못했어요"); return@Thread }
+            Bot.log("전: " + Screen.debugLine(b))
+            Bot.log("기준점: " + Screen.landmarks(b))
+
+            for (ms in longArrayOf(60, 200)) {
+                Bot.log("미션 아이콘 탭(" + ms + "ms): " +
+                    TapService.tapChecked(Screen.ICON_MISSION[0], Screen.ICON_MISSION[1], ms))
+                Runner.sleep(2800)
+                b = Runner.shot()
+                if (b == null) { Bot.log("후: 화면을 읽지 못했어요"); return@Thread }
+                Bot.log("후(" + ms + "ms): " + Screen.debugLine(b))
+                if (!Screen.atMain(b)) {
+                    Bot.log("→ 화면이 바뀌었습니다. 탭은 잘 들어갑니다. 닫고 끝냅니다")
+                    TapService.back(); Runner.sleep(1500)
+                    return@Thread
+                }
+            }
+            Bot.log("→ 두 번 다 화면이 그대로입니다 (탭이 안 먹거나 좌표가 다른 곳)")
+        }.start()
+        Toast.makeText(this, "시험 중… 5초 뒤 [진단 보내기]를 눌러 주세요", Toast.LENGTH_LONG).show()
     }
 
     /** 기기 정보 + 최근 기록 한 덩어리. 스크린샷을 찍어 보낼 일이 없게 하려는 것이다. */
