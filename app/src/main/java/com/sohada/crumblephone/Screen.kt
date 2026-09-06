@@ -220,6 +220,42 @@ object Screen {
     /** 퀘스트가 완료돼 받을 수 있나? 미완료를 잘못 누르는 쪽이 훨씬 위험해서 넉넉히 잡는다. */
     fun isQuestDone(b: Bitmap): Boolean = questBarRatio(b) >= 0.85
 
+    /**
+     * 퀘스트 띠가 **'퀘스트 NNNN 까지 한번에 클리어 하기'** 상태인가?
+     * (밀린 퀘스트를 한 번에 받는 새 버튼. 열쇠 그림 + 파란·보라 띠 + 금색 글자)
+     *
+     * 색이 다른 상태와 정반대라 기존 판정이 전부 놓쳤다 — 실측(폰 1440x3120, BAR 영역 평균):
+     * | 상태 | 평균 RGB | ratio |
+     * |---|---|---|
+     * | 완료(금색) | R>B 크게 | +1.11~1.28 |
+     * | 미완료 | | +0.16~0.58 |
+     * | **한번에 클리어(파랑)** | **(140,105,174)** | **-0.25** |
+     * | 팝업이 덮음 | | < -0.6 |
+     *
+     * 파랑이 확실히 우세하고(B가 R·G보다 큼) 어둡지 않을 때만 참으로 본다.
+     * 덮인 팝업은 ratio 가 더 낮게 내려가므로 아래쪽 경계로 갈린다.
+     */
+    fun isBulkClear(b: Bitmap): Boolean {
+        var rs = 0L; var gs = 0L; var bs = 0L; var n = 0
+        var x = BAR[0]
+        while (x < BAR[1]) {
+            var y = BAR[2]
+            while (y < BAR[3]) {
+                val c = px(b, x, y)
+                rs += Color.red(c); gs += Color.green(c); bs += Color.blue(c); n++
+                y += 6
+            }
+            x += 6
+        }
+        if (n == 0) return false
+        val r = rs.toDouble() / n; val g = gs.toDouble() / n; val bl = bs.toDouble() / n
+        val mean = (r + g + bl) / 3.0
+        if (mean < 90 || mean > 210) return false        // 너무 어둡거나(팝업) 너무 밝으면 아니다
+        if (bl < r + 15) return false                    // 파랑이 빨강보다 확실히 커야 한다
+        if (bl < g + 25) return false                    // 초록도 눌려 있어야 한다(보라 계열)
+        return true
+    }
+
     private val GACHA_BTNS = arrayOf(intArrayOf(266, 2640), intArrayOf(712, 2640), intArrayOf(1158, 2640))
 
     /**

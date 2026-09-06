@@ -95,6 +95,13 @@ object Overlay {
             text = "쉬는 중"; setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            // ⚠️ 창이 WRAP_CONTENT 라, 글자가 길면 알약이 화면 밖까지 커지고
+            //    **오른쪽 끝의 [멈추기] 가 잘려 나간다**(빨간 조각만 보였다).
+            //    글자 쪽에 상한을 둬서 버튼 자리를 먼저 확보한다.
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            maxWidth = Math.max(dp(ctx, 130),
+                ctx.resources.displayMetrics.widthPixels - dp(ctx, 190))
         }
         // [멈추기] 는 **늘 보인다.** 예전엔 알약을 탭해야 나왔는데, 그러면 있는 줄도 모른다.
         // 게다가 그 탭에 밝기 깨우기까지 얹혀 있어서 한 동작이 두 가지 일을 했다.
@@ -109,12 +116,17 @@ object Overlay {
                 cornerRadius = dp(ctx, 100).toFloat()
             }
             setPadding(dp(ctx, 13), dp(ctx, 5), dp(ctx, 13), dp(ctx, 5))
+            // 글자가 아무리 길어도 이 버튼은 절대 줄어들지 않는다.
+            minWidth = dp(ctx, 62)
+            gravity = Gravity.CENTER
             visibility = View.GONE
             isClickable = true
             setOnClickListener { Runner.stop() }
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { leftMargin = dp(ctx, 12) }
+            // 남는 자리를 글자에게 뺏기지 않게 한다.
+            (layoutParams as LinearLayout.LayoutParams).weight = 0f
         }
         box.addView(dot); box.addView(txt); box.addView(stop)
 
@@ -201,7 +213,8 @@ object Overlay {
         // 무엇이 도는지(퀘스트·토벌전…)를 맨 앞에 둔다. 게임을 보는 중에는 이게 제일 궁금하다.
         val s = if (Runner.running) {
             val pct = Runner.progress
-            (if (Runner.task.isNotEmpty()) Runner.task + " · " else "") +
+            // "퀘스트 · 퀘스트 기다리는 중" 처럼 같은 말이 겹치면 앞을 뺀다(알약은 자리가 귀하다).
+            (if (Runner.task.isNotEmpty() && !Runner.status.startsWith(Runner.task)) Runner.task + " · " else "") +
                 Runner.status +
                 (if (pct >= 0) " " + pct + "%" else "") +
                 (if (Runner.detail.isNotEmpty()) " · " + Runner.detail else "")

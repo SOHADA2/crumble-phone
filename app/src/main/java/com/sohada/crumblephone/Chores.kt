@@ -100,6 +100,7 @@ object Chores {
         var powersave = 0         // 절전 해제를 몇 번 시도했는지
         var probeAllowedAt = 0L   // 보스가 필요한 퀘스트라 쉬는 중이면 이 시각까지 탐색을 미룬다
         var bossNoticed = false   // '보스가 필요하다'는 안내를 한 번만 남기려고
+        var bulkTries = 0         // '한번에 클리어'를 몇 번 눌러 봤는지(안 먹으면 그만 두려고)
         var loggedFirst = false   // 시작 화면 판정값을 한 번만 남기려고
         tapsProven = false        // 증거는 실행마다 새로 모은다
 
@@ -176,6 +177,30 @@ object Chores {
                 Runner.sleep(3000); continue
             }
             covered = 0
+
+            // ── '퀘스트 NNNN 까지 한번에 클리어 하기' ──
+            // 밀린 퀘스트를 한 번에 받는 새 버튼. 띠가 파랗게 바뀌어 기존 판정이 전부 놓쳤다
+            // (완료도 미완료도 아니라 계속 탐색만 돌았다). 보이면 눌러서 받고 이어간다.
+            if (Screen.isBulkClear(b)) {
+                bulkTries++
+                if (bulkTries > 3) {
+                    // 세 번 눌러도 안 바뀐다 = 누를 수 없는 상태다. 더 두드리지 않고 넘어간다.
+                    if (bulkTries == 4) Bot.log("'한번에 클리어'를 눌러도 안 바뀌어요 - 그냥 지나갑니다")
+                } else {
+                    Runner.set("한번에 클리어 받는 중", "밀린 퀘스트를 한 번에 받아요")
+                    Bot.log("'한번에 클리어 하기' 발견 (" + fmt(ratio) + ") - 누릅니다")
+                    Runner.tap(Screen.QUEST_BAR, 2500)
+                    Runner.shot()?.let {
+                        if (!Screen.isBulkClear(it)) {
+                            tapsProven = true; quests++; bulkTries = 0
+                            ovenTried = false; bossNoticed = false; probeAllowedAt = 0L
+                            Bot.log("  받았어요 - 띠가 바뀌었습니다")
+                            Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
+                        }
+                    }
+                    Runner.sleep(3000); continue
+                }
+            } else bulkTries = 0
 
             if (ratio >= doneRatio) {
                 quests++
