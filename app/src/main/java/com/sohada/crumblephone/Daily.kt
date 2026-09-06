@@ -157,20 +157,46 @@ object Daily {
      * 진입 화면이 보일 때까지 확인하고, 안 되면 통째로 한 번 더 시도한다.
      * 그 뒤의 모든 동작은 `atDailyEntry` 가 참일 때만 하므로, 여기서 어긋나도 헛탭으로 끝난다.
      */
+    /**
+     * 일일 던전 진입 화면까지 간다.
+     *
+     * ⚠️ **이미 목록 화면에 있으면 되돌아 나가지 않는다.** 예전엔 고정 좌표로 첫 배너를 누르고,
+     *    안 들어가지면 무조건 `clearPopups` + `resetToMain` 으로 메인까지 되돌아갔다.
+     *    그런데 그 고정 좌표가 배너 사이 **검은 띠**여서 탭이 늘 헛돌았고, 목록 앞에 서 있으면서도
+     *    "가림막 치우는 중"으로 되돌아가기를 반복했다. 화면을 보고 배너를 찾아 누른다.
+     */
     private fun enter(): Boolean {
-        for (t in 1..2) {
+        for (t in 1..3) {
             if (!Runner.running) return false
-            Runner.set("일일 던전으로 이동 중", t.toString() + "/2")
-            Runner.tap(Screen.NAV_DUNGEON, 3000)
-            Runner.tap(Screen.DAILY_TAB, 2500)
-            Runner.tap(Screen.DAILY_FIRST, 2800)
-            for (w in 1..4) {
-                if (Runner.shot()?.let { Screen.atDailyEntry(it) } == true) return true
-                Runner.sleep(900)
+            Runner.set("일일 던전으로 이동 중", t.toString() + "/3")
+
+            var b = Runner.shot()
+            if (b != null && Screen.atDailyEntry(b)) return true
+
+            // 목록이 아니면 그때만 던전 탭으로 이동한다.
+            if (b == null || !Screen.atDailyList(b)) {
+                Runner.tap(Screen.NAV_DUNGEON, 3000)
+                Runner.tap(Screen.DAILY_TAB, 2500)
+                b = Runner.shot()
             }
-            // 안 들어가졌다. 메인으로 보여도 보상 팝업 같은 게 덮고 있을 수 있으니 치우고 다시.
-            Runner.clearPopups()
-            Runner.resetToMain()
+
+            if (b != null && Screen.atDailyList(b)) {
+                val y = Screen.findDailyBanner(b)
+                if (y > 0) {
+                    Bot.log("일일 던전 목록 - 배너(y=" + y + ")를 눌러 들어갑니다")
+                    Runner.tap(intArrayOf(700, y), 2800)
+                    for (w in 1..5) {
+                        if (Runner.shot()?.let { Screen.atDailyEntry(it) } == true) return true
+                        Runner.sleep(900)
+                    }
+                    Runner.shot()?.let { Bot.log("  들어가지 못했어요: " + Screen.debugLine(it)) }
+                } else {
+                    Bot.log("일일 던전 목록인데 배너를 못 찾았어요")
+                }
+            }
+
+            // 목록도 아니고 진입도 안 됐다. 그때만 팝업을 치우고 메인부터 다시 간다.
+            if (t < 3) { Runner.clearPopups(); Runner.resetToMain() }
         }
         return false
     }

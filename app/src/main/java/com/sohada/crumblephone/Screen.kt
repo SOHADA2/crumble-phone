@@ -425,7 +425,8 @@ object Screen {
     //    (실측 41,31,29). PC 는 터치 영역이 넓어 우연히 먹었던 것으로 보인다. 아이콘 한가운데로 옮겼다.
     val NAV_DUNGEON       = intArrayOf(505, 2990)    // 하단 네비 '던전'(교차한 검)
     val DAILY_TAB         = intArrayOf(850, 2835)    // '일일 던전' 서브탭 (눈대중보다 아래다)
-    val DAILY_FIRST       = intArrayOf(700, 830)     // 목록 첫 던전 배너
+    // ⚠️ 옛 `DAILY_FIRST (700,830)` 는 지웠다 — 목록이 스크롤되면 배너 사이 검은 띠를 누른다.
+    //    지금은 `findDailyBanner` 로 화면을 보고 배너를 찾아 누른다.
     val DAILY_CHALLENGE   = intArrayOf(733, 2590)    // 도전하기!
     val DAILY_CONT_CHK    = intArrayOf(1076, 2574)   // 연속 도전 체크박스
     val DAILY_NEXT        = intArrayOf(1400, 1470)   // ▶ 다음 던전
@@ -438,6 +439,45 @@ object Screen {
     val DAILY_SWEEP       = intArrayOf(150, 2600)    // 소탕 (SKIP 티켓을 쓴다)
     val DAILY_SWEEP_MAX   = intArrayOf(1095, 2515)   // 소탕 다이얼로그 '최대'
     val DAILY_SWEEP_GO    = intArrayOf(715, 2815)    // 소탕 다이얼로그 '소탕하기'
+
+    /**
+     * 일일 던전 **목록** 화면인가? (던전 배너가 세로로 쭉 늘어선 그 화면)
+     * 하단 서브탭 '일일 던전' 자리가 밝은 청록이고, 그 오른쪽 '쟁탈전' 자리는 까맣다.
+     * 실측: (720,2840) = (3,167,179) · (1150,2840) = (0,0,0).
+     */
+    fun atDailyList(b: Bitmap): Boolean {
+        val tab = px(b, 720, 2840)
+        if (!(Color.red(tab) < 60 && Color.green(tab) > 140 && Color.blue(tab) > 150)) return false
+        val right = px(b, 1150, 2840)
+        return Color.red(right) < 45 && Color.green(right) < 45 && Color.blue(right) < 45
+    }
+
+    /**
+     * 목록에서 **던전 배너 하나의 세로 중심**을 찾는다. 없으면 -1.
+     *
+     * ⚠️ 고정 좌표로 첫 배너를 누르면 안 된다. 목록이 조금만 스크롤돼 있어도 **배너 사이 검은 띠**를
+     *    누르게 되고, 탭이 헛돌아 '진입 실패'로 빠진다(실측: 옛 `DAILY_FIRST (700,830)` 자리가
+     *    `(34,29,26)` — 딱 그 검은 띠였다).
+     *
+     * 그래서 세로로 훑어 **밝은 구간(배너)** 을 찾는다. 배경 청록은 밝기 57~59, 배너 사이 검은 띠는
+     * 29~43, 배너는 90~223 이라 78 로 자르면 깨끗하게 갈린다.
+     */
+    fun findDailyBanner(b: Bitmap): Int {
+        var start = -1
+        var y = 560
+        while (y <= 2560) {
+            val c = px(b, 700, y)
+            val on = (Color.red(c) + Color.green(c) + Color.blue(c)) / 3 > 78
+            if (on && start < 0) start = y
+            if (!on && start >= 0) {
+                if (y - start >= 100) return (start + y) / 2
+                start = -1
+            }
+            y += 6
+        }
+        if (start >= 0 && 2560 - start >= 100) return (start + 2560) / 2
+        return -1
+    }
 
     /** 일일 던전 '진입 화면'인가? 소탕 버튼 자리가 여기서는 늘 청록이다. */
     fun atDailyEntry(b: Bitmap): Boolean {
