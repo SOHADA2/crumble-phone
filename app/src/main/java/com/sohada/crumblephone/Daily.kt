@@ -12,7 +12,9 @@ import kotlin.concurrent.thread
  * ⚠️ **입장권(기회)을 쓴다.** 진입만 시험하고 싶으면 `maxDungeons = 0` 으로 부르면 된다
  *    (PC 봇의 `-MaxDungeons 0` 과 같은 안전한 시험 방법이다).
  *
- * **소탕(SKIP 티켓)** 은 설정에서 켰을 때만 돈다(기본 꺼짐). 광고 제거를 가진 사람만 의미가 있다.
+ * ★ **소탕(SKIP 티켓)은 하지 않는다.** 소탕은 '지금 스테이지' 기준으로 보상을 주는데,
+ *   스테이지는 계속 올라가므로 지금 태워 버리면 나중에 받을 것보다 손해다(사용자 판단).
+ *   기능을 끄는 설정으로 두지 않고 **코드에서 아예 뺐다** — 켤 수 있게 두면 언젠가 켜진다.
  */
 object Daily {
 
@@ -82,6 +84,7 @@ object Daily {
 
             // ── 전투: 도전하기가 주황이면 누르고, 청록(0/3)이 되면 이 던전 끝 ──
             var fought = false
+            var idle = 0     // 진입 화면인데 도전도 완료도 아닌 상태가 연속 몇 번인지
             val deadline = System.currentTimeMillis() + 260_000   // 던전당 안전 상한
             while (System.currentTimeMillis() < deadline && Runner.running) {
                 val s = Runner.shot()
@@ -89,14 +92,24 @@ object Daily {
                 if (Screen.atDailyEntry(s)) {
                     if (Screen.dailyChallengeDone(s)) break
                     if (Screen.dailyChallengeOpen(s)) {
+                        idle = 0
                         Runner.set("일일 던전 " + idx + "번째", name + " · 도전")
                         Runner.setProgress(2, 4)
                         Runner.tap(Screen.DAILY_CHALLENGE, 3000)
                         fought = true
                         continue
                     }
+                    // 도전도 안 되고 완료도 아니다 = **열쇠(기회)가 없다.**
+                    // 예전엔 여기서 260초 상한까지 그냥 기다렸다. 기다려도 열쇠는 안 생기니
+                    // 6초만 지켜보고(전환 중일 수 있다) 바로 다음 던전을 보러 간다.
+                    idle++
+                    if (idle >= 5) {
+                        Bot.log("던전 " + idx + ": 도전할 수 없어요(열쇠 없음) - 다음 던전으로")
+                        break
+                    }
                     Runner.sleep(1200); continue
                 }
+                idle = 0
                 Runner.status = "일일 던전 " + idx + "번째"
                 Runner.detail = name + " · 자동 전투 중"
                 Runner.setProgress(3, 4)
@@ -120,17 +133,6 @@ object Daily {
                 results.add(name + " 확인불가")
                 Runner.tap(Screen.DAILY_NEXT, 2200)
                 continue
-            }
-
-            // ── (설정에서 켰을 때만) 소탕 — SKIP 티켓을 쓴다 ──
-            // 광고 제거를 가진 사람만 의미가 있다. 기본은 꺼져 있고, 켜야만 돈다.
-            if (Prefs.dailySweep && !Prefs.testMode) {
-                Runner.set("일일 던전 " + idx + "번째", name + " · 소탕 (SKIP 티켓)")
-                Runner.tap(Screen.DAILY_SWEEP, 1800)
-                Runner.tap(Screen.DAILY_SWEEP_MAX, 1000)
-                Runner.tap(Screen.DAILY_SWEEP_GO, 2500)
-                Runner.tap(Screen.DAILY_MODAL_CLOSE, 1200)   // 보상 팝업을 바깥 탭으로 넘긴다
-                Runner.tap(Screen.DAILY_MODAL_CLOSE, 1000)
             }
 
             // ── 달성 보상 수령 ──

@@ -31,10 +31,6 @@ object Prefs {
         get() = sp?.getInt("arenaFights", 10) ?: 10
         set(v) { sp?.edit()?.putInt("arenaFights", v)?.apply() }
 
-    /** 일일 던전에서 기회를 다 쓴 뒤 소탕으로 **SKIP 티켓까지** 쓸지. 기본은 끔. */
-    var dailySweep: Boolean
-        get() = sp?.getBoolean("dailySweep", false) ?: false
-        set(v) { sp?.edit()?.putBoolean("dailySweep", v)?.apply() }
 
     /**
      * 봇이 도는 동안 화면을 아주 어둡게 할지.

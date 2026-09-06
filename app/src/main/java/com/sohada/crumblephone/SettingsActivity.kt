@@ -54,15 +54,11 @@ class SettingsActivity : ListActivity() {
         val g2 = group()
         rowArena = row("아레나 판수", value = Prefs.arenaFights.toString() + "판",
             subtitle = "재화가 먼저 떨어지면 거기서 끝나요") { cycle(Prefs.ARENA_CHOICES, true) }
-        val (rSweep, _) = switchRow("일일 던전 소탕", "SKIP 티켓까지 써요 (광고 제거 보유자용)", Prefs.dailySweep) {
-            Prefs.dailySweep = it
-        }
         // 오븐은 레벨마다 한 번에 여는 개수가 달라서, 게임 쪽 값을 여기에 맞춰 둬야
         // 봇이 '한 싸이클'이 얼마나 큰지 알고 상한을 제대로 잡는다.
         rowOven = row("오븐 1회 개수", value = Prefs.ovenPerRun.toString() + "개",
             subtitle = "게임의 '자동 열기 → 1회에 여는 개수'와 같게") { cycle(Prefs.OVEN_CHOICES, false) }
         g2.addView(rowArena); g2.addView(separator())
-        g2.addView(rSweep); g2.addView(separator())
         g2.addView(rowOven)
         root.addView(g2)
 

@@ -398,6 +398,9 @@ object Screen {
     val DAILY_ACHIEVE     = intArrayOf(1350, 1580)   // 달성 보상 상자
     val DAILY_CLAIM_ALL   = intArrayOf(710, 2840)    // 모두 받기
     val DAILY_MODAL_CLOSE = intArrayOf(720, 430)     // 모달 바깥(닫기)
+    // ⚠️ 아래 소탕 좌표 셋은 **쓰지 않는다.** 소탕은 '지금 스테이지' 기준으로 보상을 주는데
+    //    스테이지가 계속 올라가므로 지금 태우면 손해다(사용자 판단, 2026-09-06).
+    //    실측값이라 지우지 않고 남겨 둔다 — 다시 재지 말 것. 다만 **부르는 곳이 있으면 안 된다.**
     val DAILY_SWEEP       = intArrayOf(150, 2600)    // 소탕 (SKIP 티켓을 쓴다)
     val DAILY_SWEEP_MAX   = intArrayOf(1095, 2515)   // 소탕 다이얼로그 '최대'
     val DAILY_SWEEP_GO    = intArrayOf(715, 2815)    // 소탕 다이얼로그 '소탕하기'
