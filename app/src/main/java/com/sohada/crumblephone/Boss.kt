@@ -134,7 +134,23 @@ object Boss {
     private fun switchPreset(n: Int) {
         if (n < 1 || n > Screen.PRESET_TABS.size) return
         Runner.tap(Screen.NAV_COOKIE, 2500)
-        Runner.tap(Screen.PRESET_TABS[n - 1], 1500)
+
+        // ⚠️ 편성 화면이 열린 걸 **확인하고** 누른다. 옛 좌표가 팀 진열대 배경을 가리키는 바람에
+        //    쿠키 상세 화면이 열려 봇이 거기서 길을 잃은 적이 있다.
+        //    화면이 아니면 조합 변경만 건너뛰고 전투로 돌아간다 — 헤매느니 조합 하나를 포기한다.
+        val b = Runner.shot()
+        if (b != null && Screen.atCookieRoster(b)) {
+            Runner.tap(Screen.PRESET_TABS[n - 1], 1500)
+        } else {
+            Bot.log("  편성 화면이 안 열렸어요 - 조합 " + n + " 변경을 건너뜁니다")
+        }
         Runner.tap(Screen.NAV_BATTLE, 2500)
+
+        // 전투 화면으로 못 돌아왔으면(쿠키 상세 같은 데 있으면) 뒤로가기로 빠져나온다.
+        for (k in 1..3) {
+            val s = Runner.shot() ?: break
+            if (Screen.atMain(s)) break
+            TapService.back(); Runner.sleep(1500)
+        }
     }
 }

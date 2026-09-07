@@ -697,10 +697,39 @@ object Screen {
     }
     val NAV_COOKIE  = intArrayOf(70, 2972)           // 하단 좌측 '쿠키' 탭 → 편성 화면
     val NAV_BATTLE  = intArrayOf(718, 2972)          // 하단 '전투/홈' 탭 → 메인 전투로 복귀
-    val PRESET_TABS = arrayOf(                       // 쿠키 편성 화면의 프리셋 1~5 탭
-        intArrayOf(74, 698), intArrayOf(194, 698), intArrayOf(312, 698),
-        intArrayOf(428, 698), intArrayOf(542, 698)
+    /**
+     * 쿠키 편성 화면의 프리셋 1~5 탭. **2026-09-07 실기 스크린샷에서 다시 쟀다.**
+     *
+     * ⚠️ 옛 값 `y=698` 은 **PC 봇 좌표를 그대로 복사한 것**인데 폰에서는 그 자리가
+     *    편성 화면 위쪽 **팀 진열대 배경**(198,151,203)이었다. 눌러도 조합이 안 바뀌고
+     *    **쿠키 상세 화면이 열려** 봇이 거기서 길을 잃었다(실기 확인).
+     *    x 는 우연히 맞았고 **y 만 122px 위**였다 — 그래서 더 늦게 들켰다.
+     *
+     * 실측: y **820** · x **74 / 191 / 308 / 425 / 543**
+     * (선택된 탭은 노랑 `(255,246,71)`, 나머지는 청록 `(80,187,193)`)
+     */
+    val PRESET_TABS = arrayOf(
+        intArrayOf(74, 820), intArrayOf(191, 820), intArrayOf(308, 820),
+        intArrayOf(425, 820), intArrayOf(543, 820)
     )
+
+    /**
+     * 쿠키 **편성 화면**인가? 프리셋 탭 다섯 자리가 청록(비선택) 또는 노랑(선택)이면 참.
+     * 조합을 바꾸기 전에 이걸 확인한다 — **화면을 안 보고 좌표를 누르지 않는다**는 원칙 그대로.
+     */
+    fun atCookieRoster(b: Bitmap): Boolean {
+        var hit = 0
+        for (p in PRESET_TABS) {
+            var ok = false
+            for (dx in intArrayOf(-14, 0, 14)) for (dy in intArrayOf(-14, 0, 14)) {
+                val c = px(b, p[0] + dx, p[1] + dy)
+                val r = Color.red(c); val g = Color.green(c); val bl = Color.blue(c)
+                if ((r < 120 && g > 140 && bl > 150) || (r > 210 && g > 190 && bl < 140)) ok = true
+            }
+            if (ok) hit++
+        }
+        return hit >= 4
+    }
 
     // ── 오븐(oven.ps1) ──
     val OVEN_AUTO   = intArrayOf(516, 2840)          // 오븐 왼쪽 'Auto' 버튼
