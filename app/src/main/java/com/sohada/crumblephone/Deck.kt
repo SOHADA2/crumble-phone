@@ -68,7 +68,7 @@ object Deck {
         // 상세 화면에는 좌우 넘김(▶)이 있어서 목록으로 돌아올 필요가 없다.
         scrollTop()
         // 첫 칸 자리도 **찾아서** 누른다. 맨 위로 올린 뒤라도 몇 px 어긋나 있을 수 있다.
-        val top = Runner.shot()?.let { Screen.findStarRows(it) } ?: IntArray(0)
+        val top = settle()?.let { Screen.findStarRows(it) } ?: IntArray(0)
         if (top.isEmpty()) { fail("카드 줄을 못 찾았어요"); return }
         Runner.tap(Screen.cardAt(0, top[0]), 1800)
         val b = Runner.shot()
@@ -136,7 +136,10 @@ object Deck {
         val rowsOut = ArrayList<Array<FloatArray>>()   // 한 칸이 5장인 '행'들
         var pages = 0
         while (rowsOut.size * Screen.CARD_COLS < names.size && Runner.running && pages < 40) {
-            val shot = Runner.shot()
+            // ★ **움직임이 멈춘 뒤에 찍는다.** 스크롤 직후에 찍으면 그 줄 지문이 흐려져서,
+            //   나중에 그 다섯 마리를 영영 못 알아본다.
+            //   실기에서 정확히 그랬다 — 못 알아본 9마리가 '연속 5개 + 연속 4개', 곧 두 줄이었다.
+            val shot = settle()
             if (shot == null || !Screen.atDeckEdit(shot)) { fail("편집 모드를 벗어났어요"); return }
             val stars = Screen.findStarRows(shot)
             if (stars.isEmpty()) { fail("카드 줄을 못 찾았어요"); return }
