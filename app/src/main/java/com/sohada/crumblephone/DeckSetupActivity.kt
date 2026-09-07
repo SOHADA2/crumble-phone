@@ -68,7 +68,7 @@ class DeckSetupActivity : ListActivity() {
                 "어느 칸이 어느 쿠키인지 알아야 이름으로 넣을 수 있어요.",
                 14f, t.label2).apply { setPadding(dp(22), dp(10), dp(22), dp(10)) })
         } else {
-            root.addView(text("넣을 쿠키 이름을 한 줄에 하나씩 적어 주세요. 조금 틀려도 알아서 찾아요.\n" +
+            root.addView(text("넣을 쿠키 이름을 한 줄에 하나씩(또는 쉼표로 나눠) 적어 주세요. 조금 틀려도 알아서 찾아요.\n" +
                 "[시험] 은 똑같이 해 보고 저장만 안 해요 — 먼저 이걸로 확인하세요.",
                 13f, t.label3).apply { setPadding(dp(22), dp(4), dp(22), dp(10)) })
 
@@ -107,7 +107,7 @@ class DeckSetupActivity : ListActivity() {
             setTextColor(t.label)
             textSize = 16f
             background = null
-            hint = "예) 다크초코 쿠키"
+            hint = "예) 다크초코 쿠키 (한 줄에 하나씩, 쉼표로 나눠도 돼요)"
             setHintTextColor(t.label3)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
             minLines = 2
@@ -123,10 +123,11 @@ class DeckSetupActivity : ListActivity() {
         }
     }
 
+    /** 저장할 때 **한 줄에 하나씩**으로 정리한다. 쉼표로 적어도 다음에 열면 줄로 갈려 보인다. */
     private fun save() {
         var changed = false
         for ((n, box) in boxes) {
-            val v = box.text.toString().split("\n").map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
+            val v = box.text.toString().split(Deck.SEP).map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
             if (v != Prefs.deckNames(n)) { Prefs.setDeckNames(n, v); changed = true }
         }
         if (changed) Toast.makeText(this, "덱 구성을 저장했어요", Toast.LENGTH_SHORT).show()

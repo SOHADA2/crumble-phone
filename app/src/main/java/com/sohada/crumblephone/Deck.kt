@@ -18,6 +18,9 @@ import kotlin.concurrent.thread
  */
 object Deck {
 
+    /** 이름을 나누는 기준 — 줄바꿈 · 쉼표 · 가운뎃점 · 슬래시 · 세미콜론 */
+    val SEP = Regex("[\n,、·/;]+")
+
     private const val MAX_COOKIES = 400
     private const val STEP_MS = 900L
     /** 한 쪽에서 연달아 몇 번까지 눌러 볼지. 무한히 두드리지 않게. */
@@ -206,7 +209,10 @@ object Deck {
         if (!DeckDict.ready(ctx)) {
             Runner.set("사전이 아직이에요", "[쿠키 사전 만들기] 를 먼저 해 주세요"); return
         }
-        val wanted = Prefs.deckNames(n).split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+        // 줄바꿈뿐 아니라 **쉼표·가운뎃점·슬래시**로도 나눈다.
+        // 실기에서 사용자가 `다크초코쿠키, 허브쿠키` 처럼 한 줄에 쉼표로 적었는데
+        // 줄바꿈으로만 나누는 바람에 그 전체를 이름 하나로 보고 못 찾았다.
+        val wanted = Prefs.deckNames(n).split(SEP).map { it.trim() }.filter { it.isNotEmpty() }
         if (wanted.isEmpty()) { Runner.set("덱 " + n + "번이 비어 있어요", "쿠키 이름을 적어 주세요"); return }
 
         val want = HashSet<Int>()
