@@ -303,11 +303,24 @@ object Deck {
             if (changes == 0) break
             if (round < ROUNDS) Bot.log("  순서가 바뀌었을 수 있어 한 바퀴 더 봅니다")
         }
-        if (seenIdx.size < DeckDict.names.size / 2)
-            Bot.log("⚠ 사전 " + DeckDict.names.size + "마리 중 " + seenIdx.size + "마리만 알아봤어요 - 사전을 다시 만들어 보세요")
+        // ★ **원하는 쿠키를 화면에서 못 찾았으면 반드시 알린다.**
+        //   조용히 안 넣고 끝내면 사용자는 덱이 맞춰진 줄 안다.
+        val notSeen = want.filter { !seenIdx.contains(it) }
+        if (notSeen.isNotEmpty()) {
+            Bot.log("⚠ 넣으려던 쿠키를 화면에서 못 찾았어요: " +
+                notSeen.joinToString(", ") { DeckDict.names.getOrElse(it) { "?" } })
+            Bot.log("  사전의 그림과 지금 화면이 다를 수 있어요 - 사전을 다시 만들어 보세요")
+        }
+        if (seenIdx.size < DeckDict.names.size) {
+            val miss = DeckDict.names.indices.filter { !seenIdx.contains(it) }
+            Bot.log("못 알아본 쿠키 " + miss.size + "마리: " +
+                miss.take(12).joinToString(", ") { DeckDict.names.getOrElse(it) { "?" } } +
+                (if (miss.size > 12) " 외 " + (miss.size - 12) + "마리" else ""))
+        }
 
         Runner.tap(if (dry) Screen.DECK_CANCEL else Screen.DECK_SAVE, 2200)
-        val tail = if (dry) " (저장 안 함)" else ""
+        val short = want.count { !seenIdx.contains(it) }
+        val tail = (if (short > 0) " · 못 넣음 " + short else "") + (if (dry) " (저장 안 함)" else "")
         Runner.set("덱 " + n + "번 " + (if (dry) "시험 끝" else "저장했어요"),
             "넣음 " + added + " · 뺌 " + removed + tail)
         Runner.lastResult = "덱 " + n + "번: 넣음 " + added + " · 뺌 " + removed + tail
