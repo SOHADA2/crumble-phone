@@ -51,6 +51,18 @@ object Deck {
         Runner.tap(Screen.NAV_COOKIE, 2500)
         if (!atRoster()) { fail("편성 화면을 못 열었어요"); return }
 
+        // ── 0) 몇 마리인지 먼저 읽는다 ──
+        // 왼쪽 아래 `73/73`. 이게 있으면 '몇 마리에서 끝나야 하는지'를 알아서,
+        // ▶ 가 한 번 안 먹어 중간에 끊기는 사고를 잡을 수 있다.
+        var target = 0
+        Runner.shot()?.let { sh ->
+            val c = Screen.OWNED_CROP
+            val txt = Ocr.readText(sh, c[0], c[1], c[2], c[3]) ?: ""
+            val m = Regex("(\\d+)\\s*/\\s*(\\d+)").find(txt.replace(",", ""))
+            if (m != null) target = m.groupValues[1].toIntOrNull() ?: 0
+            Bot.log("소유 쿠키 수: " + (if (target > 0) target.toString() + "마리" else "못 읽음 (" + txt.trim() + ")"))
+        }
+
         // ── 1) 이름 ──
         // 상세 화면에는 좌우 넘김(▶)이 있어서 목록으로 돌아올 필요가 없다.
         scrollTop()
@@ -59,8 +71,9 @@ object Deck {
         if (b == null || !Screen.atCookieDetail(b)) { fail("첫 칸의 상세를 못 열었어요"); return }
 
         val names = ArrayList<String>()
-        val seen = HashSet<String>()
         var blanks = 0
+        var stuck = 0
+        var last: String? = null
         for (i in 1..MAX_COOKIES) {
             if (!Runner.running) return
             val shot = Runner.shot() ?: break
@@ -71,17 +84,40 @@ object Deck {
                 if (blanks >= 3) { Bot.log("연달아 세 번 못 읽어 멈춥니다"); break }
             } else {
                 blanks = 0
-                if (!seen.add(nm)) { Bot.log("'" + nm + "' 이 다시 나왔어요 - 한 바퀴 돌았습니다"); break }
+                // ⚠️ **앞과 같은 이름 = ▶ 가 안 먹은 것**이지 한 바퀴 돈 게 아니다.
+                //    예전엔 이걸 '돌았다'로 보고 56/73 에서 끊겼다. 다시 눌러 본다.
+                if (nm == last) {
+                    stuck++
+                    if (stuck >= 3) { Bot.log("▶ 를 세 번 눌러도 안 넘어가요 - 여기서 끝냅니다"); break }
+                    Bot.log("  같은 화면이에요 - ▶ 를 다시 누릅니다")
+                    Runner.tap(Screen.DETAIL_NEXT, STEP_MS + 700)
+                    continue
+                }
+                stuck = 0
+                // 한 바퀴는 **첫 쿠키로 돌아왔을 때**만 인정한다.
+                if (names.isNotEmpty() && nm == names[0]) {
+                    Bot.log("첫 쿠키 '" + nm + "' 로 돌아왔어요 - 한 바퀴 돌았습니다"); break
+                }
+                // 그 밖의 중복은 OCR 우연일 수 있다. **빼지 않고 그대로 담는다** —
+                // 이름과 그림은 순서로 짝지어지므로 하나만 빠져도 뒤가 통째로 밀린다.
+                if (names.contains(nm)) Bot.log("  (이미 본 이름이지만 자리를 지키려고 그대로 담아요)")
                 names.add(nm)
+                last = nm
                 Bot.log("  " + names.size + ": " + nm)
+                if (target > 0 && names.size >= target) {
+                    Bot.log("소유 수 " + target + "마리를 다 읽었습니다"); break
+                }
             }
-            Runner.set("쿠키 사전 만드는 중", "이름 " + names.size + "마리")
-            Runner.setProgress(names.size, 80)
+            Runner.set("쿠키 사전 만드는 중", "이름 " + names.size + (if (target > 0) "/" + target else "") + "마리")
+            Runner.setProgress(names.size, if (target > 0) target else 80)
             Runner.tap(Screen.DETAIL_NEXT, STEP_MS)
         }
         TapService.back(); Runner.sleep(1500)
         if (names.isEmpty()) {
             Runner.set("한 마리도 못 읽었어요", "글자 읽기 점검부터 해 보세요"); return
+        }
+        if (target > 0 && names.size < target) {
+            Bot.log("⚠ " + target + "마리 중 " + names.size + "마리만 읽었어요 - 그래도 이만큼으로 만듭니다")
         }
 
         // ── 2) 지문 ──

@@ -954,6 +954,12 @@ object Screen {
     val DECK_SAVE   = intArrayOf(1051, 2950)   // [편성 저장]
     val DECK_CANCEL = intArrayOf(709, 2950)    // 가운데 주황 ✕ (저장 안 하고 나감)
 
+    /**
+     * 편성 화면 왼쪽 아래의 **소유 수** `73/73` 자리. 사전을 몇 마리까지 모아야 하는지 여기서 안다.
+     * 실측: 흰 글자가 x 60~190 · y 2525~2565. 넉넉히 자른다.
+     */
+    val OWNED_CROP = intArrayOf(40, 2515, 220, 60)
+
     val ROSTER_EQUIP  = intArrayOf(1290, 822)    // 프리셋 탭 줄 오른쪽 초록 [편성]
     val ROSTER_FILTER = intArrayOf(78, 2660)     // [골라보기]
     val ROSTER_AUTO   = intArrayOf(1355, 2650)   // [자동 편성]
