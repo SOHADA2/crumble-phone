@@ -212,10 +212,10 @@ object Deck {
         val want = HashSet<Int>()
         val missing = ArrayList<String>()
         for (nm in wanted) {
-            val i = findIndex(nm)
-            if (i < 0) missing.add(nm) else want.add(i)
+            val (i, why) = find(nm)
+            if (i < 0) { missing.add(nm); Bot.log("'" + nm + "' 을 못 찾았어요 - " + why) }
+            else { want.add(i); Bot.log("'" + nm + "' → " + DeckDict.names[i] + " (" + why + ")") }
         }
-        if (missing.isNotEmpty()) Bot.log("사전에서 못 찾은 이름: " + missing.joinToString(", "))
         if (want.isEmpty()) { Runner.set("이름을 하나도 못 찾았어요", "사전을 다시 만들어 보세요"); return }
 
         Runner.set("덱 " + n + "번 맞추는 중", "편성 화면으로")
@@ -380,21 +380,42 @@ object Deck {
      * `밀키웨이`→`밀귀웨이` · `팬케이크`→`팬궤이크` · `커피`→`귀피`. 전부 편집거리 1이라 그냥 붙는다.
      * 임계값은 PC 봇 `Match-Canon` 과 같은 **이름 길이의 34%**.
      */
-    fun findIndex(want: String): Int {
+    fun findIndex(want: String): Int = find(want).first
+
+    /** 찾은 순번과 **왜 그렇게 됐는지**. 못 찾았을 때 로그에 남기려고 같이 낸다. */
+    fun find(want: String): Pair<Int, String> {
         val names = DeckDict.names
-        if (names.isEmpty()) return -1
+        if (names.isEmpty()) return -1 to "사전이 비어 있음"
         val w = norm(want)
-        if (w.isEmpty()) return -1
-        names.forEachIndexed { i, n -> if (norm(n) == w) return i }
+        if (w.isEmpty()) return -1 to "글자를 못 알아봄('" + want + "')"
+        names.forEachIndexed { i, n -> if (norm(n) == w) return i to "정확히" }
         var best = -1; var bd = Int.MAX_VALUE
         names.forEachIndexed { i, n ->
             val d = lev(w, norm(n))
             if (d < bd) { bd = d; best = i }
         }
-        return if (bd <= Math.max(1, (w.length * 0.34).toInt())) best else -1
+        val limit = Math.max(1, (w.length * 0.34).toInt())
+        val near = names.getOrElse(best) { "?" }
+        return if (bd <= limit) best to ("비슷함(거리 " + bd + ")")
+               else -1 to ("가장 가까운 게 '" + near + "' 인데 거리 " + bd + " > " + limit)
     }
 
-    private fun norm(s: String) = s.replace(Regex("[^가-힣]"), "")
+    /**
+     * 견줄 모양으로 다듬는다.
+     *
+     * ⚠️ **먼저 완성형(NFC)으로 합친다.** 안 그러면 자판에 따라 `다크초코쿠키` 가 자모로 분리된
+     *    형태(`ᄃ`+`ᅡ`+…)로 들어오는데, 그건 `가-힣` 범위가 아니라서 **글자가 통째로 사라진다.**
+     *    실기에서 사전에 있는 이름을 둘 다 '못 찾았다'고 한 게 이것이었다.
+     *
+     * ⚠️ 남기는 기준도 '한글만'이 아니라 **글자·숫자면 남긴다**로 넓혔다.
+     *    영어·숫자가 섞인 이름(`TSSR` 같은)도 통째로 지워지지 않게.
+     */
+    private fun norm(s: String): String {
+        val t = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFC)
+        val sb = StringBuilder()
+        for (c in t) if (Character.isLetterOrDigit(c)) sb.append(c)
+        return sb.toString()
+    }
 
     private fun lev(a: String, b: String): Int {
         if (a.isEmpty()) return b.length
