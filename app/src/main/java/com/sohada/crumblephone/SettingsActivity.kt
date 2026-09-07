@@ -64,7 +64,7 @@ class SettingsActivity : ListActivity() {
                     leftMargin = dp(18); topMargin = dp(12)
                 }
             })
-            addView(text("설정", 30f, t.label, Typeface.DEFAULT_BOLD).apply {
+            addView(text("설정", 30f, t.gold, Typeface.DEFAULT_BOLD).apply {
                 setPadding(dp(14), dp(12), dp(20), 0)
             })
         })

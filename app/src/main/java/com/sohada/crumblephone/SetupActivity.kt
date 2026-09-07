@@ -190,7 +190,7 @@ class SetupActivity : AppCompatActivity() {
 
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = t.card(dpf(18f), Math.max(1, dp(2)))
+            background = t.card(dpf(18f), Math.max(1, dp(3)))
             setPadding(dp(18), dp(18), dp(18), dp(18))
             addView(head); addView(body)
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {

@@ -84,7 +84,8 @@ class MainActivity : ListActivity() {
         root.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(text("크럼블 폰봇", 34f, t.label, Typeface.DEFAULT_BOLD).apply {
+            // 제목은 게임 화면 제목처럼 금색이다("코인 던전" 같은 그 글자).
+            addView(text("크럼블 폰봇", 32f, t.gold, Typeface.DEFAULT_BOLD).apply {
                 setPadding(dp(20), dp(12), 0, 0)
                 layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
             })
@@ -159,16 +160,29 @@ class MainActivity : ListActivity() {
         // 진행률 막대. 너비를 직접 바꾸면 애니메이션이 안 되므로,
         // 꽉 찬 막대를 왼쪽 기준으로 scaleX 만 줄여 둔다(그건 부드럽게 움직인다).
         fill = View(this).apply {
-            background = t.round(t.gold, dpf(4f))
+            // 게임 스테이지 바와 같은 4단 금색 — 알약의 막대와 한 벌이다.
+            background = GradientDrawable().apply {
+                colors = intArrayOf(
+                    Color.parseColor("#FFD92C"), Color.parseColor("#F9C114"),
+                    Color.parseColor("#FEAD04"), Color.parseColor("#8A5605"))
+                orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                cornerRadius = dpf(5f)
+            }
             layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
             pivotX = 0f
             scaleX = 0f
         }
         track = FrameLayout(this).apply {
-            background = t.round(t.bgDeep, dpf(4f))
+            // 검은 홈 + 검은 테두리. 막대가 그 위에서 차오른다.
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#15100F"))
+                cornerRadius = dpf(6f)
+                setStroke(dp(2), t.border)
+            }
             addView(fill)
             visibility = View.GONE
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(4)).apply { topMargin = dp(14) }
+            // 게임 바처럼 두툼하게 — 4dp 는 테두리에 다 먹혀 막대가 안 보인다.
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(12)).apply { topMargin = dp(14) }
         }
         hero.addView(track)
         root.addView(hero)

@@ -58,7 +58,7 @@ open class ListActivity : AppCompatActivity() {
     protected fun group(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         // 게임 패널처럼 두툼한 테두리를 두른다.
-        background = t.card(dpf(18f), Math.max(1, dp(2)))
+        background = t.card(dpf(18f), Math.max(1, dp(3)))
         clipToOutline = true
         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
             leftMargin = dp(16); rightMargin = dp(16)

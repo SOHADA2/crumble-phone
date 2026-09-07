@@ -19,9 +19,9 @@ import android.graphics.drawable.RippleDrawable
  * |---|---|---|
  * | 하단 독(제일 어두운 판) | #281E1C | 바탕 #231A18 |
  * | 돌 패널(플레이트 강화) | #3A2C2A | 카드 #382A27 |
- * | 테두리 | 탄/황토 | #8A6A52 / #6B4F42 |
+ * | 테두리 | **거의 검정** | #0B0609 (게임 UI 실측 (0,0,12)) |
  * | 글씨 | 크림 | #E8D9C8 / #BCA491 |
- * | 숫자 강조 | 금색 | #FFC94A |
+ * | 숫자 강조 | 금색 | #F8E861 (게임 '스테이지' 글자 실측 (248,240,97)) |
  * | 주 버튼 | 주황 #FD9500 | #F0921E · 짙은 갈색 외곽선 |
  *
  * **한 색은 한 역할로만 쓴다**(바탕이면 바탕, 글씨면 글씨, 테두리면 테두리).
@@ -32,20 +32,21 @@ import android.graphics.drawable.RippleDrawable
  */
 class Theme(val dark: Boolean = true) {
 
-    val bg        = Color.parseColor("#231A18")   // 화면 바탕
-    val bgDeep    = Color.parseColor("#1B1412")   // 한 단계 더 어두운 판
-    val cell      = Color.parseColor("#382A27")   // 카드/셀
-    val fill      = Color.parseColor("#2A201D")   // 기록처럼 한 단계 안쪽
-    val separator = Color.parseColor("#4A3733")
+    val bg        = Color.parseColor("#1C1517")   // 화면 바탕 (판이 도드라지게 한 단계 낮췄다)
+    val bgDeep    = Color.parseColor("#120D0F")
+    val cell      = Color.parseColor("#2E272C")   // 카드/셀 — **알약과 같은 판 색**
+    val fill      = Color.parseColor("#241E22")   // 기록처럼 한 단계 안쪽
+    val separator = Color.parseColor("#3A3238")
 
-    val border    = Color.parseColor("#8A6A52")   // 카드 테두리(탄)
-    val borderDim = Color.parseColor("#6B4F42")
+    /** ★ 테두리는 **거의 검정**이다. 게임 UI 를 만화처럼 보이게 하는 건 이 두께와 검정이다. */
+    val border    = Color.parseColor("#0B0609")
+    val borderDim = Color.parseColor("#0B0609")
 
     val label     = Color.parseColor("#E8D9C8")   // 크림
     val label2    = Color.parseColor("#BCA491")
     val label3    = Color.parseColor("#8A7565")
 
-    val gold      = Color.parseColor("#FFC94A")   // 숫자·강조
+    val gold      = Color.parseColor("#F8E861")   // 숫자·강조 — 알약 글자와 같은 금색
     val blue      = Color.parseColor("#F0921E")   // '주 동작' 자리(이름만 blue, 톤은 주황이다)
     val orange    = Color.parseColor("#FD9500")
     val red       = Color.parseColor("#E8503C")
@@ -68,9 +69,12 @@ class Theme(val dark: Boolean = true) {
         setColor(color); cornerRadius = radiusPx
     }
 
-    /** 카드/셀 묶음 — 게임 패널처럼 **두툼한 테두리**를 두른다. */
+    /**
+     * 카드/셀 묶음 — 게임 패널처럼 **두툼한 검은 테두리**를 두른다.
+     * 알약(`Overlay.kt`)과 같은 규칙이다: 얇은 색선이 아니라 두꺼운 검정.
+     */
     fun card(radiusPx: Float, strokePx: Int): GradientDrawable = GradientDrawable().apply {
-        setColor(cell); cornerRadius = radiusPx; setStroke(strokePx, borderDim)
+        setColor(cell); cornerRadius = radiusPx; setStroke(strokePx, border)
     }
 
     /**
@@ -83,7 +87,8 @@ class Theme(val dark: Boolean = true) {
             colors = intArrayOf(shade(base, 1.18f), base)
             orientation = GradientDrawable.Orientation.TOP_BOTTOM
             cornerRadius = radiusPx
-            setStroke(strokePx, shade(base, 0.45f))
+            // 외곽선은 색을 어둡게 한 것이 아니라 **검정**이다 — 알약과 같은 규칙.
+            setStroke(strokePx, border)
         }
         val stack = LayerDrawable(arrayOf(under, face))
         stack.setLayerInset(1, 0, 0, 0, depthPx)
