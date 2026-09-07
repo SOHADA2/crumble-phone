@@ -26,6 +26,22 @@ object Prefs {
         get() = sp?.getBoolean("testMode", false) ?: false
         set(v) { sp?.edit()?.putBoolean("testMode", v)?.apply() }
 
+    /**
+     * 쿠키 **사전** — 편성 목록 순서대로의 이름 목록(줄바꿈으로 구분).
+     *
+     * 목록에는 이름이 안 적혀 있어서(실측: `Lv.61`·`편성중`·`3/7` 뿐), 어느 칸이 어느 쿠키인지
+     * 한 번은 읽어 둬야 이름으로 배치할 수 있다. `Deck.buildDict` 가 채운다.
+     *
+     * 73마리쯤이면 2KB 남짓이라 SharedPreferences 로 충분하다.
+     */
+    var deckDict: String
+        get() = sp?.getString("deckDict", "") ?: ""
+        set(v) { sp?.edit()?.putString("deckDict", v)?.apply() }
+
+    /** 사전에 들어 있는 쿠키 수. 0 이면 아직 안 만든 것. */
+    val deckDictSize: Int
+        get() = deckDict.split("\n").count { it.isNotBlank() }
+
     /** 아레나를 몇 판까지 할지. 재화가 먼저 떨어지면 거기서 스스로 끝난다. */
     var arenaFights: Int
         get() = sp?.getInt("arenaFights", 10) ?: 10

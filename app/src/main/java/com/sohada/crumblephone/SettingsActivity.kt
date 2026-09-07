@@ -144,6 +144,12 @@ class SettingsActivity : ListActivity() {
         gChk.addView(separator())
         gChk.addView(row("글자 읽기 점검", subtitle = "지금 게임 화면의 한글을 읽어 봐요") { textTest() })
         gChk.addView(separator())
+        gChk.addView(row("쿠키 사전 만들기",
+            value = if (Prefs.deckDictSize > 0) Prefs.deckDictSize.toString() + "마리" else "아직",
+            subtitle = "덱을 이름으로 채우려면 한 번은 읽어 둬야 해요") {
+            Overlay.show(applicationContext); Deck.buildDict(applicationContext); finish()
+        })
+        gChk.addView(separator())
         gChk.addView(row("진단 보내기", value = "글", subtitle = "기기 정보와 최근 기록") { sendDiag() })
         gChk.addView(separator())
         gChk.addView(row("화면 보내기", value = "그림", subtitle = "게임을 띄워 5초 뒤 찍어요") { sendShot() })
@@ -357,6 +363,12 @@ class SettingsActivity : ListActivity() {
         t.append("게임 앱: ").append(GameApp.pkg(this) ?: "못 찾음").append("\n")
         t.append("접근성 ").append(if (TapService.isReady) "켜짐" else "꺼짐")
             .append(" · 화면 읽기 ").append(if (CaptureService.instance != null) "켜짐" else "꺼짐").append("\n")
+        if (Prefs.deckDictSize > 0) {
+            // 사전은 이름 배치가 잘 되는지 판단하는 핵심 자료다 — 오독이 있으면 여기서 바로 보인다.
+            t.append("--- 쿠키 사전 ").append(Prefs.deckDictSize).append("마리 ---\n")
+            t.append(Prefs.deckDict.split("\n").filter { it.isNotBlank() }
+                .mapIndexed { i, n -> (i + 1).toString() + "." + n }.joinToString(" / ")).append("\n")
+        }
         t.append("--- 최근 기록 ---\n").append(Bot.recentText())
         return t.toString()
     }

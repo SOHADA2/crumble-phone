@@ -817,6 +817,69 @@ object Screen {
         return hit >= 4
     }
 
+    // ══════════════════════════════════════════════════════════
+    //  쿠키 편성 화면 — 덱(조합) 구성용. 2026-09-07 실기 스크린샷에서 전부 실측.
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * 소유 쿠키 **격자**. 5열이고 위아래로 스크롤된다. 아주 규칙적이라 좌표를 계산으로 낸다.
+     *
+     * 실측(1440x3120): 카드 사이에 배경 틈이 **없어서** 색으로는 열을 못 가른다.
+     * 대신 격자 전체 폭(x 37~1369)을 5등분했고, 각 카드의 `Lv.NN` 글자 오른쪽 끝이
+     * 계산한 중심 +113 과 ±16px 안에서 맞는 걸로 검증했다.
+     * 행은 **별(★) 줄**이 규칙적이라 그걸로 쟀다 — 별줄 중심 1196·1513·1830·2147·2465 (간격 317).
+     */
+    const val CARD_COL0 = 170        // 1열 중심 x
+    const val CARD_COL_PITCH = 266   // 열 간격 (1332/5 = 266.4)
+    const val CARD_ROW0 = 1112       // 1행 중심 y (별줄 −84)
+    const val CARD_ROW_PITCH = 317   // 행 간격
+    const val CARD_COLS = 5
+    const val CARD_ROWS_VISIBLE = 5  // 한 화면에 보이는 행 수
+
+    /** 격자에서 `col`(0~4) `row`(0~4) 칸의 중심. 화면에 보이는 행 기준이다. */
+    fun cardAt(col: Int, row: Int): IntArray =
+        intArrayOf(CARD_COL0 + CARD_COL_PITCH * col, CARD_ROW0 + CARD_ROW_PITCH * row)
+
+    val ROSTER_EQUIP  = intArrayOf(1290, 822)    // 프리셋 탭 줄 오른쪽 초록 [편성]
+    val ROSTER_FILTER = intArrayOf(78, 2660)     // [골라보기]
+    val ROSTER_AUTO   = intArrayOf(1355, 2650)   // [자동 편성]
+    val TAB_COOKIE    = intArrayOf(228, 2836)    // 하단 서브탭 '쿠키'
+    val TAB_PET       = intArrayOf(712, 2836)    // '펫'
+    val TAB_DEX       = intArrayOf(1195, 2836)   // '도감'
+
+    // 격자 스크롤: 배경이 (23,71,85) 인 영역 안에서만 끈다.
+    val GRID_SWIPE_X  = 720
+    const val GRID_TOP = 1000
+    const val GRID_BOTTOM = 2480
+
+    /**
+     * 쿠키 **상세 화면**인가? 이름 띠 좌우의 **주황 넘김 버튼 두 개**로 판정한다.
+     * 실측: ◀ 중심 (63,1792) · ▶ 중심 (1375,1793), 둘 다 `(255,173,1)` 계열.
+     * 둘 다 있어야 참 — 한쪽만 보는 판정은 배경 주황에 걸린다.
+     */
+    val DETAIL_PREV = intArrayOf(63, 1792)
+    val DETAIL_NEXT = intArrayOf(1375, 1793)
+
+    fun atCookieDetail(b: Bitmap): Boolean {
+        for (pt in arrayOf(DETAIL_PREV, DETAIL_NEXT)) {
+            var hit = 0
+            for (dx in intArrayOf(-20, 0, 20)) for (dy in intArrayOf(-12, 0, 12)) {
+                val c = px(b, pt[0] + dx, pt[1] + dy)
+                if (Color.red(c) > 160 && Color.green(c) < 190 && Color.blue(c) < 75 &&
+                    Color.red(c) - Color.blue(c) > 110) hit++
+            }
+            if (hit < 4) return false
+        }
+        return true
+    }
+
+    /**
+     * 상세 화면에서 **쿠키 이름**이 찍히는 자리. 실측 '바람궁수 쿠키' = x 436~770, y 1780~1900.
+     * 왼쪽의 `TSSR Legendary` 배지(x ~250~400)를 피해 **x 420 부터** 자른다 —
+     * 안 그러면 등급 글자가 이름에 섞여 들어온다.
+     */
+    val NAME_CROP = intArrayOf(420, 1770, 780, 130)   // x, y, w, h
+
     // ── 오븐(oven.ps1) ──
     val OVEN_AUTO   = intArrayOf(516, 2840)          // 오븐 왼쪽 'Auto' 버튼
     val OVEN_GO     = intArrayOf(713, 2815)          // '자동 열기'의 [시작] 과 '자동 열기 결과'의 [정리 하기] 가 같은 자리다
