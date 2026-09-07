@@ -133,7 +133,7 @@ class SettingsActivity : ListActivity() {
 
         // ── 점검 ──
         root.addView(sectionHeader("점검"))
-        root.addView(text("잘 안 될 때만 쓰면 돼요. 넷 다 게임을 진행시키지 않아요.",
+        root.addView(text("잘 안 될 때만 쓰면 돼요. 다섯 다 게임을 진행시키지 않아요.",
             13f, t.label3).apply { setPadding(dp(22), 0, dp(22), dp(8)) })
         val gChk = group()
         gChk.addView(row("화면 점검", subtitle = "게임을 띄워 좌표와 판정값을 재요") {
@@ -141,6 +141,8 @@ class SettingsActivity : ListActivity() {
         })
         gChk.addView(separator())
         gChk.addView(row("탭 점검", subtitle = "탭이 게임에 먹히는지 봐요") { tapTest() })
+        gChk.addView(separator())
+        gChk.addView(row("글자 읽기 점검", subtitle = "지금 게임 화면의 한글을 읽어 봐요") { textTest() })
         gChk.addView(separator())
         gChk.addView(row("진단 보내기", value = "글", subtitle = "기기 정보와 최근 기록") { sendDiag() })
         gChk.addView(separator())
@@ -215,6 +217,44 @@ class SettingsActivity : ListActivity() {
      *
      * 폰에서도 같은 걸 찍어 나란히 놓으면 좌표가 맞는지 바로 보인다.
      */
+    /**
+     * 지금 게임 화면의 **한글**을 읽어 기록에 남긴다. (덱 이름 배치 기능을 위한 준비 점검)
+     *
+     * ⚠️ 기본 인식기는 **라틴 전용이라 한글을 아예 못 읽는다.** 그래서 한글 인식기를 따로 붙였는데,
+     *    게임 장식 폰트를 실제로 읽어 내는지는 **기기에서 봐야만** 안다 —
+     *    PC 봇은 Windows 내장 OCR 로 게임 글자를 끝내 못 읽었다("터치해서 계속" → `EÆ16HÆ`).
+     *
+     * 화면을 가로 띠 여섯 개로 잘라 각각 읽는다. 어디에 어떤 글자가 있는지까지 같이 보려는 것이다
+     * (편성 화면에서 쿠키 이름이 어느 높이에 찍히는지 이걸로 잡는다).
+     */
+    private fun textTest() {
+        if (CaptureService.instance == null) { Bot.log("화면 읽기를 먼저 켜 주세요"); return }
+
+        val gi = GameApp.launchIntent(this)
+        if (gi == null) { Bot.log("게임을 찾지 못했어요 - '게임 앱'에서 골라 주세요"); pickGame(); return }
+        gi.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(gi)
+        Toast.makeText(this, "읽고 싶은 화면을 열어 두세요 — 5초 뒤에 읽어요", Toast.LENGTH_LONG).show()
+
+        Thread {
+            Bot.log("── 글자 읽기 점검 (한글) ──")
+            Runner.sleep(5000)
+            val b = Runner.shot()
+            if (b == null) { Bot.log("화면을 읽지 못했어요"); return@Thread }
+            var got = 0
+            var y = 0
+            while (y < 3120) {
+                val t = Ocr.readKorean(b, 0, y, 1440, 520, 2)
+                    ?.replace(Regex("\\s*\n\\s*"), " / ")?.trim()
+                if (t.isNullOrBlank()) Bot.log("y" + y + "~" + (y + 520) + ": (없음)")
+                else { got++; Bot.log("y" + y + "~" + (y + 520) + ": " + t.take(200)) }
+                y += 520
+            }
+            if (got == 0) Bot.log("→ 한 줄도 못 읽었어요. 게임 폰트를 OCR 이 못 읽는 것일 수 있어요")
+            else Bot.log("→ " + got + "개 띠에서 글자를 읽었어요. 이 값을 그대로 보내 주세요")
+        }.start()
+    }
+
     private fun tapTest() {
         if (CaptureService.instance == null) { Bot.log("화면 읽기를 먼저 켜 주세요"); return }
         if (!TapService.isReady) { Bot.log("접근성을 먼저 켜 주세요"); return }

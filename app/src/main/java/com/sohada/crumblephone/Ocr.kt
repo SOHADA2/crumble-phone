@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.TimeUnit
 
@@ -13,6 +14,44 @@ import java.util.concurrent.TimeUnit
  */
 object Ocr {
     private val client by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+
+    /**
+     * 한글 인식기. **기본 인식기(`DEFAULT_OPTIONS`)는 라틴 전용이라 한글을 아예 못 읽는다** —
+     * 쿠키 이름을 읽으려다 이걸 모르면 "OCR이 또 안 되네"로 잘못 결론 내리기 쉽다.
+     * 모델은 Play 서비스가 들고 있어 APK 가 커지지 않는다(숫자용 라틴 인식기와 같은 방식).
+     */
+    private val korean by lazy { TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build()) }
+
+    /**
+     * 설계 좌표로 자른 조각을 만든다. 못 자르면 `null`.
+     * `scale` 을 주면 그만큼 확대한다 — 작은 글자는 확대하면 인식률이 크게 오른다
+     * (PC 사전 빌더도 4배 확대해서야 이름을 읽어 냈다).
+     */
+    private fun crop(bmp: Bitmap, dx: Int, dy: Int, dw: Int, dh: Int, scale: Int = 1): Bitmap? {
+        val x = Coords.x(dx); val y = Coords.y(dy)
+        val w = Coords.x(dx + dw) - x; val h = Coords.y(dy + dh) - y
+        if (x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > bmp.width || y + h > bmp.height) return null
+        val c = Bitmap.createBitmap(bmp, x, y, w, h)
+        if (scale <= 1) return c
+        val big = Bitmap.createScaledBitmap(c, w * scale, h * scale, true)
+        if (big !== c) c.recycle()
+        return big
+    }
+
+    /**
+     * 잘라낸 영역의 **한글**을 그대로 읽는다(쿠키 이름 등). 못 읽으면 `null`.
+     * ⚠️ 결과를 기다리므로 반드시 작업 스레드에서 부를 것.
+     */
+    fun readKorean(bmp: Bitmap, dx: Int, dy: Int, dw: Int, dh: Int, scale: Int = 3): String? {
+        val c = crop(bmp, dx, dy, dw, dh, scale) ?: return null
+        return try {
+            Tasks.await(korean.process(InputImage.fromBitmap(c, 0)), 8, TimeUnit.SECONDS).text
+        } catch (e: Exception) {
+            null
+        } finally {
+            c.recycle()
+        }
+    }
 
     /**
      * 잘라낸 영역에서 숫자만 뽑는다. 자릿수가 모자라면 오독으로 보고 버린다.

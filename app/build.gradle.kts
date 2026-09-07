@@ -48,4 +48,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     // 글자 읽기: 모델을 APK 에 넣지 않는 Play 서비스판(앱 크기를 키우지 않는다)
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
+    // 쿠키 이름은 한글이라 별도 인식기가 필요하다. 기본(라틴) 인식기는 한글을 아예 못 읽는다.
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-korean:16.0.1")
 }
