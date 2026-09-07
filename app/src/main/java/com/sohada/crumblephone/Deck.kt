@@ -135,6 +135,9 @@ object Deck {
         //   조금씩(2행) 밀어 겹침을 넉넉히 남긴다.
         val rowsOut = ArrayList<Array<FloatArray>>()   // 한 칸이 5장인 '행'들
         var pages = 0
+        // 목록 끝에서는 마지막 줄이 화면 아래에 걸쳐 멈춘다. 좁은 기준으로 거르면 그 줄을
+        // 영영 못 잡아 사전이 통째로 실패한다(실기 70/73). 막히면 한 번은 넓게 본다.
+        var loose = false
         while (rowsOut.size * Screen.CARD_COLS < names.size && Runner.running && pages < 40) {
             // ★ **움직임이 멈춘 뒤에 찍는다.** 스크롤 직후에 찍으면 그 줄 지문이 흐려져서,
             //   나중에 그 다섯 마리를 영영 못 알아본다.
@@ -148,7 +151,7 @@ object Deck {
             // ★ **온전히 보이는 줄만** 쓴다. 위/아래로 반쯤 잘린 줄에서 지문을 뜨면
             //   카드가 아니라 잘린 화면을 뜨게 되고, 그 다섯 마리를 영영 못 알아본다.
             //   실기에서 매번 '연속 5개 = 한 줄' 이 안 됐던 게 이것이다(매번 다른 줄).
-            var stars = Screen.findStarRows(shot).filter { Screen.starUsable(it) }.toIntArray()
+            var stars = Screen.findStarRows(shot).filter { Screen.starUsable(it, loose) }.toIntArray()
             if (stars.isEmpty()) { fail("온전히 보이는 카드 줄이 없어요"); return }
             var first = stars.map { sy -> Array(Screen.CARD_COLS) { Screen.cardThumb(shot!!, it, sy) } }
 
@@ -157,7 +160,7 @@ object Deck {
                 if (!Runner.running) return
                 Runner.sleep(400)
                 val again2 = Runner.shot() ?: break
-                val st2 = Screen.findStarRows(again2).filter { Screen.starUsable(it) }.toIntArray()
+                val st2 = Screen.findStarRows(again2).filter { Screen.starUsable(it, loose) }.toIntArray()
                 if (st2.size == stars.size && st2.indices.all { Math.abs(st2[it] - stars[it]) <= 4 }) {
                     val second = st2.map { sy -> Array(Screen.CARD_COLS) { Screen.cardThumb(again2, it, sy) } }
                     // '같은 카드인가'(0.90)보다 **훨씬 엄하게** 본다 — 여기서 보려는 건
@@ -196,7 +199,14 @@ object Deck {
                 Runner.set("사전을 못 끝냈어요", "스크롤이 너무 많이 내려갔어요 · 다시 해 주세요")
                 return
             }
-            if (appended == 0 && pages > 0) { Bot.log("더 내려갈 데가 없어요"); break }
+            if (appended == 0 && pages > 0) {
+                if (!loose && rowsOut.size * Screen.CARD_COLS < names.size) {
+                    loose = true
+                    Bot.log("  더 내려갈 데가 없어요 - 마지막 줄을 넓게 다시 봅니다")
+                    continue
+                }
+                Bot.log("더 내려갈 데가 없어요"); break
+            }
             Bot.log("  한 쪽: 새 줄 " + appended + "개 (누적 " + rowsOut.size * Screen.CARD_COLS + ")")
             pageDown(); pages++
         }
@@ -205,17 +215,22 @@ object Deck {
         for (row in rowsOut) for (t in row) { if (thumbs.size < names.size) thumbs.add(t) }
         Runner.tap(Screen.DECK_CANCEL, 2000)
 
-        if (thumbs.size < names.size) {
-            Bot.log("그림을 " + thumbs.size + "장밖에 못 모았어요 (이름 " + names.size + ")")
-            Runner.set("사전을 못 끝냈어요", "그림 " + thumbs.size + " / 이름 " + names.size); return
-        }
-        Prefs.deckDict = names.joinToString("\n")
+        // ★ 모자라도 **통째로 버리지 않는다.** 이름과 그림은 앞에서부터 짝이 맞으므로,
+        //   모은 만큼은 그대로 쓸 수 있다. 실기에서 마지막 한 줄 때문에 사전 전체가
+        //   날아가 예전 사전을 계속 쓰게 됐다 — 그게 더 나쁘다.
+        val keep = if (thumbs.size < names.size) {
+            Bot.log("⚠ 그림을 " + thumbs.size + "장만 모았어요 (이름 " + names.size + ")")
+            Bot.log("  뒤쪽 " + (names.size - thumbs.size) + "마리는 사전에서 빠집니다")
+            names.take(thumbs.size)
+        } else names
+        if (keep.size < 5) { Runner.set("사전을 못 끝냈어요", "그림 " + thumbs.size + "장뿐이에요"); return }
+        Prefs.deckDict = keep.joinToString("\n")
         DeckDict.saveThumbs(ctx, thumbs)
         // 사전이 바뀌면 지난 점검 결과는 낡은 것이다. 지워서 '아직 점검 안 함'으로 되돌린다.
         Prefs.deckUnseen = ""; Prefs.deckChecked = false
-        Runner.set("쿠키 사전 완성", names.size.toString() + "마리 (이름+그림)")
-        Runner.lastResult = "쿠키 사전 " + names.size + "마리"
-        Bot.log("── 쿠키 사전 " + names.size + "마리 (이름+그림) 저장 ──")
+        Runner.set("쿠키 사전 완성", keep.size.toString() + "마리 (이름+그림)")
+        Runner.lastResult = "쿠키 사전 " + keep.size + "마리"
+        Bot.log("── 쿠키 사전 " + keep.size + "마리 (이름+그림) 저장 ──")
     }
 
     // ══════════════════════════════════════════════════════════

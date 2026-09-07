@@ -860,8 +860,11 @@ object Screen {
                 if (Color.red(c) > 200 && Color.green(c) > 150 && Color.blue(c) < 110) n++
                 x += 4
             }
-            if (n >= 100) { if (start < 0) start = y }
-            else if (start >= 0) { if (y - start >= 10) cand.add((start + y - 2) / 2); start = -1 }
+            // 문턱을 낮게 둔다 — **마지막 줄은 카드가 3개뿐**이라 별이 5칸 줄의 60% 밖에 안 된다.
+            // 가짜 띠(금색 경험치 바)는 아래 317 격자 검사가 걸러 주므로 낮춰도 안전하다.
+            // 실측: 5칸 줄 186~227개 · 3칸이면 110~136개 · 문턱 60 이면 둘 다 잡고 격자는 그대로 5개.
+            if (n >= 60) { if (start < 0) start = y }
+            else if (start >= 0) { if (y - start >= 8) cand.add((start + y - 2) / 2); start = -1 }
             y += 2
         }
         if (cand.isEmpty()) return IntArray(0)
@@ -892,9 +895,15 @@ object Screen {
      * **어떤 행이든 이 범위를 2번쯤 지나간다** — 건너뛴다고 놓치지 않는다.
      */
     const val STAR_SAFE_LO = 1300
-    const val STAR_SAFE_HI = 2720
+    const val STAR_SAFE_HI = 2760
 
-    fun starUsable(starY: Int) = starY in STAR_SAFE_LO..STAR_SAFE_HI
+    /**
+     * `loose` 는 **더 내려갈 데가 없을 때만** 쓴다.
+     * 목록 끝에서는 마지막 줄이 화면 아래쪽에 걸쳐 멈추는데, 좁은 기준으로 거르면
+     * 그 줄을 영영 못 잡는다 — 실기에서 70/73 에서 멈춘 게 이것이었다.
+     */
+    fun starUsable(starY: Int, loose: Boolean = false) =
+        if (loose) starY in 1150..2860 else starY in STAR_SAFE_LO..STAR_SAFE_HI
 
     /**
      * 칸을 **누를 자리**. 별줄에서 130 위 — 별(아래)과 배지(위) 사이의 그림 한복판이라
