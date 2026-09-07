@@ -932,6 +932,36 @@ object Screen {
     }
 
     /**
+     * 화면의 아무 네모나 지문으로 뜬다(설계 좌표). 카드용 `cardThumb` 와 같은 크기·형식이라
+     * `thumbScore` 로 바로 견줄 수 있다.
+     */
+    fun regionThumb(b: Bitmap, dx: Int, dy: Int, dw: Int, dh: Int): FloatArray {
+        val x0 = Coords.x(dx); val x1 = Coords.x(dx + dw)
+        val y0 = Coords.y(dy); val y1 = Coords.y(dy + dh)
+        val out = FloatArray(THUMB_W * THUMB_H)
+        val w = x1 - x0; val h = y1 - y0
+        if (w <= 0 || h <= 0) return out
+        var i = 0
+        for (ty in 0 until THUMB_H) {
+            val py = y0 + (ty * h) / THUMB_H + h / (2 * THUMB_H)
+            for (tx in 0 until THUMB_W) {
+                val px2 = x0 + (tx * w) / THUMB_W + w / (2 * THUMB_W)
+                val c = if (px2 in 0 until b.width && py in 0 until b.height) b.getPixel(px2, py) else 0
+                out[i++] = (Color.red(c) + Color.green(c) + Color.blue(c)) / 3f
+            }
+        }
+        return out
+    }
+
+    /**
+     * 쿠키 **상세 화면의 그림** 자리. `▶` 를 눌러 정말 다음 쿠키로 넘어갔는지를 이걸로 본다.
+     * 이름으로 판단하면 안 된다 — 못 읽었거나 두 쿠키 이름이 같게 읽히면 헷갈린다.
+     */
+    val DETAIL_ART = intArrayOf(300, 700, 840, 800)
+
+    fun detailSig(b: Bitmap): FloatArray = regionThumb(b, DETAIL_ART[0], DETAIL_ART[1], DETAIL_ART[2], DETAIL_ART[3])
+
+    /**
      * 두 지문이 얼마나 닮았나 (정규화 상호상관, -1~1).
      * 평균과 표준편차를 걷어내고 보므로 **밝기·대비가 달라도** 같은 그림이면 높게 나온다.
      */
