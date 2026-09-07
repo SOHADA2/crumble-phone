@@ -20,7 +20,7 @@ package com.sohada.crumblephone
 object Oven {
 
     private const val DONE_STRICT = 1.0    // 가동 중 완료 판정 문턱
-    private const val IDLE_QUIT_MS = 10_000L   // 이만큼 아무 변화가 없으면 한 싸이클이 끝난 것
+    private const val IDLE_QUIT_MS = 5_000L    // 한 싸이클은 끊김 없이 이어지므로 5초면 '끝났다'로 충분(예전 10초)
 
     /**
      * Auto 한 번이 얼마나 큰지는 **오븐 레벨마다 다르다**(1회에 5~50개).
@@ -153,22 +153,25 @@ object Oven {
      *    → **끈 뒤에 정말 꺼졌는지 확인하고, 아직 돌면 다시 끈다.**
      */
     private fun stopAuto() {
+        clearDialog()
+        clearPopups(3, 1500)
+
+        // ★ 켜져 있을 때만 누른다.
+        //   '1회에 여는 개수'만큼 열고 나면 **게임이 알아서 멈춘다**(사용자 확인: 보통 15개면 충분하고
+        //   20개짜리 한 싸이클이면 퀘스트가 바로 채워진다). 그래서 여기 도달했을 땐 대개 이미 꺼져 있다.
+        //   그 상태에서 누르면 '자동 열기' 패널이 열려 [시작]을 누르는 꼴이라 **오히려 켜진다**.
+        //   → 확인부터 하고, 꺼져 있으면 아무것도 누르지 않고 나간다. 빠르고 안전하다.
+        //   ※ 그러면 [정리 하기]를 못 누르지만, 장비가 꽉 차면 게임이 '자동 정리' 창을 띄우고
+        //     clearDialog 가 그걸 처리하므로 문제되지 않는다.
+        if (!autoRunning()) { Bot.log("  오븐: Auto 는 이미 꺼져 있어요 - 그대로 나갑니다"); return }
+
         for (t in 1..3) {
             Bot.log("  오븐: Auto 끄고 정리")
             clearDialog()
-            // 비교 팝업이 떠 있으면 Auto 패널이 제대로 안 열린다. 먼저 넘긴다.
-            for (k in 1..3) {
-                val s = Runner.shot() ?: break
-                if (!Screen.isOvenPopup(s)) break
-                Runner.tap(Screen.OUTSIDE, 1500)
-            }
+            clearPopups(3, 1500)                   // 팝업이 있으면 Auto 패널이 제대로 안 열린다
             Runner.tap(Screen.OVEN_AUTO, 2000)     // '자동 열기 결과' 패널
             Runner.tap(Screen.OVEN_GO, 2000)       // [정리 하기]
-            for (k in 1..2) {
-                val s = Runner.shot() ?: break
-                if (!Screen.isOvenPopup(s)) break
-                Runner.tap(Screen.OUTSIDE, 1000)
-            }
+            clearPopups(2, 1000)
             if (!Runner.running) return
             if (!autoRunning()) {
                 if (t > 1) Bot.log("  오븐: Auto 꺼진 것 확인 (" + t + "번째에)")
@@ -186,6 +189,14 @@ object Oven {
      * ⚠️ **줄어드는 건 세면 안 된다.** [정리 하기]는 쌓인 장비를 없애서 뱃지를 크게 **줄인다** —
      *    절대값으로 보면 '제대로 껐다'를 '아직 돈다'로 오판하고, 그 오판이 곧 **다시 켜기**다.
      */
+    private fun clearPopups(n: Int, waitMs: Long) {
+        for (k in 1..n) {
+            val s = Runner.shot() ?: return
+            if (!Screen.isOvenPopup(s)) return
+            Runner.tap(Screen.OUTSIDE, waitMs)
+        }
+    }
+
     private fun autoRunning(): Boolean {
         Runner.sleep(2000L)                 // 정리 연출이 끝나고 나서 재기 시작한다
         val a = Runner.shot() ?: return false
