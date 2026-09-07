@@ -184,7 +184,10 @@ object Deck {
                     if (sameRow(rowsOut[k], row)) { dup = true; break }
                     k--; checked++
                 }
-                if (!dup) { rowsOut.add(row); appended++ }
+                // 필요한 줄 수를 넘겨 담지 않는다 — 넘치면 어딘가 중복이 들어간 것이고,
+                // 그러면 이름과 그림의 짝이 밀린다.
+                val needRows = (names.size + Screen.CARD_COLS - 1) / Screen.CARD_COLS
+                if (!dup && rowsOut.size < needRows) { rowsOut.add(row); appended++ }
             }
             Runner.set("쿠키 사전 만드는 중",
                 "그림 " + (rowsOut.size * Screen.CARD_COLS).coerceAtMost(names.size) + "/" + names.size)
@@ -501,7 +504,12 @@ object Deck {
         Runner.sleep(900)
     }
 
-    /** 두 행이 얼마나 닮았나. 다섯 칸 지문의 평균. */
+    /**
+     * 두 행이 얼마나 닮았나. 다섯 칸 지문의 평균.
+     *
+     * ⚠️ **세로로 몇 px만 어긋나도 점수가 확 떨어진다**(실측: 4px → 0.76).
+     *    자리를 격자로 고정해 뒀지만, 그래도 남는 흔들림은 `sameRow` 쪽에서 받아 준다.
+     */
     private fun rowScore(a: Array<FloatArray>, b: Array<FloatArray>): Float {
         if (a.size != b.size || a.isEmpty()) return -1f
         var sum = 0f

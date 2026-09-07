@@ -899,6 +899,457 @@ object Screen {
             }
         }
         if (anchor < 0) return IntArray(0)
+
+        // ── ②-a 기준점을 **평균으로 다듬는다** ──
+        // ⚠️ 여기서 '가장 센 자리'를 찍으면 안 된다. 촬영마다 몇 px씩 흔들리는데,
+        //    실측상 **4px만 어긋나도** 같은 줄의 지문 점수가 0.76 으로 떨어져 '다른 줄'로 보인다.
+        //    그러면 같은 줄이 두 번 담겨 이름과 그림의 짝이 통째로 밀린다(실기 16줄/15줄).
+        //    그래서 고른 위상의 띠들에서 **격자 위치를 평균 내어** 항상 같은 자리가 나오게 한다.
+        // ⚠️ **격자점끼리 평균 내면 안 된다** — 개수가 짝수면 격자 사이(1874.5 같은 곳)에 떨어진다.
+        //    기준 하나를 잡고 **어긋난 양(잔차)만 평균** 내야 항상 격자 위에 있다.
+        var a0 = Int.MAX_VALUE
+        for (a in hs) {
+            var d = (a - anchor) % STAR_PITCH
+            if (d < 0) d += STAR_PITCH
+            if (d > STAR_PITCH / 2) d -= STAR_PITCH
+            if (Math.abs(d) <= 10 && a < a0) a0 = a
+        }
+        if (a0 == Int.MAX_VALUE) a0 = anchor
+        var rs = 0
+        var num = 0
+        for (a in hs) {
+            var d = (a - a0) % STAR_PITCH
+            if (d < 0) d += STAR_PITCH
+            if (d > STAR_PITCH / 2) d -= STAR_PITCH
+            if (Math.abs(d) <= 10) { rs += d; num++ }
+        }
+        val base = a0 + (if (num > 0) Math.round(rs.toFloat() / num) else 0)
+
+        // ── ② 그 위상으로 317 간격 자리를 만들어 **있나만** 본다 ──
+        // 자리는 격자에서 계산한 값을 그대로 쓴다(흔들리지 않게).
+        // 문턱을 낮게 봐도 안전하다 — 자리가 이미 정해져 있어 가짜가 낄 수 없다.
+        // 낮게 보는 이유는 **마지막 줄이 카드 3개뿐**이라 별이 60% 밖에 안 되기 때문이다.
+        val out = ArrayList<Int>()
+        for (k in -8..12) {
+            val y = base + STAR_PITCH * k
+            if (y < y0 + 20 || y > y1 - 20) continue
+            var bn = 0
+            var yy = y - 12
+            while (yy <= y + 12) {
+                val idx = (yy - y0) / 2
+                if (idx in cnt.indices && cnt[idx] > bn) bn = cnt[idx]
+                yy += 2
+            }
+            if (bn >= 50) out.add(y)
+        }
+        return out.toIntArray()
+    }
+
+    private val ROW_SIG_X = intArrayOf(260, 420, 580, 740, 900, 1060, 1220, 1330)
+
+    /**
+     * 목록의 **한 줄**을 알아보는 지문. 던전마다 그림 색이 뚜렷이 달라 이걸로 충분하다.
+     * (제목 글자는 게임 폰트라 OCR 이 안 된다 — 여러 번 확인된 사실이다.)
+     */
+    fun dailyRowSig(b: Bitmap, cy: Int): IntArray {
+        val out = IntArray(ROW_SIG_X.size * 3)
+        for ((i, x) in ROW_SIG_X.withIndex()) {
+            val c = px(b, x, cy)
+            out[i * 3] = Color.red(c); out[i * 3 + 1] = Color.green(c); out[i * 3 + 2] = Color.blue(c)
+        }
+        return out
+    }
+
+    /** 같은 줄인가? 애니메이션·반짝임이 있어 넉넉히 본다. */
+    fun dailyRowMatch(a: IntArray, b: IntArray): Boolean {
+        if (a.size != b.size) return false
+        var diff = 0
+        for (i in a.indices) diff += Math.abs(a[i] - b[i])
+        return diff < a.size * 26
+    }
+
+    /**
+     * 던전 **안** 화면인가? (도전하기·소탕·자동 편성이 있는 화면)
+     *
+     * ⚠️ 하단 서브탭 줄(도전 던전 / 일일 던전 / 쟁탈전)은 **목록 화면과 던전 화면에 똑같이 있다.**
+     *    실측으로 확인했다 — 두 화면 모두 (720,2840)=(3,167,179), (1150,2840)=(0,0,0).
+     *    그래서 그 줄만으로는 둘을 절대 못 가른다. 던전 화면에만 있는 **하단 버튼 줄**을 본다:
+     *    소탕(밝은 청록) + 자동 편성(초록). 실측 던전 (82,193,204)/(6,199,142) · 목록 (18,54,66)/(53,149,163).
+     */
+    fun atDailyEntry(b: Bitmap): Boolean {
+        val sweep = px(b, 210, 2600)
+        if (!(Color.red(sweep) < 130 && Color.green(sweep) > 150 && Color.blue(sweep) > 160)) return false
+        val auto = px(b, 1325, 2600)
+        return Color.red(auto) < 90 && Color.green(auto) > 160 && Color.blue(auto) in 100..190
+    }
+
+    // ── 빨간 점(레드 닷) ──
+    // 게임은 '지금 할 수 있는 것' 우상단에 빨간 점을 찍는다. 색 임계로 애매하게 가르는 것보다
+    // 이게 훨씬 깨끗한 신호다. 세 던전을 대조해 확인했다:
+    //   경험치 0/4 → 도전 닷 없음 · 보상 닷 없음
+    //   반죽  3/4 → 도전 닷 **있음** · 보상 닷 **있음**
+    //   코인  4/4 → 도전 닷 **있음** · 보상 닷 없음
+    val DOT_CHALLENGE = intArrayOf(942, 2567)    // 도전하기 버튼 우상단 (실측 x922~964, y2546~2588)
+    val DOT_ACHIEVE   = intArrayOf(1410, 1547)   // 달성 보상 우상단 (실측 x1392~1428, y1528~1566)
+
+    /**
+     * 그 자리에 빨간 점이 있나?
+     * 한 점만 보면 반짝임·안티에일리어싱에 흔들리므로 **주변을 격자로 훑어** 여러 점을 본다.
+     */
+    fun hasRedDot(b: Bitmap, pt: IntArray): Boolean {
+        var hit = 0
+        var dx = -12
+        while (dx <= 12) {
+            var dy = -12
+            while (dy <= 12) {
+                val c = px(b, pt[0] + dx, pt[1] + dy)
+                if (Color.red(c) > 190 && Color.green(c) < 90 && Color.blue(c) in 40..130) hit++
+                dy += 6
+            }
+            dx += 6
+        }
+        return hit >= 8
+    }
+
+    /**
+     * **달성 보상 창**이 떠 있나?
+     *
+     * 창의 짙은 청록 테두리를 좌우 두 점으로 본다. 실측(y=1150):
+     * 창 `(0,94,114)` / 던전 화면 `(236,107,6)` / 목록 `(226,136,22)` — 따뜻한 색과 확실히 갈린다.
+     */
+    fun isDailyAchieve(b: Bitmap): Boolean {
+        for (x in intArrayOf(150, 1300)) {
+            val c = px(b, x, 1150)
+            if (!(Color.red(c) < 50 && Color.green(c) in 60..130 && Color.blue(c) in 90..160)) return false
+        }
+        return true
+    }
+
+    /**
+     * 도전하기 왼쪽에 **[▶ SKIP]** 배지가 있나? = 광고를 보면 도전 횟수를 더 받을 수 있다.
+     *
+     * ⚠️ 이 버튼에는 **빨간 점이 안 붙는다.** 그래서 닷으로는 못 찾고 배지 자체를 봐야 한다.
+     * 실측(x500~576, y2630~2696 의 붉은 비율): 배지 있음 **54%** / 없음(던전 셋 모두) **0%**.
+     */
+    fun hasDailyAdSkip(b: Bitmap): Boolean {
+        var hit = 0; var tot = 0
+        var y = 2630
+        while (y <= 2696) {
+            var x = 500
+            while (x <= 576) {
+                val c = px(b, x, y); tot++
+                if (Color.red(c) > 170 && Color.green(c) < 95 && Color.blue(c) < 80) hit++
+                x += 4
+            }
+            y += 4
+        }
+        return tot > 0 && hit * 100 / tot >= 25
+    }
+
+    // 도전하기 버튼의 **바탕색**을 보는 자리. 글자(흰색)를 피해 왼쪽 안쪽을 고른다.
+    private val DAILY_CH_PT = intArrayOf(560, 2600)
+
+    // 실측 확인: 열쇠 4/4 일 때 (560,2600) = (253,149,0) 주황 / 0/4 일 때 (20,174,184) 청록.
+    // 숫자 `4/4` 는 **남은 수 / 최대**다(다 쓰면 0/4 가 된다).
+    /** 도전하기가 주황 = 아직 남은 열쇠가 있다. */
+    fun dailyChallengeOpen(b: Bitmap): Boolean {
+        val c = px(b, DAILY_CH_PT[0], DAILY_CH_PT[1])
+        return Color.red(c) > 200 && Color.green(c) in 90..190 && Color.blue(c) < 80
+    }
+
+    /** 도전하기가 청록 = 열쇠를 다 썼다. 이 던전은 끝. */
+    fun dailyChallengeDone(b: Bitmap): Boolean {
+        val c = px(b, DAILY_CH_PT[0], DAILY_CH_PT[1])
+        return Color.red(c) < 80 && Color.green(c) > 140 && Color.blue(c) > 150
+    }
+
+    /** '연속 도전' 이 켜져 있나(노란 체크)? 켜져 있으면 꺼야 한다 — 아래 Daily 주석 참고. */
+    fun dailyContChecked(b: Bitmap): Boolean {
+        val c = px(b, DAILY_CONT_CHK[0], DAILY_CONT_CHK[1])
+        return Color.red(c) > 230 && Color.green(c) > 200 && Color.blue(c) < 120
+    }
+
+    private val DAILY_SIG_PTS = arrayOf(
+        intArrayOf(160, 600), intArrayOf(280, 600), intArrayOf(400, 600),
+        intArrayOf(160, 700), intArrayOf(280, 700), intArrayOf(400, 700),
+        intArrayOf(160, 800), intArrayOf(280, 800), intArrayOf(400, 800)
+    )
+
+    /**
+     * 어느 던전인지 알아보는 지문 — 좌상단 '보상 아이콘' 박스를 뜬다.
+     * 던전마다 색이 매우 뚜렷하고(XP별·코인·반죽·젬·크리스탈) 애니메이션이 없어 안정적이다.
+     * 제목 글자로 하면 폰트를 못 읽어서(OCR 불가) 안 된다.
+     */
+    fun dailySig(b: Bitmap): IntArray {
+        val out = IntArray(DAILY_SIG_PTS.size * 3)
+        for ((i, p) in DAILY_SIG_PTS.withIndex()) {
+            val c = px(b, p[0], p[1])
+            out[i * 3] = Color.red(c); out[i * 3 + 1] = Color.green(c); out[i * 3 + 2] = Color.blue(c)
+        }
+        return out
+    }
+
+    /** 같은 던전인가? 실측: 같은 던전 ~225 / 다른 던전 1400+ → 700 이 안전한 경계. */
+    fun dailySigMatch(a: IntArray, b: IntArray): Boolean {
+        if (a.size != b.size) return false
+        var diff = 0
+        for (i in a.indices) diff += Math.abs(a[i] - b[i])
+        return diff < 700
+    }
+
+    // ── 아레나(arena.ps1) ──  좌표는 시즌2 기준 실측
+    val ARENA_BANNER   = intArrayOf(710, 1295)       // 던전 화면의 아레나 배너
+    val ARENA_GO       = intArrayOf(1092, 2519)      // '도전하러 가기' → 로비
+    val ARENA_CHALLENGE = intArrayOf(710, 2480)      // 도전하기
+    val ARENA_NEXT     = intArrayOf(1225, 2480)      // 다음 상대
+    val ARENA_CONTINUE = intArrayOf(720, 2790)       // 결과/승급 '화면을 탭하세요'
+    val ARENA_CENTER   = intArrayOf(720, 1560)       // 승급·강등 축하 화면(아무 곳이나 탭)
+
+    // OCR 로 읽을 자리 (x, y, w, h)
+    val A_MY   = intArrayOf(305, 1415, 165, 58)      // 내 전투력(흰 글씨)
+    val A_OPP  = intArrayOf(750, 565, 200, 60)       // 상대 전투력(금 글씨)
+    val A_CUR  = intArrayOf(600, 40, 150, 52)        // 아레나 재화(상단)
+    val A_PTS  = intArrayOf(590, 1415, 140, 58)      // 내 아레나 점수
+
+    /**
+     * '300 크리스탈로 상대 새로고침 하시겠습니까?' 팝업이 떠 있나?
+     * 오른쪽 [확인]이 주황이면 참. 정상 로비는 그 자리가 청록이라 확실히 갈린다.
+     * 이게 뜨면 점수도 못 읽고 갇히므로, 만나면 **왼쪽 [취소]** 를 누르고 지금 상대와 그냥 도전한다.
+     * (오른쪽 주황은 크리스탈 300 을 쓴다 — 어느 창에서든 절대 누르지 않는다.)
+     */
+    fun isArenaRefreshDialog(b: Bitmap): Boolean {
+        for (p in arrayOf(intArrayOf(1040, 2750), intArrayOf(1120, 2830))) {
+            val c = px(b, p[0], p[1])
+            if (!(Color.red(c) > 220 && Color.blue(c) < 90)) return false
+        }
+        return true
+    }
+
+    // ── 보스 소환 / 쿠키 조합(프리셋) ──
+    // 소환 배너는 **고정 좌표를 두지 않는다**. 화면에서 찾아 누른다(아래 `bossSummonPoint`).
+    // 예전의 `BOSS_SUMMON=(710,406)` 은 PC 좌표라 폰에서는 배너 위 허공이었다.
+    // 보스전 '우측 돌진' 조이스틱. 전장 빈 곳을 누른 채 오른쪽으로 끌면 캐릭터가 그쪽으로 달려든다.
+    val CHARGE_FROM = intArrayOf(500, 1500)
+    val CHARGE_TO   = intArrayOf(1300, 1500)
+
+    /**
+     * 상단 **'보스 소환' 빨간 배너**를 찾는다. = **아직 이 보스를 못 깼다**.
+     * 깨서 스테이지가 밀리면 그 자리는 하늘·배경이 되어 빨강이 아니다 — 승패를 이걸로 가른다.
+     *
+     * ⚠️ 전투 **중**에도 배너는 사라진다(PC 봇이 여기서 세 번 틀렸다). 소환 직후에 보면 안 되고,
+     *    전투가 끝날 만큼 기다렸다가 봐야 한다.
+     *
+     * ⚠️ 예전엔 PC 봇의 두 점 `(562,380)`·`(620,410)` 을 그대로 봤는데,
+     *    **폰에서 그 자리는 배너가 아니다.** 폰은 게임이 상태표시줄 아래에서 시작해
+     *    같은 UI 가 150px 쯤 내려와 있다(스테이지 바 실측 y 500~610).
+     *    그래서 배너가 떠 있어도 판정이 한 번도 안 걸렸고, **퀘스트가 보스에 진입하지 못했다.**
+     *    `PRESET_TABS` 와 똑같은 사고다 — **PC 좌표를 폰에서 다시 재지 않고 쓴 것.**
+     *
+     * 그래서 고정 좌표를 버리고 **띠를 찾는다**: 스테이지 바 근처를 훑어
+     * **가로로 길게 이어진 빨강**이 있으면 배너다. 배너는 폭이 넓고, 배경 빨강(용암 등)은 끊긴다.
+     *
+     * **실측 (전체 해상도 스크린샷 20장 · 배너 1 / 배너 없음 19)**
+     *
+     * | | 가장 긴 연속 빨강 | 띠 높이 |
+     * |---|---|---|
+     * | 배너 있음 | **320px** | **116px** |
+     * | 배너 없음 (19장 최대) | 156px | 76px |
+     *
+     * 두 신호가 다 갈라져서 **둘 다** 본다(하나가 이펙트에 흔들려도 나머지가 받아 준다).
+     * 좌표를 안 믿고 **찾아서** 누르니, 기종마다 UI 가 몇십 px 밀려도 그대로 맞는다.
+     */
+    private const val BANNER_MIN_RUN  = 230   // 320 과 156 사이
+    private const val BANNER_MIN_BAND = 90    // 116 과 76 사이
+
+    /**
+     * 느슨한 기준. '탐색도 실패했으니 스테이지 클리어형이 맞다'고 거의 확신할 때만 쓴다
+     * (이펙트가 배너를 조금 덮은 경우). **그래도 배너 없는 19장(최대 156px/76px)보다는 위**여야 한다 —
+     * 안 그러면 배너가 없는데 엉뚱한 데를 누른다.
+     */
+    private const val BANNER_LOOSE_RUN  = 180
+    private const val BANNER_LOOSE_BAND = 60
+
+    /**
+     * 훑은 결과 `[가장 긴 연속 빨강(px), 띠의 세로 중심 y, 띠 높이(px)]`. 진단 줄에도 그대로 쓴다.
+     *
+     * 누를 자리로 **가장 긴 줄이 아니라 띠의 가운데**를 준다. 가장 긴 줄은 글자('보스 소환')가
+     * 빨강을 끊지 않는 **배너 위쪽 가장자리**라, 거기를 누르면 테두리에서 14px 밖에 안 떨어진다.
+     * 실측에서 가장 긴 줄은 y=484, 배너 실제 범위는 y 470~588 → 가운데 **528** 이 안전하다.
+     */
+    fun bannerScan(b: Bitmap): IntArray {
+        val runs = IntArray((660 - 440) / 4 + 1)
+        var bestI = -1
+        var bestRun = 0
+        var i = 0
+        var y = 440
+        while (y <= 660) {
+            var run = 0
+            var mx = 0
+            var x = 380
+            while (x <= 1080) {
+                val c = px(b, x, y)
+                if (Color.red(c) > 190 && Color.green(c) < 120 && Color.blue(c) < 95) {
+                    run += 2; if (run > mx) mx = run
+                } else run = 0
+                x += 2
+            }
+            runs[i] = mx
+            if (mx > bestRun) { bestRun = mx; bestI = i }
+            i++; y += 4
+        }
+        if (bestI < 0) return intArrayOf(0, -1, 0)
+
+        // 가장 긴 줄에서 위아래로 '아직 빨간 줄'이 이어지는 데까지 넓혀 띠의 높이를 잰다.
+        val th = Math.max(60, bestRun / 4)
+        var top = bestI
+        while (top - 1 >= 0 && runs[top - 1] >= th) top--
+        var bot = bestI
+        while (bot + 1 < runs.size && runs[bot + 1] >= th) bot++
+        val topY = 440 + top * 4
+        val botY = 440 + bot * 4
+        return intArrayOf(bestRun, (topY + botY) / 2, botY - topY + 4)
+    }
+
+    /** 배너의 세로 중심. 없으면 -1. */
+    fun findBossBanner(b: Bitmap, loose: Boolean = false): Int {
+        val s = bannerScan(b)
+        val minRun  = if (loose) BANNER_LOOSE_RUN  else BANNER_MIN_RUN
+        val minBand = if (loose) BANNER_LOOSE_BAND else BANNER_MIN_BAND
+        return if (s[0] >= minRun && s[2] >= minBand) s[1] else -1
+    }
+
+    /** 지금 보스에 막혀 있나? = 상단 빨간 배너가 있나. */
+    fun hasBossBanner(b: Bitmap, loose: Boolean = false): Boolean = findBossBanner(b, loose) >= 0
+
+    /**
+     * 배너를 누를 자리. 배너는 가로 가운데에 있으므로 x 는 화면 중앙을 쓰고,
+     * y 는 **찾은 띠의 가운데**를 쓴다. 못 찾으면 `null` — 그때는 아무것도 누르지 않는다.
+     */
+    fun bossSummonPoint(b: Bitmap, loose: Boolean = false): IntArray? {
+        val y = findBossBanner(b, loose)
+        return if (y < 0) null else intArrayOf(720, y)
+    }
+
+    // ── 하단 나브 ──
+    val NAV_COOKIE  = intArrayOf(70, 2972)           // 하단 좌측 '쿠키' 탭 → 편성 화면
+    val NAV_BATTLE  = intArrayOf(718, 2972)          // 하단 '전투/홈' 탭 → 메인 전투로 복귀
+
+    /**
+     * 쿠키 편성 화면의 프리셋 1~5 탭. **2026-09-07 실기 스크린샷에서 다시 쟀다.**
+     *
+     * ⚠️ 옛 값 `y=698` 은 **PC 봇 좌표를 그대로 복사한 것**인데 폰에서는 그 자리가
+     *    편성 화면 위쪽 **팀 진열대 배경**(198,151,203)이었다. 눌러도 조합이 안 바뀌고
+     *    **쿠키 상세 화면이 열려** 봇이 거기서 길을 잃었다(실기 확인).
+     *    x 는 우연히 맞았고 **y 만 122px 위**였다 — 그래서 더 늦게 들켰다.
+     *
+     * 실측: y **820** · x **74 / 191 / 308 / 425 / 543**
+     * (선택된 탭은 노랑 `(255,246,71)`, 나머지는 청록 `(80,187,193)`)
+     */
+    val PRESET_TABS = arrayOf(
+        intArrayOf(74, 820), intArrayOf(191, 820), intArrayOf(308, 820),
+        intArrayOf(425, 820), intArrayOf(543, 820)
+    )
+
+    /**
+     * 쿠키 **편성 화면**인가? 프리셋 탭 다섯 자리가 청록(비선택) 또는 노랑(선택)이면 참.
+     * 조합을 바꾸기 전에 이걸 확인한다 — **화면을 안 보고 좌표를 누르지 않는다**는 원칙 그대로.
+     */
+    fun atCookieRoster(b: Bitmap): Boolean = tabsLookRight(b, PRESET_TABS)
+
+    // ══════════════════════════════════════════════════════════
+    //  쿠키 편성 화면 — 덱(조합) 구성용. 2026-09-07 실기 스크린샷에서 전부 실측.
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * 소유 쿠키 **격자**. 5열이고 위아래로 스크롤된다.
+     *
+     * ## 기준을 '별(★) 줄'로 잡는 이유
+     * 카드 사이에 배경 틈이 **없어서** 색으로는 칸을 못 가른다. 그런데 카드마다 별 줄이 있고
+     * 그게 **아주 규칙적**이라(실측 간격 317, 편차 1px) 이걸 자로 쓴다.
+     *
+     * ## 화면이 두 가지다 — 별 줄의 시작 높이가 다르다
+     * | | 첫 별줄 y | 간격 |
+     * |---|---|---|
+     * | 그냥 보는 편성 화면 | **1196** | 317 |
+     * | [편성] 누른 편집 모드 | **1399** | 317 |
+     *
+     * 편집 모드는 위쪽 팀 진열대가 커지면서 격자가 **203px 내려간다.**
+     * 모드를 안 보고 한 벌만 쓰면 통째로 어긋난다.
+     *
+     * 열은 카드 테두리(어두운 세로선)로 쟀다 — 경계 60·326·588·850·1110·1364 → 중심 193 + 261n.
+     */
+    const val CARD_COL0 = 193        // 1열 중심 x
+    const val CARD_COL_PITCH = 261   // 열 간격
+    const val CARD_COLS = 5
+    const val STAR_PITCH = 317        // 행 간격 (실측 편차 1px)
+    const val CARD_ROWS_VISIBLE = 5
+    // 참고 실측 첫 별줄: 그냥 보기 1196 · 편집 모드 1399.
+    // **고정값으로 쓰지 말 것** — 스크롤하면 어긋난다. `findStarRows` 로 매번 찾는다.
+
+    /**
+     * 지금 화면에 **실제로 보이는 별줄들의 y**. 위에서 아래 순서.
+     *
+     * ## 왜 고정값을 못 쓰나
+     * 스크롤이 **정확히 몇 행씩 움직이지 않는다.** 스와이프 1480px 는 1480/317 ≈ 4.67행이라
+     * 한 쪽 넘길 때마다 어긋난다. `1196 + 317n` 같은 고정 표를 쓰면 스크롤한 뒤부터 전부 빗나간다.
+     * 화면이 두 가지(그냥 보기 / 편집)라 시작점도 다르다(1196 vs 1399).
+     *
+     * ## 어떻게 찾나
+     * 노란 별이 가로로 길게 늘어선 줄을 찾는다. 다만 별 아래 **금색 경험치 바**도 같이 걸리므로,
+     * **간격 317 의 격자에 가장 많이 들어맞는 줄만** 남긴다(가짜는 격자에서 벗어난다).
+     * 실측 3장 전부 **후보 7~9개 → 진짜 5개**를 정확히 골라냈다.
+     */
+    fun findStarRows(b: Bitmap): IntArray {
+        // 줄마다 노란 점을 한 번만 센다.
+        val y0 = 950
+        val y1 = 2950
+        val cnt = IntArray((y1 - y0) / 2 + 1)
+        for (i in cnt.indices) {
+            val y = y0 + i * 2
+            var n = 0
+            var x = 60
+            while (x <= 1400) {
+                val c = px(b, x, y)
+                if (Color.red(c) > 200 && Color.green(c) > 150 && Color.blue(c) < 110) n++
+                x += 4
+            }
+            cnt[i] = n
+        }
+
+        // ── ① **높은 문턱으로 '위상'만 정한다** ──
+        // 별 아래 **금색 경험치 바**가 별줄에서 딱 63px 아래에 있다. 문턱을 낮추면 그것도
+        // 317 간격으로 줄줄이 잡혀 **가짜 위상**이 되고, 진짜 줄이 4줄만 보이는 쪽에서는
+        // 표가 같아져 가짜가 이긴다 — 실기에서 지문이 통째로 어긋난 게 이것이었다.
+        // 높은 문턱(120)에서는 경험치 바가 아예 안 뜨므로 위상을 안전하게 고를 수 있다.
+        var bestCount = 0
+        var bestTotal = 0
+        var anchor = -1
+        val hs = ArrayList<Int>()   // 띠 중심
+        val hp = ArrayList<Int>()   // 그 띠의 최대치
+        var st = -1
+        var peak = 0
+        for (i in cnt.indices) {
+            if (cnt[i] >= 120) { if (st < 0) { st = i; peak = cnt[i] }; if (cnt[i] > peak) peak = cnt[i] }
+            else if (st >= 0) {
+                if (i - st >= 4) { hs.add(y0 + (st + i - 1)); hp.add(peak) }
+                st = -1
+            }
+        }
+        if (hs.isEmpty()) return IntArray(0)
+        for (a in hs) {
+            var c2 = 0
+            var t2 = 0
+            for (k in hs.indices) {
+                var d = (hs[k] - a) % STAR_PITCH
+                if (d < 0) d += STAR_PITCH
+                if (d > STAR_PITCH / 2) d -= STAR_PITCH
+                if (Math.abs(d) <= 10) { c2++; t2 += hp[k] }
+            }
+            if (c2 > bestCount || (c2 == bestCount && t2 > bestTotal)) {
+                bestCount = c2; bestTotal = t2; anchor = a
+            }
+        }
+        if (anchor < 0) return IntArray(0)
         // 고른 위상 중 **가장 위쪽** 을 기준점으로
         for (a in hs) {
             var d = (a - anchor) % STAR_PITCH
