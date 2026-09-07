@@ -245,9 +245,13 @@ object Deck {
                 var taps = 0
                 var again = true
                 var newHere = 0
+                // 이 쪽에서 **방금 바꿔 확인까지 끝낸** 쿠키. 다시 건드리지 않는다.
+                // 목록이 다시 정렬되는 동안 '아직 안 들어갔다'로 잘못 읽고 되돌려 버린 적이 있다.
+                val justDone = HashSet<Int>()
                 while (again && taps < PAGE_TAPS && Runner.running) {
                     again = false
-                    val shot = Runner.shot()
+                    // 방금 무언가 눌렀다면 목록이 다시 정렬되며 움직인다. 멈출 때까지 기다린다.
+                    val shot = settle()
                     if (shot == null || !Screen.atDeckEdit(shot)) { fail("편집 모드를 벗어났어요"); return }
                     // ★ 별줄을 **찾아서** 행을 잡는다. 스크롤이 정확히 안 멈추므로 고정값을 쓰면 안 된다.
                     val stars = Screen.findStarRows(shot)
@@ -265,12 +269,13 @@ object Deck {
                             val who = DeckDict.identify(ctx, listOf(Screen.cardThumb(shot, c, sy)))
                             if (who < 0) { unknown++; continue }
                             if (seenIdx.add(who)) newHere++
+                            if (justDone.contains(who)) continue
                             val inTeam = Screen.cardInTeam(shot, c, sy)
                             val shouldBe = want.contains(who)
                             if (inTeam == shouldBe) continue
                             val label = DeckDict.names.getOrElse(who) { "?" }
-                            Runner.tap(Screen.cardAt(c, sy), 800)
-                            val after = Runner.shot() ?: return
+                            Runner.tap(Screen.cardAt(c, sy), 500)
+                            val after = settle() ?: return
                             // **누른 자리가 정말 바뀌었나.** 안 바뀌면 더 두드리지 않는다.
                             if (Screen.cardInTeam(after, c, sy) == inTeam) {
                                 Bot.log("'" + label + "' 을 눌렀는데 편성이 안 바뀌었어요")
@@ -281,6 +286,7 @@ object Deck {
                                 return
                             }
                             if (shouldBe) { added++; Bot.log("  + " + label) } else { removed++; Bot.log("  − " + label) }
+                            justDone.add(who)
                             changes++; taps++
                             Runner.set("덱 " + n + "번 맞추는 중", "넣음 " + added + " · 뺌 " + removed)
                             // 한 번 누르면 **순서가 다시 바뀔 수 있으니** 이 쪽을 처음부터 다시 본다.
@@ -350,6 +356,29 @@ object Deck {
         var sum = 0f
         for (i in a.indices) sum += Screen.thumbScore(a[i], b[i])
         return sum / a.size > 0.90f
+    }
+
+    /**
+     * **화면이 잠잠해질 때까지** 기다렸다가 찍는다.
+     *
+     * 카드를 넣고 빼면 목록이 **다시 정렬되며 미끄러진다.** 그 도중에 찍으면 카드가 반쯤 움직인
+     * 자리에 있어서, 그림은 맞게 읽혀도 **편성중 배지 자리는 빗나간다.**
+     * 실기에서 `+ 다크초코 쿠키` 로 잘 넣어 놓고 바로 다음 바퀴에 '안 들어가 있다'고 읽어
+     * 다시 눌러 빼 버린 게 이것이었다.
+     */
+    private fun settle(maxMs: Long = 3000): android.graphics.Bitmap? {
+        var prev: FloatArray? = null
+        var waited = 0L
+        var shot = Runner.shot()
+        while (waited < maxMs && Runner.running) {
+            val cur = if (shot == null) return shot
+                      else Screen.regionThumb(shot, 60, 1100, 1320, 1500)
+            if (prev != null && Screen.thumbScore(prev, cur) > 0.995f) return shot
+            prev = cur
+            Runner.sleep(350); waited += 350
+            shot = Runner.shot()
+        }
+        return shot
     }
 
     private fun fail(msg: String) {
