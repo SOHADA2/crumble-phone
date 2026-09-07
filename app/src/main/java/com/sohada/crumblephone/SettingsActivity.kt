@@ -145,10 +145,17 @@ class SettingsActivity : ListActivity() {
         gChk.addView(row("글자 읽기 점검", subtitle = "지금 게임 화면의 한글을 읽어 봐요") { textTest() })
         gChk.addView(separator())
         gChk.addView(row("쿠키 사전 만들기",
-            value = if (Prefs.deckDictSize > 0) Prefs.deckDictSize.toString() + "마리" else "아직",
+            value = if (Prefs.deckDictSize > 0) "다시" else "아직",
             subtitle = "덱을 이름으로 채우려면 한 번은 읽어 둬야 해요") {
             Overlay.show(applicationContext); Deck.buildDict(applicationContext); finish()
         })
+        if (Prefs.deckDictSize > 0) {
+            gChk.addView(separator())
+            gChk.addView(row("쿠키 사전 보기", value = Prefs.deckDictSize.toString() + "마리",
+                subtitle = "잘못 읽힌 이름을 고칠 수 있어요") {
+                startActivity(android.content.Intent(this, DeckDictActivity::class.java))
+            })
+        }
         gChk.addView(separator())
         gChk.addView(row("진단 보내기", value = "글", subtitle = "기기 정보와 최근 기록") { sendDiag() })
         gChk.addView(separator())

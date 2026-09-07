@@ -56,6 +56,12 @@
             android:exported="false"
             android:label="설정" />
 
+        <!-- 쿠키 사전 보기·고치기 (설정 → 점검) -->
+        <activity
+            android:name=".DeckDictActivity"
+            android:exported="false"
+            android:label="쿠키 사전" />
+
         <!-- 첫 실행 안내 (켤 것을 하나씩만 보여 준다) -->
         <activity
             android:name=".SetupActivity"

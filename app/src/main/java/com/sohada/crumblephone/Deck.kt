@@ -141,6 +141,60 @@ object Deck {
     private fun clean(s: String): String {
         var t = s.replace(Regex("\\s+"), " ").trim()
         t = TAIL.replace(t, "쿠키")
+        // '…맛 쿠' 처럼 **끝 글자가 통째로 빠진** 것을 되살린다.
+        // 73마리 실측에서 `귀피맛 쿠`·`보더맛 쿠`·`명랑한 쿠` 셋이 이랬다.
+        if (t.endsWith(" 쿠") || (t.endsWith("쿠") && t.length > 2)) t += "키"
         return t
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  이름으로 찾기 — **OCR 을 완벽하게 만들려 하지 않는다**
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * 사전에서 `want` 와 가장 가까운 쿠키의 **순번(0부터)**. 못 찾으면 -1.
+     *
+     * ★ 요점: **OCR 오독을 고치는 대신, 찾을 때 너그럽게 본다.**
+     * 73마리 실측에서 `ㅋ` 이 `ㄱ` 으로 새는 오독이 규칙적으로 나왔다 —
+     * `밀키웨이`→`밀귀웨이` · `팬케이크`→`팬궤이크` · `치즈케이크`→`치즈궤이크` · `커피`→`귀피`.
+     * 이걸 공식 이름표로 되돌리려면 크럼블 전체 이름 목록이 있어야 하는데 그건 없다.
+     * 그런데 **편집거리로 보면 전부 1~2 차이**라, 사용자가 제대로 친 이름과 그냥 붙는다.
+     *
+     * 임계값은 PC 봇(`deck_dict.ps1` 의 `Match-Canon`)이 쓰던 **이름 길이의 34%** 를 그대로 쓴다.
+     */
+    fun findIndex(want: String): Int {
+        val names = Prefs.deckDict.split("\n").filter { it.isNotBlank() }
+        if (names.isEmpty()) return -1
+        val w = norm(want)
+        if (w.isEmpty()) return -1
+        names.forEachIndexed { i, n -> if (norm(n) == w) return i }   // 똑같으면 바로
+        var best = -1
+        var bd = Int.MAX_VALUE
+        names.forEachIndexed { i, n ->
+            val d = lev(w, norm(n))
+            if (d < bd) { bd = d; best = i }
+        }
+        val limit = Math.max(1, (w.length * 0.34).toInt())
+        return if (bd <= limit) best else -1
+    }
+
+    /** 띄어쓰기와 한글 아닌 글자를 걷어낸다. 비교는 이 모양끼리 한다. */
+    private fun norm(s: String) = s.replace(Regex("[^가-힣]"), "")
+
+    /** 편집거리. 두 줄만 들고 도는 표준 방식이라 73개쯤은 순식간이다. */
+    private fun lev(a: String, b: String): Int {
+        if (a.isEmpty()) return b.length
+        if (b.isEmpty()) return a.length
+        var prev = IntArray(b.length + 1) { it }
+        val cur = IntArray(b.length + 1)
+        for (i in 1..a.length) {
+            cur[0] = i
+            for (j in 1..b.length) {
+                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+                cur[j] = minOf(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+            }
+            prev = cur.copyOf()
+        }
+        return prev[b.length]
     }
 }
