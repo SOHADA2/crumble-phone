@@ -145,8 +145,11 @@ object Deck {
             //   같은 줄을 두 번 떠서 서로 닮았을 때만 담으면, 움직이는 중에 뜬 건 자동으로 걸러진다.
             var shot = settle()
             if (shot == null || !Screen.atDeckEdit(shot)) { fail("편집 모드를 벗어났어요"); return }
-            var stars = Screen.findStarRows(shot)
-            if (stars.isEmpty()) { fail("카드 줄을 못 찾았어요"); return }
+            // ★ **온전히 보이는 줄만** 쓴다. 위/아래로 반쯤 잘린 줄에서 지문을 뜨면
+            //   카드가 아니라 잘린 화면을 뜨게 되고, 그 다섯 마리를 영영 못 알아본다.
+            //   실기에서 매번 '연속 5개 = 한 줄' 이 안 됐던 게 이것이다(매번 다른 줄).
+            var stars = Screen.findStarRows(shot).filter { Screen.starUsable(it) }.toIntArray()
+            if (stars.isEmpty()) { fail("온전히 보이는 카드 줄이 없어요"); return }
             var first = stars.map { sy -> Array(Screen.CARD_COLS) { Screen.cardThumb(shot!!, it, sy) } }
 
             var steady = false
@@ -154,7 +157,7 @@ object Deck {
                 if (!Runner.running) return
                 Runner.sleep(400)
                 val again2 = Runner.shot() ?: break
-                val st2 = Screen.findStarRows(again2)
+                val st2 = Screen.findStarRows(again2).filter { Screen.starUsable(it) }.toIntArray()
                 if (st2.size == stars.size && st2.indices.all { Math.abs(st2[it] - stars[it]) <= 4 }) {
                     val second = st2.map { sy -> Array(Screen.CARD_COLS) { Screen.cardThumb(again2, it, sy) } }
                     // '같은 카드인가'(0.90)보다 **훨씬 엄하게** 본다 — 여기서 보려는 건
@@ -186,7 +189,8 @@ object Deck {
             // ⚠️ **겹치는 행이 하나는 있어야** 이어 붙인 게 맞다고 할 수 있다.
             //   한 쪽이 통째로 새것이면 사이가 빈 것일 수 있다 — 그러면 이름과 그림의 짝이
             //   조용히 밀린다. 그 상태로 만드느니 멈추고 알린다.
-            if (pages > 0 && appended >= stars.size && stars.size >= Screen.CARD_ROWS_VISIBLE) {
+            // (잘린 줄을 걸러내면 한 쪽에 보통 4줄이라, 5줄 기준으로 두면 이 검사가 죽는다)
+            if (pages > 0 && appended >= stars.size && stars.size >= 2) {
                 Bot.log("겹치는 줄이 없어요 (" + appended + "줄 전부 새것) - 사이가 빌 수 있어 멈춥니다")
                 Runner.tap(Screen.DECK_CANCEL, 2000)
                 Runner.set("사전을 못 끝냈어요", "스크롤이 너무 많이 내려갔어요 · 다시 해 주세요")
@@ -258,8 +262,8 @@ object Deck {
         while (Runner.running && pages < 40) {
             val shot = settle()
             if (shot == null || !Screen.atDeckEdit(shot)) { fail("편집 모드를 벗어났어요"); return }
-            val stars = Screen.findStarRows(shot)
-            if (stars.isEmpty()) { fail("카드 줄을 못 찾았어요"); return }
+            val stars = Screen.findStarRows(shot).filter { Screen.starUsable(it) }
+            if (stars.isEmpty()) { fail("온전히 보이는 카드 줄이 없어요"); return }
             var newHere = 0
             for (sy in stars) for (c in 0 until Screen.CARD_COLS) {
                 cards++
@@ -363,8 +367,10 @@ object Deck {
                     val shot = settle()
                     if (shot == null || !Screen.atDeckEdit(shot)) { fail("편집 모드를 벗어났어요"); return }
                     // ★ 별줄을 **찾아서** 행을 잡는다. 스크롤이 정확히 안 멈추므로 고정값을 쓰면 안 된다.
-                    val stars = Screen.findStarRows(shot)
-                    if (stars.isEmpty()) { fail("카드 줄을 못 찾았어요"); return }
+                    // 잘린 줄은 건드리지 않는다 — 그림도 배지도 제대로 안 읽히고,
+                    // 누를 자리도 화면 밖일 수 있다. 다음 쪽에서 온전히 보일 때 다룬다.
+                    val stars = Screen.findStarRows(shot).filter { Screen.starUsable(it) }
+                    if (stars.isEmpty()) { fail("온전히 보이는 카드 줄이 없어요"); return }
                     // 첫 쪽에서 한 번만, 왜 알아보고 못 알아보는지를 로그에 남긴다.
                     if (round == 1 && pages == 0 && taps == 0 && !logged) {
                         logged = true
