@@ -431,6 +431,7 @@ object Screen {
     val DAILY_CHALLENGE   = intArrayOf(715, 2600)    // 도전하기!
     val DAILY_CONT_CHK    = intArrayOf(1078, 2645)   // 연속 도전 체크박스 (옛 값은 71px 위였다)
     val DAILY_PREV        = intArrayOf(64, 1400)     // ◀ 이전 던전 (쓰지 않는다, 기록용)
+    val DAILY_AD_SKIP     = intArrayOf(537, 2662)    // 도전하기 왼쪽의 붉은 [▶ SKIP] — 광고로 횟수 더 받기
     // 자동 편성 (1325,2600) · 편성하기 — **누르지 않는다.** 쿠키 편성 화면으로 빠진다.
     // ▶ 다음 던전 — **던전 화면 안**의 화살표다(목록 화면이 아니다).
     // ⚠️ 목록 화면에서 이 자리는 배너 한가운데라, 목록에 있는 동안 누르면 엉뚱한 던전이 열린다.
@@ -569,6 +570,27 @@ object Screen {
             if (!(Color.red(c) < 50 && Color.green(c) in 60..130 && Color.blue(c) in 90..160)) return false
         }
         return true
+    }
+
+    /**
+     * 도전하기 왼쪽에 **[▶ SKIP]** 배지가 있나? = 광고를 보면 도전 횟수를 더 받을 수 있다.
+     *
+     * ⚠️ 이 버튼에는 **빨간 점이 안 붙는다.** 그래서 닷으로는 못 찾고 배지 자체를 봐야 한다.
+     * 실측(x500~576, y2630~2696 의 붉은 비율): 배지 있음 **54%** / 없음(던전 셋 모두) **0%**.
+     */
+    fun hasDailyAdSkip(b: Bitmap): Boolean {
+        var hit = 0; var tot = 0
+        var y = 2630
+        while (y <= 2696) {
+            var x = 500
+            while (x <= 576) {
+                val c = px(b, x, y); tot++
+                if (Color.red(c) > 170 && Color.green(c) < 95 && Color.blue(c) < 80) hit++
+                x += 4
+            }
+            y += 4
+        }
+        return tot > 0 && hit * 100 / tot >= 25
     }
 
     // 도전하기 버튼의 **바탕색**을 보는 자리. 글자(흰색)를 피해 왼쪽 안쪽을 고른다.

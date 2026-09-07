@@ -54,6 +54,17 @@ object Prefs {
      * 봇이 이 값을 바꾸지는 않는다 — 한 싸이클이 얼마나 큰지 알아야 상한을 제대로 잡을 수 있어서다.
      * 오븐 레벨에 따라 고를 수 있는 값이 달라서 사용자가 직접 맞춘다.
      */
+    /**
+     * **광고 제거를 가지고 있나.** 켜면 일일 던전에서 `[▶ SKIP]` 을 눌러 도전 횟수를 더 받는다.
+     *
+     * ⚠️ 기본은 **꺼짐**이다. 광고 제거가 없는데 켜면 **진짜 광고가 재생된다** —
+     *    봇이 광고를 보고 앉아 있게 되므로, 켜는 건 사용자가 직접 정한다.
+     *    (봇은 눌러 본 뒤 던전 화면을 벗어나면 광고로 보고 빠져나온 다음, 그 실행에서는 다시 안 쓴다.)
+     */
+    var adFree: Boolean
+        get() = sp?.getBoolean("adFree", false) ?: false
+        set(v) { sp?.edit()?.putBoolean("adFree", v)?.apply() }
+
     val OVEN_CHOICES = intArrayOf(5, 10, 20, 30, 50)
     var ovenPerRun: Int
         get() = sp?.getInt("ovenPerRun", 20) ?: 20

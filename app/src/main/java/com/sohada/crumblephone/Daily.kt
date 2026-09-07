@@ -19,6 +19,9 @@ import kotlin.concurrent.thread
 object Daily {
 
     /** 일일 던전 목록은 위→아래 순서가 고정이라, 방문한 순서로 이름을 붙인다. */
+    /** [SKIP] 으로 횟수를 더 받는 최대 횟수(던전 하나당). 무한히 눌리지 않게 상한을 둔다. */
+    private const val AD_MAX = 3
+
     private val NAMES = arrayOf("경험치", "코인", "반죽", "연구석", "룬결정", "던전6", "던전7", "던전8")
     private fun nameOf(i: Int) = if (i in 1..NAMES.size) NAMES[i - 1] else "던전$i"
 
@@ -116,41 +119,36 @@ object Daily {
                 Runner.tap(Screen.DAILY_CONT_CHK, 1200)
             }
 
-            // ── 남은 열쇠를 **하나씩** 다 쓴다 ──
-            // 열쇠는 낱개로 남는다(상자·퀘스트로도 들어온다). 그래서 '4번'처럼 횟수를 박지 않고
-            // **도전하기 버튼 색**만 본다: 주황이면 아직 남았고, 청록이 되면 그 던전은 끝이다.
+            // ── 남은 열쇠를 다 쓰고, (광고 제거가 있으면) [SKIP] 으로 더 받아 또 쓴다 ──
             var fought = 0
-            var idle = 0
-            val deadline = System.currentTimeMillis() + 260_000
-            while (System.currentTimeMillis() < deadline && Runner.running) {
-                val s = Runner.shot()
-                if (s == null) { Runner.sleep(900); continue }
-                if (Screen.atDailyEntry(s)) {
-                    // 빨간 점이 없으면 **할 게 없는 것**이다. 게임이 직접 알려 주는 신호라
-                    // 색 임계보다 깨끗하다 — 다 쓴 던전은 여기서 즉시 끊긴다(기다리지 않는다).
-                    if (!Screen.hasRedDot(s, Screen.DOT_CHALLENGE)) break
-                    if (Screen.dailyChallengeDone(s)) break        // 청록 = 남은 열쇠 없음
-                    if (Screen.dailyChallengeOpen(s)) {            // 주황 = 아직 남음
-                        idle = 0
-                        fought++
-                        Runner.set("일일 던전 " + idx + "번째", name + " · " + fought + "번째 도전")
-                        Runner.setProgress(2, 4)
-                        Runner.tap(Screen.DAILY_CHALLENGE, 3000)
-                        continue
-                    }
-                    // 주황도 청록도 아니다 = 열쇠가 아예 없거나 화면이 넘어가는 중.
-                    idle++
-                    if (idle >= 5) {
-                        Bot.log("던전 " + idx + ": 도전할 수 없어요(열쇠 없음) - 다음 던전으로")
-                        break
-                    }
-                    Runner.sleep(1200); continue
+            var adUsed = 0
+            while (Runner.running) {
+                fought += runKeys(idx, name)
+                if (!Runner.running) break
+                if (!Prefs.adFree || adUsed >= AD_MAX) break
+                val s0 = Runner.shot() ?: break
+                if (!Screen.atDailyEntry(s0) || !Screen.hasDailyAdSkip(s0)) break
+                adUsed++
+                Runner.set("일일 던전 " + idx + "번째", name + " · 횟수 더 받는 중 (" + adUsed + ")")
+                Bot.log("던전 " + idx + ": [SKIP] 으로 도전 횟수를 더 받습니다 (" + adUsed + "/" + AD_MAX + ")")
+                Runner.tap(Screen.DAILY_AD_SKIP, 2500)
+                // ⚠️ 광고 제거가 없는데 설정이 켜져 있으면 **진짜 광고가 재생된다.**
+                //    던전 화면을 벗어나면 그걸로 보고 빠져나온 뒤, 이 실행에서는 다시 안 쓴다.
+                var back = false
+                for (k in 1..6) {
+                    if (Runner.shot()?.let { Screen.atDailyEntry(it) } == true) { back = true; break }
+                    Runner.sleep(1000)
                 }
-                idle = 0
-                Runner.status = "일일 던전 " + idx + "번째"
-                Runner.detail = name + " · 자동 전투 중"
-                Runner.setProgress(3, 4)
-                Runner.sleep(5000)
+                if (!back) {
+                    Bot.log("  화면을 벗어났어요 - 광고가 재생된 것 같습니다. [SKIP] 은 이번 실행에서 그만 씁니다")
+                    Bot.log("  ⚙ → '광고 제거 있음' 을 꺼 주세요")
+                    Prefs.adFree = false
+                    for (k in 1..4) {
+                        TapService.back(); Runner.sleep(1500)
+                        if (Runner.shot()?.let { Screen.atDailyEntry(it) } == true) break
+                    }
+                    break
+                }
             }
             if (fought > 0) battled++
             if (!Runner.running) break
@@ -217,6 +215,48 @@ object Daily {
         val head = if (battled == 0) "돌 수 있는 던전이 없었어요" else battled.toString() + "개 던전 진행함"
         if (Runner.running) Runner.set("일일 던전 끝", head) else Runner.set("멈췄어요", head)
         Runner.lastResult = if (results.isEmpty()) head else head + " — " + results.joinToString(" · ")
+    }
+
+    /**
+     * 남은 열쇠를 **하나씩 다 쓴다.** 몇 판 돌았는지 돌려준다.
+     *
+     * 열쇠는 낱개로 남는다(시간·상자·퀘스트로 들어온다). 그래서 '4번' 같은 횟수를 박지 않고
+     * **도전하기 버튼 색**과 **빨간 점**만 본다 — 주황/닷 있으면 남았고, 청록/닷 없으면 끝이다.
+     */
+    private fun runKeys(idx: Int, name: String): Int {
+        var fought = 0
+        var idle = 0
+        val deadline = System.currentTimeMillis() + 260_000
+        while (System.currentTimeMillis() < deadline && Runner.running) {
+            val s = Runner.shot()
+            if (s == null) { Runner.sleep(900); continue }
+            if (Screen.atDailyEntry(s)) {
+                // 빨간 점이 없으면 **할 게 없는 것**이다. 게임이 직접 알려 주는 신호라
+                // 색 임계보다 깨끗하다 — 다 쓴 던전은 여기서 즉시 끊긴다(기다리지 않는다).
+                if (!Screen.hasRedDot(s, Screen.DOT_CHALLENGE)) break
+                if (Screen.dailyChallengeDone(s)) break        // 청록 = 남은 열쇠 없음
+                if (Screen.dailyChallengeOpen(s)) {            // 주황 = 아직 남음
+                    idle = 0
+                    fought++
+                    Runner.set("일일 던전 " + idx + "번째", name + " · " + fought + "번째 도전")
+                    Runner.setProgress(2, 4)
+                    Runner.tap(Screen.DAILY_CHALLENGE, 3000)
+                    continue
+                }
+                idle++
+                if (idle >= 5) {
+                    Bot.log("던전 " + idx + ": 도전할 수 없어요(열쇠 없음)")
+                    break
+                }
+                Runner.sleep(1200); continue
+            }
+            idle = 0
+            Runner.status = "일일 던전 " + idx + "번째"
+            Runner.detail = name + " · 자동 전투 중"
+            Runner.setProgress(3, 4)
+            Runner.sleep(5000)
+        }
+        return fought
     }
 
     /**

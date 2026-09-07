@@ -92,7 +92,10 @@ class SettingsActivity : ListActivity() {
         // 봇이 '한 싸이클'이 얼마나 큰지 알고 상한을 제대로 잡는다.
         rowOven = row("오븐 1회 개수", value = Prefs.ovenPerRun.toString() + "개",
             subtitle = "게임의 '자동 열기 → 1회에 여는 개수'와 같게") { cycle(Prefs.OVEN_CHOICES, false) }
+        val (rAd, _) = switchRow("광고 제거 있음",
+            "일일 던전에서 [SKIP]으로 횟수를 더 받아요", Prefs.adFree) { Prefs.adFree = it }
         gRun.addView(rTest); gRun.addView(separator())
+        gRun.addView(rAd); gRun.addView(separator())
         gRun.addView(rowArena); gRun.addView(separator())
         gRun.addView(rowOven)
         root.addView(gRun)
