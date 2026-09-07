@@ -122,6 +122,150 @@ object Deck {
         Bot.log("── 쿠키 사전 " + names.size + "마리 저장 ──")
     }
 
+    // ══════════════════════════════════════════════════════════
+    //  덱 배치 — 이름 목록대로 프리셋 하나를 채운다
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * 프리셋 `n`(1~5)을 `wanted` 이름들로 채운다.
+     *
+     * ## 짐작으로 누르지 않는다
+     * 편집 모드에서 칸을 누르면 팀에 들어가고 다시 누르면 빠질 **것으로 보이지만**, 그건 아직
+     * 실기로 못 본 동작이다. 그래서 **누를 때마다 배지를 다시 읽어 정말 바뀌었는지 확인**한다
+     * (`Screen.cardInTeam`, 실측 25칸 전수 정답). 안 바뀌면 더 두드리지 않고 **바로 멈춘다** —
+     * 이 프로젝트가 여러 번 당한 '안 먹는 좌표를 계속 누르며 헤매기'를 여기서 막는다.
+     *
+     * ## 저장은 마지막에 한 번
+     * `dry` 면 [편성 저장] 대신 **주황 ✕ 로 취소**하고 나온다. 좌표가 맞는지 공짜로 보는 방법이다
+     * (PC 봇의 `-MaxFights 0` 과 같은 자리).
+     *
+     * @return 실제로 팀에 넣은 쿠키 수
+     */
+    fun applyPreset(ctx: Context, n: Int, dry: Boolean) {
+        if (!Runner.guard()) return
+        Runner.running = true; Runner.task = "덱 " + n + "번"
+        thread(name = "deckapply") {
+            try {
+                if (!Runner.bringGameToFront(ctx)) { Runner.set("시작 못 함", "게임을 찾지 못했어요"); return@thread }
+                val (ok, why) = Runner.resetToMain()
+                if (!ok) { Runner.failByReason(why); return@thread }
+                apply(n, dry)
+            }
+            catch (e: Exception) { Runner.set("오류", e.message ?: "알 수 없음") }
+            finally { Runner.running = false; Runner.task = "" }
+        }
+    }
+
+    private fun apply(n: Int, dry: Boolean) {
+        val wanted = Prefs.deckNames(n).split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+        if (wanted.isEmpty()) {
+            Runner.set("덱 " + n + "번이 비어 있어요", "쿠키 이름을 먼저 적어 주세요"); return
+        }
+
+        // 이름 → 목록 순번. 못 찾은 이름은 여기서 걸러 사용자에게 알린다.
+        val want = LinkedHashMap<Int, String>()
+        val missing = ArrayList<String>()
+        for (nm in wanted) {
+            val idx = findIndex(nm)
+            if (idx < 0) missing.add(nm) else want[idx] = nm
+        }
+        if (missing.isNotEmpty()) Bot.log("사전에서 못 찾은 이름: " + missing.joinToString(", "))
+        if (want.isEmpty()) {
+            Runner.set("이름을 하나도 못 찾았어요", "쿠키 사전을 먼저 만들어 주세요"); return
+        }
+
+        // ── 편성 화면 → 프리셋 n → 편집 모드 ──
+        Runner.set("덱 " + n + "번 맞추는 중", "편성 화면으로")
+        Runner.tap(Screen.NAV_COOKIE, 2500)
+        var b = Runner.shot()
+        if (b == null || !Screen.atCookieRoster(b)) { fail("편성 화면을 못 열었어요"); return }
+
+        Runner.tap(Screen.PRESET_TABS[n - 1], 1500)
+        Runner.tap(Screen.ROSTER_EQUIP, 2000)
+        b = Runner.shot()
+        if (b == null || !Screen.atDeckEdit(b)) { fail("편집 모드로 못 들어갔어요"); return }
+
+        // ── 맨 위로 ──
+        for (k in 1..6) {
+            if (!Runner.running) return
+            TapService.swipe(Screen.GRID_SWIPE_X, Screen.GRID_TOP, Screen.GRID_SWIPE_X, Screen.GRID_BOTTOM, 320)
+            Runner.sleep(400)
+        }
+        Runner.sleep(800)
+
+        // ── 한 행씩 내려가며 맞춘다 ──
+        // 목록 순번 = 행*5 + 열 이므로, 지금 화면 맨 위 행이 몇 번째인지만 알면 칸을 계산할 수 있다.
+        var topRow = 0
+        var added = 0
+        var removed = 0
+        val totalRows = (Prefs.deckDictSize + Screen.CARD_COLS - 1) / Screen.CARD_COLS
+        while (topRow < totalRows && Runner.running) {
+            val shot = Runner.shot()
+            if (shot == null || !Screen.atDeckEdit(shot)) { fail("편집 모드를 벗어났어요"); return }
+            // 한 장 찍어 **보이는 25칸을 한 번에** 읽는다. 칸마다 찍으면 한 페이지에 25장이라 너무 느리다.
+            val todo = ArrayList<IntArray>()   // {열, 화면행, 순번, 넣을까(1/0)}
+            for (r in 0 until Screen.CARD_ROWS_VISIBLE) {
+                val row = topRow + r
+                if (row >= totalRows) break
+                for (c in 0 until Screen.CARD_COLS) {
+                    val idx = row * Screen.CARD_COLS + c
+                    if (idx >= Prefs.deckDictSize) break
+                    val shouldBe = want.containsKey(idx)
+                    if (Screen.cardInTeam(shot, c, r) != shouldBe)
+                        todo.add(intArrayOf(c, r, idx, if (shouldBe) 1 else 0))
+                }
+            }
+            run {
+                for (job in todo) {
+                    if (!Runner.running) return
+                    val c = job[0]; val r = job[1]; val idx = job[2]; val shouldBe = job[3] == 1
+                    val row = topRow + r
+                    val label = want[idx] ?: ("순번 " + (idx + 1))
+                    Runner.tap(Screen.cardAt(c, r, true), 700)
+                    val after = Runner.shot()
+                    if (after == null) { fail("화면을 못 읽었어요"); return }
+                    if (Screen.cardInTeam(after, c, r) != shouldBe) {
+                        // 눌렀는데 안 바뀌었다 = 이 화면에서 탭이 팀을 바꾸는 동작이 아니거나
+                        // 자리 계산이 틀렸다. 계속 두드리지 않고 여기서 끝낸다.
+                        Bot.log("'" + label + "' 칸을 눌렀는데 편성이 안 바뀌었어요 (행" + row + " 열" + c + ")")
+                        Bot.log("  → 여기서 멈춥니다. 저장하지 않아요")
+                        leave(true)
+                        Runner.set("덱을 못 바꿨어요", "칸을 눌러도 편성이 안 바뀌어요")
+                        Runner.lastResult = "덱 " + n + "번: 탭이 편성을 안 바꿔요"
+                        return
+                    }
+                    if (shouldBe) { added++; Bot.log("  + " + label) } else { removed++; Bot.log("  − 뺐어요 (행" + row + " 열" + c + ")") }
+                    Runner.set("덱 " + n + "번 맞추는 중", "넣음 " + added + " · 뺌 " + removed)
+                }
+            }
+            topRow += Screen.CARD_ROWS_VISIBLE
+            if (topRow < totalRows) {
+                TapService.swipe(Screen.GRID_SWIPE_X, Screen.GRID_BOTTOM, Screen.GRID_SWIPE_X, Screen.GRID_TOP, 400)
+                Runner.sleep(900)
+            }
+        }
+
+        leave(dry)
+        if (dry) {
+            Runner.set("덱 " + n + "번 시험 끝", "넣음 " + added + " · 뺌 " + removed + " (저장 안 함)")
+            Runner.lastResult = "덱 " + n + "번 시험: 넣음 " + added + " · 뺌 " + removed
+        } else {
+            Runner.set("덱 " + n + "번 저장했어요", "넣음 " + added + " · 뺌 " + removed)
+            Runner.lastResult = "덱 " + n + "번: 넣음 " + added + " · 뺌 " + removed
+        }
+        if (missing.isNotEmpty()) Bot.log("못 찾은 이름 " + missing.size + "개는 건너뛰었어요")
+    }
+
+    /** 편집 모드에서 나간다. `cancel` 이면 저장하지 않는다. */
+    private fun leave(cancel: Boolean) {
+        Runner.tap(if (cancel) Screen.DECK_CANCEL else Screen.DECK_SAVE, 2000)
+    }
+
+    private fun fail(msg: String) {
+        Bot.log(msg + " - 멈춥니다")
+        Runner.set(msg, "화면이 예상과 달라요")
+    }
+
     /**
      * 상세 화면의 이름을 읽는다. 여러 줄로 잡히면 **'쿠키'로 끝나는 줄**을 고른다
      * (같은 띠에 속성·등급 글자가 같이 있을 수 있다).

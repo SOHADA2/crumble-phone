@@ -42,6 +42,18 @@ object Prefs {
     val deckDictSize: Int
         get() = deckDict.split("\n").count { it.isNotBlank() }
 
+    /**
+     * 덱 1~5번에 넣을 **쿠키 이름들**(한 줄에 하나). 봇이 편성 화면에서 찾아 넣는다.
+     *
+     * 이름이 조금 틀려도 된다 — 찾을 때 편집거리로 너그럽게 본다(`Deck.findIndex`).
+     */
+    fun deckNames(n: Int): String = sp?.getString("deck$n", "") ?: ""
+
+    fun setDeckNames(n: Int, v: String) { sp?.edit()?.putString("deck$n", v)?.apply() }
+
+    /** 덱 n 에 적어 둔 쿠키 수. */
+    fun deckCount(n: Int): Int = deckNames(n).split("\n").count { it.isNotBlank() }
+
     /** 아레나를 몇 판까지 할지. 재화가 먼저 떨어지면 거기서 스스로 끝난다. */
     var arenaFights: Int
         get() = sp?.getInt("arenaFights", 10) ?: 10

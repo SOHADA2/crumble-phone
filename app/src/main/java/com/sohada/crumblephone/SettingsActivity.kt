@@ -80,6 +80,13 @@ class SettingsActivity : ListActivity() {
         rowGame = row("게임 앱", subtitle = "스토어마다 이름이 달라서 여기서 골라요") { pickGame() }
         gGame.addView(rowGame); gGame.addView(separator())
         gGame.addView(row("게임 켜기", subtitle = "봇 없이 게임만 열어요") { launchGame() })
+        gGame.addView(separator())
+        // 보스전이 조합 1~5 를 하나씩 바꿔 가며 도전하므로 다섯 덱이 서로 달라야 의미가 있다.
+        gGame.addView(row("덱 구성",
+            value = (1..5).count { Prefs.deckCount(it) > 0 }.let { if (it > 0) it.toString() + "개" else "" },
+            subtitle = "덱 1~5에 넣을 쿠키를 이름으로 적어 둬요") {
+            startActivity(android.content.Intent(this, DeckSetupActivity::class.java))
+        })
         root.addView(gGame)
 
         // ── 자동 실행 ──

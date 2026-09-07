@@ -803,9 +803,85 @@ object Screen {
      * 쿠키 **편성 화면**인가? 프리셋 탭 다섯 자리가 청록(비선택) 또는 노랑(선택)이면 참.
      * 조합을 바꾸기 전에 이걸 확인한다 — **화면을 안 보고 좌표를 누르지 않는다**는 원칙 그대로.
      */
-    fun atCookieRoster(b: Bitmap): Boolean {
+    fun atCookieRoster(b: Bitmap): Boolean = tabsLookRight(b, PRESET_TABS)
+
+    // ══════════════════════════════════════════════════════════
+    //  쿠키 편성 화면 — 덱(조합) 구성용. 2026-09-07 실기 스크린샷에서 전부 실측.
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * 소유 쿠키 **격자**. 5열이고 위아래로 스크롤된다.
+     *
+     * ## 기준을 '별(★) 줄'로 잡는 이유
+     * 카드 사이에 배경 틈이 **없어서** 색으로는 칸을 못 가른다. 그런데 카드마다 별 줄이 있고
+     * 그게 **아주 규칙적**이라(실측 간격 317, 편차 1px) 이걸 자로 쓴다.
+     *
+     * ## 화면이 두 가지다 — 별 줄의 시작 높이가 다르다
+     * | | 첫 별줄 y | 간격 |
+     * |---|---|---|
+     * | 그냥 보는 편성 화면 | **1196** | 317 |
+     * | [편성] 누른 편집 모드 | **1399** | 317 |
+     *
+     * 편집 모드는 위쪽 팀 진열대가 커지면서 격자가 **203px 내려간다.**
+     * 모드를 안 보고 한 벌만 쓰면 통째로 어긋난다.
+     *
+     * 열은 카드 테두리(어두운 세로선)로 쟀다 — 경계 60·326·588·850·1110·1364 → 중심 193 + 261n.
+     */
+    const val CARD_COL0 = 193        // 1열 중심 x
+    const val CARD_COL_PITCH = 261   // 열 간격
+    const val CARD_COLS = 5
+    const val STAR_ROW_VIEW = 1196   // 그냥 보는 화면의 첫 별줄 y
+    const val STAR_ROW_EDIT = 1399   // 편집 모드의 첫 별줄 y
+    const val STAR_PITCH = 317
+    const val CARD_ROWS_VISIBLE = 5
+
+    /** `row` 행의 별줄 y. `edit` 는 [편성] 을 눌러 편집 모드인지. */
+    fun starRow(row: Int, edit: Boolean) =
+        (if (edit) STAR_ROW_EDIT else STAR_ROW_VIEW) + STAR_PITCH * row
+
+    /**
+     * 칸을 **누를 자리**. 별줄에서 130 위 — 별(아래)과 배지(위) 사이의 그림 한복판이라
+     * 행이 조금 어긋나도 카드를 벗어나지 않는다(카드 높이 약 290).
+     */
+    fun cardAt(col: Int, row: Int, edit: Boolean = false): IntArray =
+        intArrayOf(CARD_COL0 + CARD_COL_PITCH * col, starRow(row, edit) - 130)
+
+    /**
+     * **편집 모드에서** 그 칸이 지금 팀에 들어가 있나(우상단 초록 배지).
+     *
+     * 배지는 카드 **위 테두리에 걸쳐 튀어나온 탭**이라 별줄에서 268 위, 중심에서 90 오른쪽이다.
+     * 실측 스크린샷 한 장의 **25칸 전부(편성중 12 / 아님 13)를 맞혔다.**
+     *
+     * 이게 있어서 **탭이 먹혔는지 매번 확인**할 수 있다 — 눌렀는데 안 바뀌면 바로 멈춘다.
+     */
+    fun cardInTeam(b: Bitmap, col: Int, row: Int): Boolean {
+        val x = CARD_COL0 + CARD_COL_PITCH * col + 90
+        val y = starRow(row, true) - 268
         var hit = 0
-        for (p in PRESET_TABS) {
+        for (dx in intArrayOf(-16, -8, 0, 8, 16)) for (dy in intArrayOf(-8, 0, 8)) {
+            val c = px(b, x + dx, y + dy)
+            if (Color.green(c) > 200 && Color.red(c) < 90 && Color.blue(c) < 215 &&
+                Color.green(c) - Color.red(c) > 140) hit++
+        }
+        return hit >= 5
+    }
+
+    /**
+     * [편성] 을 눌러 들어간 **편집 모드**인가?
+     * 프리셋 1~5 탭이 **y=1010** 에 있으면 편집 모드다(그냥 보는 화면에서는 y=820).
+     * 실측: 편집 y1010 은 청록/노랑(탭), 그냥 보는 화면의 y1010 은 카드 그림이라 색이 제각각이다.
+     */
+    val PRESET_TABS_EDIT = arrayOf(
+        intArrayOf(74, 1010), intArrayOf(191, 1010), intArrayOf(308, 1010),
+        intArrayOf(425, 1010), intArrayOf(543, 1010)
+    )
+
+    fun atDeckEdit(b: Bitmap): Boolean = tabsLookRight(b, PRESET_TABS_EDIT)
+
+    /** 프리셋 탭 다섯 자리가 청록(비선택) 또는 노랑(선택)이면 참. */
+    private fun tabsLookRight(b: Bitmap, pts: Array<IntArray>): Boolean {
+        var hit = 0
+        for (p in pts) {
             var ok = false
             for (dx in intArrayOf(-14, 0, 14)) for (dy in intArrayOf(-14, 0, 14)) {
                 val c = px(b, p[0] + dx, p[1] + dy)
@@ -817,28 +893,9 @@ object Screen {
         return hit >= 4
     }
 
-    // ══════════════════════════════════════════════════════════
-    //  쿠키 편성 화면 — 덱(조합) 구성용. 2026-09-07 실기 스크린샷에서 전부 실측.
-    // ══════════════════════════════════════════════════════════
-
-    /**
-     * 소유 쿠키 **격자**. 5열이고 위아래로 스크롤된다. 아주 규칙적이라 좌표를 계산으로 낸다.
-     *
-     * 실측(1440x3120): 카드 사이에 배경 틈이 **없어서** 색으로는 열을 못 가른다.
-     * 대신 격자 전체 폭(x 37~1369)을 5등분했고, 각 카드의 `Lv.NN` 글자 오른쪽 끝이
-     * 계산한 중심 +113 과 ±16px 안에서 맞는 걸로 검증했다.
-     * 행은 **별(★) 줄**이 규칙적이라 그걸로 쟀다 — 별줄 중심 1196·1513·1830·2147·2465 (간격 317).
-     */
-    const val CARD_COL0 = 170        // 1열 중심 x
-    const val CARD_COL_PITCH = 266   // 열 간격 (1332/5 = 266.4)
-    const val CARD_ROW0 = 1112       // 1행 중심 y (별줄 −84)
-    const val CARD_ROW_PITCH = 317   // 행 간격
-    const val CARD_COLS = 5
-    const val CARD_ROWS_VISIBLE = 5  // 한 화면에 보이는 행 수
-
-    /** 격자에서 `col`(0~4) `row`(0~4) 칸의 중심. 화면에 보이는 행 기준이다. */
-    fun cardAt(col: Int, row: Int): IntArray =
-        intArrayOf(CARD_COL0 + CARD_COL_PITCH * col, CARD_ROW0 + CARD_ROW_PITCH * row)
+    // 편집 모드 하단 바 — 실측: 주황 취소 X 가 x610~808 · y2850~3051 (중심 709,2950)
+    val DECK_SAVE   = intArrayOf(1051, 2950)   // [편성 저장]
+    val DECK_CANCEL = intArrayOf(709, 2950)    // 가운데 주황 ✕ (저장 안 하고 나감)
 
     val ROSTER_EQUIP  = intArrayOf(1290, 822)    // 프리셋 탭 줄 오른쪽 초록 [편성]
     val ROSTER_FILTER = intArrayOf(78, 2660)     // [골라보기]
