@@ -24,8 +24,6 @@ object Deck {
     private const val PAGE_TAPS = 10
     /** 전체를 몇 바퀴까지 다시 훑을지(누를 때마다 순서가 바뀔 수 있으므로). */
     private const val ROUNDS = 3
-    /** 화면 세로 어긋남 보정 — 모드에 따라 30px쯤 밀린다(실측 34). */
-    private val SHIFTS = intArrayOf(-12, 0, 12)
 
     // ══════════════════════════════════════════════════════════
     //  ① 사전 만들기 — 이름 한 바퀴 + 지문 한 바퀴
@@ -125,21 +123,40 @@ object Deck {
         if (!atEdit()) { fail("편집 모드로 못 들어갔어요"); return }
         scrollTop()
 
-        val thumbs = ArrayList<FloatArray>()
-        var page = 0
-        while (thumbs.size < names.size && Runner.running && page < 30) {
+        // ★ 스크롤이 **정확히 몇 행씩 안 움직인다**(스와이프 1480px ≈ 4.67행).
+        //   그래서 '한 쪽에 25장' 으로 세면 두 번째 쪽부터 어긋난다 — 처음에 이걸로 틀렸다.
+        //   지금은 ① 보이는 별줄을 **찾아서** 행을 잡고 ② **겹치는 행을 알아봐서** 이어 붙인다.
+        //   조금씩(2행) 밀어 겹침을 넉넉히 남긴다.
+        val rowsOut = ArrayList<Array<FloatArray>>()   // 한 칸이 5장인 '행'들
+        var pages = 0
+        while (rowsOut.size * Screen.CARD_COLS < names.size && Runner.running && pages < 40) {
             val shot = Runner.shot()
             if (shot == null || !Screen.atDeckEdit(shot)) { fail("편집 모드를 벗어났어요"); return }
-            for (r in 0 until Screen.CARD_ROWS_VISIBLE) {
-                for (c in 0 until Screen.CARD_COLS) {
-                    if (thumbs.size >= names.size) break
-                    thumbs.add(Screen.cardThumb(shot, c, r, true))
+            val stars = Screen.findStarRows(shot)
+            if (stars.isEmpty()) { fail("카드 줄을 못 찾았어요"); return }
+
+            var appended = 0
+            for (sy in stars) {
+                val row = Array(Screen.CARD_COLS) { Screen.cardThumb(shot, it, sy) }
+                // 이미 담은 행인가? 뒤쪽 8행만 견줘 보면 충분하다.
+                var dup = false
+                var k = rowsOut.size - 1
+                var checked = 0
+                while (k >= 0 && checked < 8) {
+                    if (sameRow(rowsOut[k], row)) { dup = true; break }
+                    k--; checked++
                 }
+                if (!dup) { rowsOut.add(row); appended++ }
             }
-            Runner.set("쿠키 사전 만드는 중", "그림 " + thumbs.size + "/" + names.size)
-            Runner.setProgress(thumbs.size, names.size)
-            if (thumbs.size < names.size) { pageDown(); page++ }
+            Runner.set("쿠키 사전 만드는 중",
+                "그림 " + (rowsOut.size * Screen.CARD_COLS).coerceAtMost(names.size) + "/" + names.size)
+            Runner.setProgress(rowsOut.size * Screen.CARD_COLS, names.size)
+            if (appended == 0 && pages > 0) { Bot.log("더 내려갈 데가 없어요"); break }
+            pageDown(); pages++
         }
+
+        val thumbs = ArrayList<FloatArray>()
+        for (row in rowsOut) for (t in row) { if (thumbs.size < names.size) thumbs.add(t) }
         Runner.tap(Screen.DECK_CANCEL, 2000)
 
         if (thumbs.size < names.size) {
@@ -196,35 +213,47 @@ object Deck {
         if (!atEdit()) { fail("편집 모드로 못 들어갔어요"); return }
 
         var added = 0; var removed = 0; var unknown = 0
+        var logged = false
+        val seenIdx = HashSet<Int>()
+
         for (round in 1..ROUNDS) {
             if (!Runner.running) break
             scrollTop()
             var changes = 0
-            var page = 0
-            while (Runner.running && page < 30) {
+            var pages = 0
+            var dry2 = 0                       // 새로 본 카드가 없는 쪽이 연속 몇 번인지
+            while (Runner.running && pages < 40) {
                 var taps = 0
                 var again = true
-                var lastSeen = 0
+                var newHere = 0
                 while (again && taps < PAGE_TAPS && Runner.running) {
                     again = false
                     val shot = Runner.shot()
                     if (shot == null || !Screen.atDeckEdit(shot)) { fail("편집 모드를 벗어났어요"); return }
-                    lastSeen = 0
-                    outer@ for (r in 0 until Screen.CARD_ROWS_VISIBLE) {
+                    // ★ 별줄을 **찾아서** 행을 잡는다. 스크롤이 정확히 안 멈추므로 고정값을 쓰면 안 된다.
+                    val stars = Screen.findStarRows(shot)
+                    if (stars.isEmpty()) { fail("카드 줄을 못 찾았어요"); return }
+                    // 첫 쪽에서 한 번만, 왜 알아보고 못 알아보는지를 로그에 남긴다.
+                    if (round == 1 && pages == 0 && taps == 0 && !logged) {
+                        logged = true
+                        Bot.log("별줄 " + stars.size + "개: " + stars.joinToString(","))
+                        for (c in 0 until Screen.CARD_COLS)
+                            Bot.log("  1행 " + (c + 1) + "칸: " + DeckDict.describe(ctx, Screen.cardThumb(shot, c, stars[0])))
+                    }
+                    outer@ for (sy in stars) {
                         for (c in 0 until Screen.CARD_COLS) {
-                            // 이 칸이 **누구인지** 그림으로 알아낸다. 순번은 안 믿는다.
-                            val shots = SHIFTS.map { Screen.cardThumb(shot, c, r, true, it) }
-                            val who = DeckDict.identify(ctx, shots)
+                            // 이 칸이 **누구인지** 그림으로 알아낸다. 자리는 안 믿는다.
+                            val who = DeckDict.identify(ctx, listOf(Screen.cardThumb(shot, c, sy)))
                             if (who < 0) { unknown++; continue }
-                            lastSeen++
-                            val inTeam = Screen.cardInTeam(shot, c, r)
+                            if (seenIdx.add(who)) newHere++
+                            val inTeam = Screen.cardInTeam(shot, c, sy)
                             val shouldBe = want.contains(who)
                             if (inTeam == shouldBe) continue
                             val label = DeckDict.names.getOrElse(who) { "?" }
-                            Runner.tap(Screen.cardAt(c, r, true), 800)
+                            Runner.tap(Screen.cardAt(c, sy), 800)
                             val after = Runner.shot() ?: return
-                            // **누른 자리가 정말 바뀌었나**를 본다. 안 바뀌면 더 두드리지 않는다.
-                            if (Screen.cardInTeam(after, c, r) == inTeam) {
+                            // **누른 자리가 정말 바뀌었나.** 안 바뀌면 더 두드리지 않는다.
+                            if (Screen.cardInTeam(after, c, sy) == inTeam) {
                                 Bot.log("'" + label + "' 을 눌렀는데 편성이 안 바뀌었어요")
                                 Bot.log("  → 저장하지 않고 멈춥니다")
                                 Runner.tap(Screen.DECK_CANCEL, 2000)
@@ -241,13 +270,16 @@ object Deck {
                         }
                     }
                 }
-                if (lastSeen == 0) break      // 아는 카드가 하나도 없다 = 목록 끝
-                pageDown(); page++
+                // 새로 본 카드가 없는 쪽이 두 번 이어지면 끝까지 내려온 것이다.
+                if (newHere == 0) { dry2++; if (dry2 >= 2) break } else dry2 = 0
+                pageDown(); pages++
             }
-            Bot.log("── " + round + "바퀴: 바꾼 것 " + changes + "개")
-            if (changes == 0) break           // 더 바꿀 게 없다
+            Bot.log("── " + round + "바퀴: 알아본 쿠키 " + seenIdx.size + "마리 · 바꾼 것 " + changes + "개")
+            if (changes == 0) break
             if (round < ROUNDS) Bot.log("  순서가 바뀌었을 수 있어 한 바퀴 더 봅니다")
         }
+        if (seenIdx.size < DeckDict.names.size / 2)
+            Bot.log("⚠ 사전 " + DeckDict.names.size + "마리 중 " + seenIdx.size + "마리만 알아봤어요 - 사전을 다시 만들어 보세요")
 
         Runner.tap(if (dry) Screen.DECK_CANCEL else Screen.DECK_SAVE, 2200)
         val tail = if (dry) " (저장 안 함)" else ""
@@ -282,9 +314,23 @@ object Deck {
         Runner.sleep(700)
     }
 
+    /**
+     * 한 쪽 내린다. **두 행 남짓만** 민다 — 다섯 행이 보이므로 최소 두세 행이 겹쳐서,
+     * 겹침으로 이어 붙일 수 있다. 크게 밀면 겹침이 사라져 사이가 빈다.
+     * 느리게(700ms) 미는 것도 일부러다. 빨리 밀면 관성으로 더 내려간다.
+     */
     private fun pageDown() {
-        TapService.swipe(Screen.GRID_SWIPE_X, Screen.GRID_BOTTOM, Screen.GRID_SWIPE_X, Screen.GRID_TOP, 400)
+        val d = Screen.STAR_PITCH * 2
+        TapService.swipe(Screen.GRID_SWIPE_X, Screen.GRID_TOP + d, Screen.GRID_SWIPE_X, Screen.GRID_TOP, 700)
         Runner.sleep(900)
+    }
+
+    /** 두 행이 같은 카드들인가. 다섯 칸 지문의 평균이 충분히 닮았으면 같다고 본다. */
+    private fun sameRow(a: Array<FloatArray>, b: Array<FloatArray>): Boolean {
+        if (a.size != b.size) return false
+        var sum = 0f
+        for (i in a.indices) sum += Screen.thumbScore(a[i], b[i])
+        return sum / a.size > 0.90f
     }
 
     private fun fail(msg: String) {

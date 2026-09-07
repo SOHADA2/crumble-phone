@@ -830,21 +830,60 @@ object Screen {
     const val CARD_COL0 = 193        // 1열 중심 x
     const val CARD_COL_PITCH = 261   // 열 간격
     const val CARD_COLS = 5
-    const val STAR_ROW_VIEW = 1196   // 그냥 보는 화면의 첫 별줄 y
-    const val STAR_ROW_EDIT = 1399   // 편집 모드의 첫 별줄 y
-    const val STAR_PITCH = 317
+    const val STAR_PITCH = 317        // 행 간격 (실측 편차 1px)
     const val CARD_ROWS_VISIBLE = 5
+    // 참고 실측 첫 별줄: 그냥 보기 1196 · 편집 모드 1399.
+    // **고정값으로 쓰지 말 것** — 스크롤하면 어긋난다. `findStarRows` 로 매번 찾는다.
 
-    /** `row` 행의 별줄 y. `edit` 는 [편성] 을 눌러 편집 모드인지. */
-    fun starRow(row: Int, edit: Boolean) =
-        (if (edit) STAR_ROW_EDIT else STAR_ROW_VIEW) + STAR_PITCH * row
+    /**
+     * 지금 화면에 **실제로 보이는 별줄들의 y**. 위에서 아래 순서.
+     *
+     * ## 왜 고정값을 못 쓰나
+     * 스크롤이 **정확히 몇 행씩 움직이지 않는다.** 스와이프 1480px 는 1480/317 ≈ 4.67행이라
+     * 한 쪽 넘길 때마다 어긋난다. `1196 + 317n` 같은 고정 표를 쓰면 스크롤한 뒤부터 전부 빗나간다.
+     * 화면이 두 가지(그냥 보기 / 편집)라 시작점도 다르다(1196 vs 1399).
+     *
+     * ## 어떻게 찾나
+     * 노란 별이 가로로 길게 늘어선 줄을 찾는다. 다만 별 아래 **금색 경험치 바**도 같이 걸리므로,
+     * **간격 317 의 격자에 가장 많이 들어맞는 줄만** 남긴다(가짜는 격자에서 벗어난다).
+     * 실측 3장 전부 **후보 7~9개 → 진짜 5개**를 정확히 골라냈다.
+     */
+    fun findStarRows(b: Bitmap): IntArray {
+        val cand = ArrayList<Int>()
+        var start = -1
+        var y = 950
+        while (y <= 2950) {
+            var n = 0
+            var x = 60
+            while (x <= 1400) {
+                val c = px(b, x, y)
+                if (Color.red(c) > 200 && Color.green(c) > 150 && Color.blue(c) < 110) n++
+                x += 4
+            }
+            if (n >= 100) { if (start < 0) start = y }
+            else if (start >= 0) { if (y - start >= 10) cand.add((start + y - 2) / 2); start = -1 }
+            y += 2
+        }
+        if (cand.isEmpty()) return IntArray(0)
+
+        // 317 격자에 가장 많이 들어맞는 위상을 고른다.
+        var best: List<Int> = emptyList()
+        for (a in cand) {
+            val hits = cand.filter {
+                val d = ((it - a) % STAR_PITCH + STAR_PITCH + STAR_PITCH / 2) % STAR_PITCH - STAR_PITCH / 2
+                Math.abs(d) <= 10
+            }
+            if (hits.size > best.size) best = hits
+        }
+        return best.sorted().toIntArray()
+    }
 
     /**
      * 칸을 **누를 자리**. 별줄에서 130 위 — 별(아래)과 배지(위) 사이의 그림 한복판이라
-     * 행이 조금 어긋나도 카드를 벗어나지 않는다(카드 높이 약 290).
+     * 조금 어긋나도 카드를 벗어나지 않는다(카드 높이 약 290).
      */
-    fun cardAt(col: Int, row: Int, edit: Boolean = false): IntArray =
-        intArrayOf(CARD_COL0 + CARD_COL_PITCH * col, starRow(row, edit) - 130)
+    fun cardAt(col: Int, starY: Int): IntArray =
+        intArrayOf(CARD_COL0 + CARD_COL_PITCH * col, starY - 130)
 
     /**
      * **편집 모드에서** 그 칸이 지금 팀에 들어가 있나(우상단 초록 배지).
@@ -854,9 +893,9 @@ object Screen {
      *
      * 이게 있어서 **탭이 먹혔는지 매번 확인**할 수 있다 — 눌렀는데 안 바뀌면 바로 멈춘다.
      */
-    fun cardInTeam(b: Bitmap, col: Int, row: Int): Boolean {
+    fun cardInTeam(b: Bitmap, col: Int, starY: Int): Boolean {
         val x = CARD_COL0 + CARD_COL_PITCH * col + 90
-        val y = starRow(row, true) - 268
+        val y = starY - 268
         var hit = 0
         for (dx in intArrayOf(-16, -8, 0, 8, 16)) for (dy in intArrayOf(-8, 0, 8)) {
             val c = px(b, x + dx, y + dy)
@@ -911,9 +950,9 @@ object Screen {
     const val THUMB_W = 32
     const val THUMB_H = 26
 
-    fun cardThumb(b: Bitmap, col: Int, row: Int, edit: Boolean, dy: Int = 0): FloatArray {
+    fun cardThumb(b: Bitmap, col: Int, starY: Int): FloatArray {
         val cx = CARD_COL0 + CARD_COL_PITCH * col
-        val sy = starRow(row, edit) + dy
+        val sy = starY
         val x0 = Coords.x(cx - 95); val x1 = Coords.x(cx + 95)
         val y0 = Coords.y(sy - 200); val y1 = Coords.y(sy - 90)
         val out = FloatArray(THUMB_W * THUMB_H)

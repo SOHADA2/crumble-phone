@@ -84,6 +84,22 @@ object DeckDict {
         return if (b1 >= MIN_SCORE && b1 - b2 >= MIN_GAP) best else -1
     }
 
+    /**
+     * 왜 못 알아봤는지 한 줄로. **로그 없이 헤매지 않으려고** 둔다 —
+     * 1등 점수가 낮은 건지(그림 자르는 자리가 틀림) 2등과 안 벌어지는 건지(비슷한 쿠키)를 가른다.
+     */
+    fun describe(ctx: Context, shot: FloatArray): String {
+        val dict = thumbs(ctx)
+        if (dict.isEmpty()) return "사전 비어 있음"
+        var b1 = -2f; var b2 = -2f; var best = -1
+        for (k in dict.indices) {
+            val v = Screen.thumbScore(shot, dict[k])
+            if (v > b1) { b2 = b1; b1 = v; best = k } else if (v > b2) b2 = v
+        }
+        val nm = names.getOrElse(best) { "?" }
+        return String.format("1등 %s %.2f · 2등 %.2f · 차 %.2f", nm, b1, b2, b1 - b2)
+    }
+
     const val MIN_SCORE = 0.55f   // 이보다 낮으면 그림을 못 알아본 것으로 본다
     const val MIN_GAP = 0.06f     // 2등과 이만큼은 벌어져야 확신한다
 }
