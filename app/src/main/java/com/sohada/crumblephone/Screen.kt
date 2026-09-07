@@ -726,11 +726,14 @@ object Screen {
      *   (1240,2775) OVEN_SELL 189,242,253     114,206,212 ← 결과에만 [모두 팔기]
      */
     fun ovenPanelKind(b: Bitmap): String {
-        val a = px(b, OVEN_AUTO[0], OVEN_AUTO[1])
-        // 패널이 뜨면 Auto 버튼 자리를 덮어 주황이 된다
-        if (!(Color.red(a) > 200 && Color.blue(a) < 80)) return "none"
         val h = px(b, OVEN_HDR[0], OVEN_HDR[1])
         val v = px(b, OVEN_SELL[0], OVEN_SELL[1])
+        // ⚠️ 처음엔 'OVEN_AUTO 자리가 주황이면 패널'로 봤다가 크게 틀렸다 —
+        //    **Auto 가 돌 때 그 자리가 판매 이펙트로 빨강/주황이 된다**(PC 실측 R255 G73 B77 · R255 G155 B0).
+        //    그래서 가동 중을 '자동 열기 패널'로 오인하고 '안 누르고 닫기'로 빠져 Auto 를 켜둔 채 나갔다.
+        // → 패널 유무는 **헤더가 짙은 청록인가**로만 본다. 두 패널만 R≈0 이다:
+        //    자동 열기 0,126,145 · 결과 0,81,99 · 이펙트 196,17,165 · 오븐화면 197,16,165 · 확인창 161,8,35
+        if (!(Color.red(h) < 60 && Color.blue(h) > 80)) return "none"
         if (Color.blue(h) < 120 && Color.red(v) < 160) return "result"
         return "open"
     }
