@@ -849,10 +849,12 @@ object Screen {
      * 실측 3장 전부 **후보 7~9개 → 진짜 5개**를 정확히 골라냈다.
      */
     fun findStarRows(b: Bitmap): IntArray {
-        val cand = ArrayList<Int>()
-        var start = -1
-        var y = 950
-        while (y <= 2950) {
+        // 줄마다 노란 점을 한 번만 센다.
+        val y0 = 950
+        val y1 = 2950
+        val cnt = IntArray((y1 - y0) / 2 + 1)
+        for (i in cnt.indices) {
+            val y = y0 + i * 2
             var n = 0
             var x = 60
             while (x <= 1400) {
@@ -860,25 +862,69 @@ object Screen {
                 if (Color.red(c) > 200 && Color.green(c) > 150 && Color.blue(c) < 110) n++
                 x += 4
             }
-            // 문턱을 낮게 둔다 — **마지막 줄은 카드가 3개뿐**이라 별이 5칸 줄의 60% 밖에 안 된다.
-            // 가짜 띠(금색 경험치 바)는 아래 317 격자 검사가 걸러 주므로 낮춰도 안전하다.
-            // 실측: 5칸 줄 186~227개 · 3칸이면 110~136개 · 문턱 60 이면 둘 다 잡고 격자는 그대로 5개.
-            if (n >= 60) { if (start < 0) start = y }
-            else if (start >= 0) { if (y - start >= 8) cand.add((start + y - 2) / 2); start = -1 }
-            y += 2
+            cnt[i] = n
         }
-        if (cand.isEmpty()) return IntArray(0)
 
-        // 317 격자에 가장 많이 들어맞는 위상을 고른다.
-        var best: List<Int> = emptyList()
-        for (a in cand) {
-            val hits = cand.filter {
-                val d = ((it - a) % STAR_PITCH + STAR_PITCH + STAR_PITCH / 2) % STAR_PITCH - STAR_PITCH / 2
-                Math.abs(d) <= 10
+        // ── ① **높은 문턱으로 '위상'만 정한다** ──
+        // 별 아래 **금색 경험치 바**가 별줄에서 딱 63px 아래에 있다. 문턱을 낮추면 그것도
+        // 317 간격으로 줄줄이 잡혀 **가짜 위상**이 되고, 진짜 줄이 4줄만 보이는 쪽에서는
+        // 표가 같아져 가짜가 이긴다 — 실기에서 지문이 통째로 어긋난 게 이것이었다.
+        // 높은 문턱(120)에서는 경험치 바가 아예 안 뜨므로 위상을 안전하게 고를 수 있다.
+        var bestCount = 0
+        var bestTotal = 0
+        var anchor = -1
+        val hs = ArrayList<Int>()   // 띠 중심
+        val hp = ArrayList<Int>()   // 그 띠의 최대치
+        var st = -1
+        var peak = 0
+        for (i in cnt.indices) {
+            if (cnt[i] >= 120) { if (st < 0) { st = i; peak = cnt[i] }; if (cnt[i] > peak) peak = cnt[i] }
+            else if (st >= 0) {
+                if (i - st >= 4) { hs.add(y0 + (st + i - 1)); hp.add(peak) }
+                st = -1
             }
-            if (hits.size > best.size) best = hits
         }
-        return best.sorted().toIntArray()
+        if (hs.isEmpty()) return IntArray(0)
+        for (a in hs) {
+            var c2 = 0
+            var t2 = 0
+            for (k in hs.indices) {
+                var d = (hs[k] - a) % STAR_PITCH
+                if (d < 0) d += STAR_PITCH
+                if (d > STAR_PITCH / 2) d -= STAR_PITCH
+                if (Math.abs(d) <= 10) { c2++; t2 += hp[k] }
+            }
+            if (c2 > bestCount || (c2 == bestCount && t2 > bestTotal)) {
+                bestCount = c2; bestTotal = t2; anchor = a
+            }
+        }
+        if (anchor < 0) return IntArray(0)
+        // 고른 위상 중 **가장 위쪽** 을 기준점으로
+        for (a in hs) {
+            var d = (a - anchor) % STAR_PITCH
+            if (d < 0) d += STAR_PITCH
+            if (d > STAR_PITCH / 2) d -= STAR_PITCH
+            if (Math.abs(d) <= 10 && a < anchor) anchor = a
+        }
+
+        // ── ② 그 위상으로 317 간격 자리를 만들어 **있나만** 본다 ──
+        // 여기서는 문턱을 낮게 봐도 안전하다. 자리가 이미 정해져 있어 가짜가 낄 수 없다.
+        // 낮게 보는 이유는 **마지막 줄이 카드 3개뿐**이라 별이 60% 밖에 안 되기 때문이다.
+        val out = ArrayList<Int>()
+        for (k in -6..11) {
+            val y = anchor + STAR_PITCH * k
+            if (y < y0 + 10 || y > y1 - 10) continue
+            var bn = 0
+            var by = y
+            var yy = y - 14
+            while (yy <= y + 14) {
+                val idx = (yy - y0) / 2
+                if (idx in cnt.indices && cnt[idx] > bn) { bn = cnt[idx]; by = y0 + idx * 2 }
+                yy += 2
+            }
+            if (bn >= 50) out.add(by)
+        }
+        return out.toIntArray()
     }
 
     /**
