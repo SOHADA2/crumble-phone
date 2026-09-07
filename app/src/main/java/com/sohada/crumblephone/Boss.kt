@@ -21,7 +21,7 @@ import kotlin.concurrent.thread
 object Boss {
 
     private const val WAIT_SEC = 35L      // 소환 후 전투가 끝날 때까지 (실측: 전투 ~30초)
-    private const val PRESETS = 5         // 쿠키 조합 1~5
+    internal const val PRESETS = 5        // 쿠키 조합 1~5
 
     fun start(ctx: Context) {
         if (!Runner.guard()) return
@@ -52,29 +52,7 @@ object Boss {
         for (n in 1..PRESETS) {
             if (!Runner.running) break
             Runner.set("보스전 준비 중", "쿠키 조합 " + n + "/" + PRESETS)
-            // 오븐 퀘스트 직후엔 장비 '장착/판매' 비교 팝업이 남아 있을 수 있다.
-            // 그대로 두면 아래 탭이 전부 '팝업 바깥 누르기'로 먹혀 조합 변경도 보스 소환도 안 되는데,
-            // 조합은 한 칸 써 버려서 싸우지도 않고 '1~5 모두 실패'까지 간다. 먼저 치운다.
-            clearEquipPopup()
-            switchPreset(n)
-            // ── 보스 소환 → 잠깐 오른쪽으로 밀어붙인다 ──
-            // 전장을 누른 채 끌면 **조이스틱**이라 그 방향으로 캐릭터가 달려든다.
-            // 대부분의 보스가 달려들었을 때 효과가 좋다. 시간은 ⚙ 에서 고른다(0 이면 안 함).
-            //
-            // ⚠️ **소환 직후엔 아직 조이스틱이 안 먹는다**(전투 시작 연출) — 그때 밀면 그냥 버려진다.
-            //    그래서 '먹기 시작하는 시점'까지 기다렸다가 민다(⚙ 의 '돌진 시작 지연').
-            // ⚠️ 미는 거리는 속도에 영향이 없다(조이스틱). 다만 선형으로 끌기 때문에 처음 얼마간은
-            //    데드존 안이라 버려진다 → 거리를 800px 로 크게 잡고 시간도 10% 더 준다.
-            // ⚠️ `dispatchGesture` 는 비동기다 — **끝날 때까지 기다려 줘야** 다음 동작과 안 겹친다.
-            val chargeMs = Prefs.bossChargeMs
-            Runner.tap(Screen.BOSS_SUMMON, Prefs.bossDelayMs.toLong())
-            if (chargeMs > 0 && Runner.running) {
-                Bot.log("  오른쪽으로 " + (chargeMs / 1000.0) + "초 밀어붙임")
-                val ms = (chargeMs * 1.10).toLong()
-                TapService.swipe(Screen.CHARGE_FROM[0], Screen.CHARGE_FROM[1],
-                    Screen.CHARGE_TO[0], Screen.CHARGE_TO[1], ms)
-                Runner.sleep(ms + 300L)
-            }
+            challengeOnce(n)
 
             // 기다리는 동안 진행률을 채워 준다(멈춘 것처럼 보이지 않게).
             var s = 0L
@@ -102,6 +80,38 @@ object Boss {
             Runner.lastResult = "✗ 쿠키 조합 1~" + PRESETS + " 모두 실패"
         } else {
             Runner.set("멈췄어요", "보스전을 중간에 멈췄어요")
+        }
+    }
+
+    /**
+     * 보스 한 번 도전 — **팝업 치우기 → 조합 변경 → 소환 → (지연) → 우측 돌진**.
+     *
+     * [보스전] 버튼과 **퀘스트(`Chores`)가 같은 함수를 쓴다.** 보스에 가는 길이 두 곳에 생기면
+     * 한쪽만 고쳐 놓고 잊는다 — PC 봇도 두 경로(배너·탐색 실패)가 같은 함수를 부른다.
+     */
+    internal fun challengeOnce(n: Int) {
+        // 오븐 퀘스트 직후엔 장비 '장착/판매' 비교 팝업이 남아 있을 수 있다.
+        // 그대로 두면 아래 탭이 전부 '팝업 바깥 누르기'로 먹혀 조합 변경도 보스 소환도 안 되는데,
+        // 조합은 한 칸 써 버려서 싸우지도 않고 '1~5 모두 실패'까지 간다. 먼저 치운다.
+        clearEquipPopup()
+        switchPreset(n)
+        // ── 보스 소환 → 잠깐 오른쪽으로 밀어붙인다 ──
+        // 전장을 누른 채 끌면 **조이스틱**이라 그 방향으로 캐릭터가 달려든다.
+        // 대부분의 보스가 달려들었을 때 효과가 좋다. 시간은 ⚙ 에서 고른다(0 이면 안 함).
+        //
+        // ⚠️ **소환 직후엔 아직 조이스틱이 안 먹는다**(전투 시작 연출) — 그때 밀면 그냥 버려진다.
+        //    그래서 '먹기 시작하는 시점'까지 기다렸다가 민다(⚙ 의 '돌진 시작 지연').
+        // ⚠️ 미는 거리는 속도에 영향이 없다(조이스틱). 다만 선형으로 끌기 때문에 처음 얼마간은
+        //    데드존 안이라 버려진다 → 거리를 800px 로 크게 잡고 시간도 10% 더 준다.
+        // ⚠️ `dispatchGesture` 는 비동기다 — **끝날 때까지 기다려 줘야** 다음 동작과 안 겹친다.
+        val chargeMs = Prefs.bossChargeMs
+        Runner.tap(Screen.BOSS_SUMMON, Prefs.bossDelayMs.toLong())
+        if (chargeMs > 0 && Runner.running) {
+            Bot.log("  오른쪽으로 " + (chargeMs / 1000.0) + "초 밀어붙임")
+            val ms = (chargeMs * 1.10).toLong()
+            TapService.swipe(Screen.CHARGE_FROM[0], Screen.CHARGE_FROM[1],
+                Screen.CHARGE_TO[0], Screen.CHARGE_TO[1], ms)
+            Runner.sleep(ms + 300L)
         }
     }
 

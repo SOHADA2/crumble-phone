@@ -45,7 +45,8 @@ object Chores {
     private const val PROBE_NONE = 0      // 아무것도 못 함
     private const val PROBE_DID = 1       // 뽑기·상자·오븐을 대신 해 줬다
     private const val PROBE_CLAIMED = 2   // 누르고 보니 완료 퀘스트였다(보상을 받았다)
-    private const val BACKOFF_MINUTES = 15L       // 보스가 필요한 퀘스트라 잠시 쉬는 시간
+    private const val BACKOFF_MINUTES = 10L       // 보스에 막혔을 때 사람에게 넘기고 쉬는 시간
+    private const val BOSS_WAIT_SEC = 35L         // 보스 소환 후 결과 대기 (실측: 전투 ~30초)
     private const val REWARD_STEPS = 6            // 보상 받기 걸음 수(미션 3탭 + 출석 3단계) — 진행률용
 
     /**
@@ -99,7 +100,10 @@ object Chores {
         var covered = 0           // 퀘스트 띠 가림이 연속 몇 번째인지
         var powersave = 0         // 절전 해제를 몇 번 시도했는지
         var probeAllowedAt = 0L   // 보스가 필요한 퀘스트라 쉬는 중이면 이 시각까지 탐색을 미룬다
-        var bossNoticed = false   // '보스가 필요하다'는 안내를 한 번만 남기려고
+        var bossNoticed = false   // '보스에 막혔다'는 안내를 한 번만 남기려고
+        var bossTries = 0         // 이 스테이지에서 조합을 몇 번 바꿔 도전했는지
+        var bossWaitUntil = 0L    // 내가 소환한 보스전이 끝날 때까지
+        var bannerSeen = 0        // 보스 배너가 연속 몇 바퀴 보였나(한 프레임 오탐 방지)
         var bulkTries = 0         // '한번에 클리어'를 몇 번 눌러 봤는지(안 먹으면 그만 두려고)
         var loggedFirst = false   // 시작 화면 판정값을 한 번만 남기려고
         tapsProven = false        // 증거는 실행마다 새로 모은다
@@ -139,6 +143,18 @@ object Chores {
                 Runner.sleep(4000); continue
             }
             if (powersave > 0) { powersave = 0; Bot.log("화면 정상 - 작업 재개") }
+
+            // ── 내가 소환한 보스전이 도는 중이면 아무것도 누르지 않고 기다린다 ──
+            // 전투 중인지를 화면 색으로 알아내려던 시도는 PC 봇에서 두 번 다 실패했다
+            // (상단 이름표는 배경에 좌우되고, '보스 소환' 자리는 보스 HP 바도 같은 빨강이다).
+            // 그래서 화면을 안 읽고 '내가 소환한 시각'만 기억해서 그동안 기다린다.
+            if (System.currentTimeMillis() < bossWaitUntil) {
+                val left = (bossWaitUntil - System.currentTimeMillis()) / 1000
+                Runner.status = "보스전 진행 중"
+                Runner.detail = "쿠키 조합 " + bossTries + "/" + Boss.PRESETS + " · " + left + "초 남음"
+                Runner.setProgress((BOSS_WAIT_SEC - left).toInt(), BOSS_WAIT_SEC.toInt())
+                Runner.sleep(4000); continue
+            }
 
             val atMain = dock.ratio >= 0.1 && !Screen.hasCloseButton(b)
 
@@ -199,7 +215,7 @@ object Chores {
                     Runner.tap(Screen.QUEST_BAR, 350)
                     if (waitBarChanged(ratio)) {
                         tapsProven = true; quests++; bulkTries = 0
-                        ovenTried = false; bossNoticed = false; probeAllowedAt = 0L
+                        ovenTried = false; bossNoticed = false; bossTries = 0; probeAllowedAt = 0L
                         Bot.log("  받았어요 - 띠가 바뀌었습니다")
                         Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                     }
@@ -220,11 +236,39 @@ object Chores {
                 // 백오프도 같이 푼다 — 안 그러면 앞 퀘스트 때문에 걸린 15분이
                 // 이미 교체된 새 퀘스트의 탐색까지 막아 버린다.
                 ovenTried = false
-                bossNoticed = false
+                bossNoticed = false; bossTries = 0; bannerSeen = 0
                 probeAllowedAt = 0L
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 continue
             }
+
+            // ── ★ 보스 배너가 보이면 탐색을 기다리지 않고 바로 간다 (PC 봇 'B안') ──
+            // 배너가 떠 있다 = 스테이지가 막혀 있다는 뜻이라, 탐색을 먼저 돌려 봐야 시간만 버린다.
+            // 한 프레임 오탐을 막으려고 **두 바퀴 연속** 보일 때만 인정한다.
+            //
+            // ⚠️ 옛날에 이 색 판정을 뺐던 이유는 **영역 평균**으로 봤기 때문이다 — 배너 위로 전투
+            //    이펙트·데미지 숫자가 겹쳐 값이 흔들려 버튼을 놓치고 갇혔다. 지금은 `Boss` 처럼
+            //    **두 점을 직접** 본다. 놓쳐도(거짓 음성) 아래 '탐색 실패 → 보스' 가 받아 준다.
+            if (Screen.hasBossBanner(b)) {
+                bannerSeen++
+                if (bannerSeen >= 2 && bossTries < Boss.PRESETS) {
+                    bossTries++
+                    Bot.log("보스 소환 배너 확인 - 쿠키 조합 " + bossTries + " 번으로 도전 (" + bossTries + "/" + Boss.PRESETS + ")")
+                    Runner.set("보스전 준비 중", "쿠키 조합 " + bossTries + "/" + Boss.PRESETS)
+                    Boss.challengeOnce(bossTries)
+                    bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
+                    continue
+                }
+                if (bannerSeen >= 2 && bossTries >= Boss.PRESETS && !bossNoticed) {
+                    // 조합을 한 바퀴 다 돌렸는데 배너가 그대로다 = 손으로 밀어야 하는 보스.
+                    // 계속 두드리지 않고 사람에게 넘긴다. 쉬는 동안에도 완료 퀘스트는 계속 받는다.
+                    bossNoticed = true
+                    Bot.log("쿠키 조합 " + Boss.PRESETS + "번 도전했지만 못 깼어요 - 손으로 한 번 밀어 주세요 (" + BACKOFF_MINUTES + "분 뒤 재시도)")
+                    Runner.set("보스에 막혔어요", "손으로 한 번 밀어 주세요 · " + BACKOFF_MINUTES + "분 뒤 다시 해 볼게요")
+                    probeAllowedAt = System.currentTimeMillis() + BACKOFF_MINUTES * 60_000
+                    Runner.sleep(8000); continue
+                }
+            } else bannerSeen = 0
 
             // ── 미완료 퀘스트 ──
             Runner.status = "퀘스트 기다리는 중"
@@ -248,24 +292,27 @@ object Chores {
                 quests++
                 Runner.set("퀘스트 보상 받는 중", "지금까지 " + quests + "개")
                 ovenTried = false
-                bossNoticed = false
+                bossNoticed = false; bossTries = 0; bannerSeen = 0
                 probeAllowedAt = 0L
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 Runner.sleep(3000); continue
             }
 
             // 탐색으로도 안 풀렸다 = 스테이지 클리어형이다. 보스를 깨야 넘어간다.
-            //
-            // ⚠️ **여기서 보스를 소환하지 않는다.** 예전엔 퀘스트가 알아서 조합을 1~5 로 바꿔 가며
-            //    보스를 불렀는데, 사용자가 [퀘스트]만 눌렀는데 보스전이 시작돼 무슨 일이 벌어지는지
-            //    알 수 없었다. 보스는 별개의 콘텐츠라 [보스전] 버튼으로 뺐다.
-            //    여기서는 그 사실만 알리고, 다른 퀘스트가 완료되기를 기다린다
-            //    (방치 전투가 도는 동안 다른 퀘스트는 계속 찬다).
+            // 위의 배너 판정이 놓쳤을 때를 위한 **폴백 경로**다(PC 봇도 둘 다 갖고 있다).
+            if (bossTries < Boss.PRESETS) {
+                bossTries++
+                Bot.log("탐색 실패 - 쿠키 조합 " + bossTries + " 번으로 보스 도전 (" + bossTries + "/" + Boss.PRESETS + ")")
+                Runner.set("보스전 준비 중", "쿠키 조합 " + bossTries + "/" + Boss.PRESETS)
+                Boss.challengeOnce(bossTries)
+                bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
+                continue
+            }
             if (!bossNoticed) {
                 bossNoticed = true
-                Bot.log("이 퀘스트는 보스를 깨야 넘어가요 - [보스전] 을 눌러 주세요")
+                Bot.log("쿠키 조합 " + Boss.PRESETS + "번 도전했지만 못 깼어요 - 손으로 한 번 밀어 주세요 (" + BACKOFF_MINUTES + "분 뒤 재시도)")
             }
-            Runner.set("보스가 필요한 퀘스트예요", "[보스전] 을 눌러 주세요 · 그 사이 다른 퀘스트를 기다립니다")
+            Runner.set("보스에 막혔어요", "손으로 한 번 밀어 주세요 · " + BACKOFF_MINUTES + "분 뒤 다시 해 볼게요")
             probeAllowedAt = System.currentTimeMillis() + BACKOFF_MINUTES * 60_000
             Runner.sleep(8000)
         }

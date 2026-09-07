@@ -204,10 +204,10 @@ class MainActivity : ListActivity() {
         // ── 자동 실행 ──
         root.addView(sectionHeader("자동 실행"))
         runRows = group()
-        val rQuest = row("퀘스트", subtitle = "퀘스트 보상 받고 · 뽑기 · 상자 · 오븐") {
+        val rQuest = row("퀘스트", subtitle = "보상 받고 · 뽑기 · 상자 · 오븐 · 보스 밀기") {
             Overlay.show(applicationContext); Chores.start(applicationContext)
         }
-        val rBoss = row("보스전", subtitle = "막힌 보스를 쿠키 조합 1~5 로 도전") {
+        val rBoss = row("보스전", subtitle = "막힌 보스만 한 번 · 조합 1~5") {
             Overlay.show(applicationContext); Boss.start(applicationContext)
         }
         val rTobol = row("토벌전", subtitle = "멈출 때까지 계속 도전 · 최고 점수 기록") {
