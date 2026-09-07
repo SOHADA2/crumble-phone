@@ -323,13 +323,14 @@ object Deck {
             var changes = 0
             var pages = 0
             var dry2 = 0                       // 새로 본 카드가 없는 쪽이 연속 몇 번인지
+            // ★ **한 바퀴 단위**로 들고 있는다. 쪽마다 지웠더니, 넣은 쿠키가 목록 맨 위로
+            //   올라와 다음 쪽에서 다시 보이면서 '아직 안 들어갔다'로 읽고 되돌려 버렸다.
+            val justDone = HashSet<Int>()
+            var oddTaps = 0                    // 눌러도 안 바뀐 횟수
             while (Runner.running && pages < 40) {
                 var taps = 0
                 var again = true
                 var newHere = 0
-                // 이 쪽에서 **방금 바꿔 확인까지 끝낸** 쿠키. 다시 건드리지 않는다.
-                // 목록이 다시 정렬되는 동안 '아직 안 들어갔다'로 잘못 읽고 되돌려 버린 적이 있다.
-                val justDone = HashSet<Int>()
                 while (again && taps < PAGE_TAPS && Runner.running) {
                     again = false
                     // 방금 무언가 눌렀다면 목록이 다시 정렬되며 움직인다. 멈출 때까지 기다린다.
@@ -360,12 +361,20 @@ object Deck {
                             val after = settle() ?: return
                             // **누른 자리가 정말 바뀌었나.** 안 바뀌면 더 두드리지 않는다.
                             if (Screen.cardInTeam(after, c, sy) == inTeam) {
-                                Bot.log("'" + label + "' 을 눌렀는데 편성이 안 바뀌었어요")
-                                Bot.log("  → 저장하지 않고 멈춥니다")
-                                Runner.tap(Screen.DECK_CANCEL, 2000)
-                                Runner.set("덱을 못 바꿨어요", "칸을 눌러도 편성이 안 바뀌어요")
-                                Runner.lastResult = "덱 " + n + "번: 탭이 편성을 안 바꿔요"
-                                return
+                                // 한 번 어긋났다고 통째로 멈추지 않는다 — 목록이 아직 움직이는
+                                // 중이었을 수 있다. 이 바퀴에는 다시 안 건드리고 넘어간다.
+                                oddTaps++
+                                justDone.add(who)
+                                Bot.log("'" + label + "' 을 눌렀는데 편성이 안 바뀌었어요 (" + oddTaps + "번째)")
+                                if (oddTaps >= 3) {
+                                    Bot.log("  → 세 번이나 그래서 저장하지 않고 멈춥니다")
+                                    Runner.tap(Screen.DECK_CANCEL, 2000)
+                                    Runner.set("덱을 못 바꿨어요", "칸을 눌러도 편성이 안 바뀌어요")
+                                    Runner.lastResult = "덱 " + n + "번: 탭이 편성을 안 바꿔요"
+                                    return
+                                }
+                                again = true
+                                break@outer
                             }
                             if (shouldBe) { added++; Bot.log("  + " + label) } else { removed++; Bot.log("  − " + label) }
                             justDone.add(who)
@@ -512,21 +521,47 @@ object Deck {
      */
     fun findIndex(want: String): Int = find(want).first
 
-    /** 찾은 순번과 **왜 그렇게 됐는지**. 못 찾았을 때 로그에 남기려고 같이 낸다. */
+    /**
+     * 찾은 순번과 **왜 그렇게 됐는지**. 못 찾았을 때 로그에 남기려고 같이 낸다.
+     *
+     * ## 줄여 적어도 된다
+     * 사람은 `석류맛 쿠키` 대신 **`석류`** 라고 적는다. 그런데 편집거리만 보면
+     * 짧게 칠수록 기준이 빡빡해져서(`포도넝쿨` 4글자 → 허용 거리 1) 오히려 안 붙는다.
+     * 그래서 **앞부분 일치 → 이름 일부 → 비슷한 글자** 순으로 본다.
+     * 실기에서 `석류`·`전갈`·`피겨`·`정글`·`포도넝쿨`·`쿨링민트` 가 전부 이래서 안 붙었다.
+     *
+     * ## 여럿과 맞으면 안 고른다
+     * `다크` 는 `다크초코`·`다크체리` 둘 다다. 아무거나 고르면 엉뚱한 쿠키가 들어간다 —
+     * **후보를 알려주고 넘긴다.**
+     */
     fun find(want: String): Pair<Int, String> {
         val names = DeckDict.names
         if (names.isEmpty()) return -1 to "사전이 비어 있음"
         val w = norm(want)
         if (w.isEmpty()) return -1 to "글자를 못 알아봄('" + want + "')"
-        names.forEachIndexed { i, n -> if (norm(n) == w) return i to "정확히" }
-        var best = -1; var bd = Int.MAX_VALUE
-        names.forEachIndexed { i, n ->
-            val d = lev(w, norm(n))
+        val nm = names.map { norm(it) }
+
+        nm.forEachIndexed { i, n -> if (n == w) return i to "정확히" }
+
+        val pre = nm.indices.filter { nm[it].startsWith(w) }
+        if (pre.size == 1) return pre[0] to "줄임말 → " + names[pre[0]]
+        if (pre.size > 1) return -1 to ("여럿과 맞아요: " + pre.joinToString(", ") { names[it] })
+
+        val con = nm.indices.filter { nm[it].contains(w) }
+        if (con.size == 1) return con[0] to "이름 일부 → " + names[con[0]]
+        if (con.size > 1) return -1 to ("여럿과 맞아요: " + con.joinToString(", ") { names[it] })
+
+        // 오독 대비. 사전 이름을 **친 길이만큼 잘라서도** 견준다 —
+        // 안 그러면 줄임말이 늘 '길이 차이'만큼 멀어진다.
+        var best = -1
+        var bd = Int.MAX_VALUE
+        nm.forEachIndexed { i, n ->
+            val d = Math.min(lev(w, n), lev(w, n.take(Math.min(w.length, n.length))))
             if (d < bd) { bd = d; best = i }
         }
         val limit = Math.max(1, (w.length * 0.34).toInt())
         val near = names.getOrElse(best) { "?" }
-        return if (bd <= limit) best to ("비슷함(거리 " + bd + ")")
+        return if (bd <= limit) best to ("비슷함(거리 " + bd + ") → " + near)
                else -1 to ("가장 가까운 게 '" + near + "' 인데 거리 " + bd + " > " + limit)
     }
 
