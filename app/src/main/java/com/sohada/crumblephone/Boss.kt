@@ -113,9 +113,7 @@ object Boss {
         // ⚠️ 소환 자리는 **고정 좌표가 아니라 찾아서** 누른다. 예전엔 PC 좌표 `(710,406)` 을 그대로
         //    눌렀는데 폰에서 그 자리는 배너 위 허공이라, 조합만 한 칸씩 까먹고 한 번도 안 싸웠다.
         val shot = Runner.shot()
-        val at = if (shot == null) null
-                 else if (loose) Screen.bossSummonPoint(shot, Screen.BANNER_LOOSE_RUN)
-                 else Screen.bossSummonPoint(shot)
+        val at = if (shot == null) null else Screen.bossSummonPoint(shot, loose)
         if (at == null) {
             Bot.log("  '보스 소환' 배너를 못 찾았어요 - 아무것도 누르지 않고 넘어갑니다")
             return false

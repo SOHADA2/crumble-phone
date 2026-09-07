@@ -369,8 +369,8 @@ object Screen {
             " · 메인=" + atMain(b) +
             " · 토벌로비=" + atTobolLobby(b) +
             " · 일일진입=" + atDailyEntry(b) +
-            " · 보스배너=" + bannerScan(b).let { it[0].toString() + "px@y" + it[1] } +
-            "(기준 " + BANNER_MIN_RUN + ")"
+            " · 보스배너=" + bannerScan(b).let { it[0].toString() + "px 높이" + it[2] + " 중심y" + it[1] } +
+            "(기준 " + BANNER_MIN_RUN + "px/" + BANNER_MIN_BAND + ")"
     }
 
     private fun f(v: Double) = String.format("%.2f", v)
@@ -696,18 +696,40 @@ object Screen {
      *
      * 그래서 고정 좌표를 버리고 **띠를 찾는다**: 스테이지 바 근처를 훑어
      * **가로로 길게 이어진 빨강**이 있으면 배너다. 배너는 폭이 넓고, 배경 빨강(용암 등)은 끊긴다.
-     * 실측(배너 없는 메인 화면 셋): 가장 긴 연속 빨강이 **146px / 0px / 6px**.
      *
+     * **실측 (전체 해상도 스크린샷 20장 · 배너 1 / 배너 없음 19)**
+     *
+     * | | 가장 긴 연속 빨강 | 띠 높이 |
+     * |---|---|---|
+     * | 배너 있음 | **320px** | **116px** |
+     * | 배너 없음 (19장 최대) | 156px | 76px |
+     *
+     * 두 신호가 다 갈라져서 **둘 다** 본다(하나가 이펙트에 흔들려도 나머지가 받아 준다).
      * 좌표를 안 믿고 **찾아서** 누르니, 기종마다 UI 가 몇십 px 밀려도 그대로 맞는다.
      */
-    private const val BANNER_MIN_RUN = 260   // 이보다 길게 이어지면 배너로 본다
-    /** 느슨한 기준. '탐색도 실패했으니 보스가 맞다'고 거의 확신할 때만 쓴다(이펙트에 가린 배너용). */
-    const val BANNER_LOOSE_RUN = 130
+    private const val BANNER_MIN_RUN  = 230   // 320 과 156 사이
+    private const val BANNER_MIN_BAND = 90    // 116 과 76 사이
 
-    /** 훑은 결과 `[가장 긴 연속 빨강(px), 그 줄의 y]`. 진단 줄에도 그대로 쓴다. */
+    /**
+     * 느슨한 기준. '탐색도 실패했으니 스테이지 클리어형이 맞다'고 거의 확신할 때만 쓴다
+     * (이펙트가 배너를 조금 덮은 경우). **그래도 배너 없는 19장(최대 156px/76px)보다는 위**여야 한다 —
+     * 안 그러면 배너가 없는데 엉뚱한 데를 누른다.
+     */
+    private const val BANNER_LOOSE_RUN  = 180
+    private const val BANNER_LOOSE_BAND = 60
+
+    /**
+     * 훑은 결과 `[가장 긴 연속 빨강(px), 띠의 세로 중심 y, 띠 높이(px)]`. 진단 줄에도 그대로 쓴다.
+     *
+     * 누를 자리로 **가장 긴 줄이 아니라 띠의 가운데**를 준다. 가장 긴 줄은 글자('보스 소환')가
+     * 빨강을 끊지 않는 **배너 위쪽 가장자리**라, 거기를 누르면 테두리에서 14px 밖에 안 떨어진다.
+     * 실측에서 가장 긴 줄은 y=484, 배너 실제 범위는 y 470~588 → 가운데 **528** 이 안전하다.
+     */
     fun bannerScan(b: Bitmap): IntArray {
-        var bestY = -1
+        val runs = IntArray((660 - 440) / 4 + 1)
+        var bestI = -1
         var bestRun = 0
+        var i = 0
         var y = 440
         while (y <= 660) {
             var run = 0
@@ -720,16 +742,29 @@ object Screen {
                 } else run = 0
                 x += 2
             }
-            if (mx > bestRun) { bestRun = mx; bestY = y }
-            y += 4
+            runs[i] = mx
+            if (mx > bestRun) { bestRun = mx; bestI = i }
+            i++; y += 4
         }
-        return intArrayOf(bestRun, bestY)
+        if (bestI < 0) return intArrayOf(0, -1, 0)
+
+        // 가장 긴 줄에서 위아래로 '아직 빨간 줄'이 이어지는 데까지 넓혀 띠의 높이를 잰다.
+        val th = Math.max(60, bestRun / 4)
+        var top = bestI
+        while (top - 1 >= 0 && runs[top - 1] >= th) top--
+        var bot = bestI
+        while (bot + 1 < runs.size && runs[bot + 1] >= th) bot++
+        val topY = 440 + top * 4
+        val botY = 440 + bot * 4
+        return intArrayOf(bestRun, (topY + botY) / 2, botY - topY + 4)
     }
 
     /** 배너의 세로 중심. 없으면 -1. */
-    fun findBossBanner(b: Bitmap, minRun: Int = BANNER_MIN_RUN): Int {
+    fun findBossBanner(b: Bitmap, loose: Boolean = false): Int {
         val s = bannerScan(b)
-        return if (s[0] >= minRun) s[1] else -1
+        val minRun  = if (loose) BANNER_LOOSE_RUN  else BANNER_MIN_RUN
+        val minBand = if (loose) BANNER_LOOSE_BAND else BANNER_MIN_BAND
+        return if (s[0] >= minRun && s[2] >= minBand) s[1] else -1
     }
 
     /** 지금 보스에 막혀 있나? = 상단 빨간 배너가 있나. */
@@ -737,10 +772,10 @@ object Screen {
 
     /**
      * 배너를 누를 자리. 배너는 가로 가운데에 있으므로 x 는 화면 중앙을 쓰고,
-     * y 는 **방금 찾은 배너의 줄**을 쓴다. 못 찾으면 `null` — 그때는 아무것도 누르지 않는다.
+     * y 는 **찾은 띠의 가운데**를 쓴다. 못 찾으면 `null` — 그때는 아무것도 누르지 않는다.
      */
-    fun bossSummonPoint(b: Bitmap, minRun: Int = BANNER_MIN_RUN): IntArray? {
-        val y = findBossBanner(b, minRun)
+    fun bossSummonPoint(b: Bitmap, loose: Boolean = false): IntArray? {
+        val y = findBossBanner(b, loose)
         return if (y < 0) null else intArrayOf(720, y)
     }
 
