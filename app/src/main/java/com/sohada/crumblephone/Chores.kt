@@ -236,7 +236,10 @@ object Chores {
                 // 백오프도 같이 푼다 — 안 그러면 앞 퀘스트 때문에 걸린 15분이
                 // 이미 교체된 새 퀘스트의 탐색까지 막아 버린다.
                 ovenTried = false
-                bossNoticed = false; bossTries = 0; bannerSeen = 0
+                // ⚠️ `bannerSeen` 은 **여기서 지우면 안 된다.** 이건 '어느 퀘스트냐'와 무관한
+                //    한 프레임 오탐 방지용 카운터다. 지웠더니 몹이 빨리 죽는 계정에서
+                //    수령 → 배너 1회 → 수령 → 배너 1회 … 로 **영영 2 에 못 닿아 보스에 못 갔다.**
+                bossNoticed = false; bossTries = 0
                 probeAllowedAt = 0L
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 continue
@@ -252,7 +255,16 @@ object Chores {
             //    띠 자체가 길어서 남는다. 놓쳐도(거짓 음성) 아래 '탐색 실패 → 보스' 가 받아 준다.
             if (Screen.hasBossBanner(b)) {
                 bannerSeen++
-                if (bannerSeen >= 2 && bossTries < Boss.PRESETS) {
+                if (bannerSeen == 1) {
+                    // 한 프레임 오탐을 막으려고 한 바퀴 더 본다 — 다만 **여기서 바로** 다시 찍는다.
+                    // 예전엔 그냥 흘려보내 탐색·수령을 한 바퀴 다 돌고 왔는데, 그 사이에 퀘스트가
+                    // 완료돼 수령 경로가 카운터를 지워 버렸다. 몹이 빨리 죽는 계정에서는
+                    // 그게 매번이라 **영영 2 에 못 닿아 보스에 한 번도 못 갔다.**
+                    Bot.log("보스 소환 배너가 보여요 - 한 바퀴 더 확인합니다")
+                    Runner.set("보스 배너 확인 중")
+                    Runner.sleep(1500); continue
+                }
+                if (bossTries < Boss.PRESETS) {
                     val try_ = bossTries + 1
                     Bot.log("보스 소환 배너 확인 - 쿠키 조합 " + try_ + " 번으로 도전 (" + try_ + "/" + Boss.PRESETS + ")")
                     Runner.set("보스전 준비 중", "쿠키 조합 " + try_ + "/" + Boss.PRESETS)
@@ -264,7 +276,7 @@ object Chores {
                     } else { bannerSeen = 0; Runner.sleep(3000) }
                     continue
                 }
-                if (bannerSeen >= 2 && bossTries >= Boss.PRESETS && !bossNoticed) {
+                if (bossTries >= Boss.PRESETS && !bossNoticed) {
                     // 조합을 한 바퀴 다 돌렸는데 배너가 그대로다 = 손으로 밀어야 하는 보스.
                     // 계속 두드리지 않고 사람에게 넘긴다. 쉬는 동안에도 완료 퀘스트는 계속 받는다.
                     bossNoticed = true
@@ -297,7 +309,10 @@ object Chores {
                 quests++
                 Runner.set("퀘스트 보상 받는 중", "지금까지 " + quests + "개")
                 ovenTried = false
-                bossNoticed = false; bossTries = 0; bannerSeen = 0
+                // ⚠️ `bannerSeen` 은 **여기서 지우면 안 된다.** 이건 '어느 퀘스트냐'와 무관한
+                //    한 프레임 오탐 방지용 카운터다. 지웠더니 몹이 빨리 죽는 계정에서
+                //    수령 → 배너 1회 → 수령 → 배너 1회 … 로 **영영 2 에 못 닿아 보스에 못 갔다.**
+                bossNoticed = false; bossTries = 0
                 probeAllowedAt = 0L
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 Runner.sleep(3000); continue
