@@ -675,8 +675,8 @@ object Screen {
     // ── 보스 소환 / 쿠키 조합(프리셋) ──
     val BOSS_SUMMON = intArrayOf(710, 406)           // 상단 '보스 소환' 빨간 배너 중앙
     // 보스전 '우측 돌진' 조이스틱. 전장 빈 곳을 누른 채 오른쪽으로 끌면 캐릭터가 그쪽으로 달려든다.
-    val CHARGE_FROM = intArrayOf(700, 1500)
-    val CHARGE_TO   = intArrayOf(1000, 1500)
+    val CHARGE_FROM = intArrayOf(500, 1500)
+    val CHARGE_TO   = intArrayOf(1300, 1500)
 
     /**
      * 상단 '보스 소환' 빨간 배너가 있나? = **아직 이 보스를 못 깼다**.

@@ -53,18 +53,23 @@ object Boss {
             if (!Runner.running) break
             Runner.set("보스전 준비 중", "쿠키 조합 " + n + "/" + PRESETS)
             switchPreset(n)
-            Runner.tap(Screen.BOSS_SUMMON, 3000)
-
-            // ── 전투가 시작되면 잠깐 오른쪽으로 밀어붙인다 ──
+            // ── 보스 소환 → 잠깐 오른쪽으로 밀어붙인다 ──
             // 전장을 누른 채 끌면 **조이스틱**이라 그 방향으로 캐릭터가 달려든다.
             // 대부분의 보스가 달려들었을 때 효과가 좋다. 시간은 ⚙ 에서 고른다(0 이면 안 함).
+            //
+            // ⚠️ **소환 직후엔 아직 조이스틱이 안 먹는다**(전투 시작 연출) — 그때 밀면 그냥 버려진다.
+            //    그래서 '먹기 시작하는 시점'까지 기다렸다가 민다(⚙ 의 '돌진 시작 지연').
+            // ⚠️ 미는 거리는 속도에 영향이 없다(조이스틱). 다만 선형으로 끌기 때문에 처음 얼마간은
+            //    데드존 안이라 버려진다 → 거리를 800px 로 크게 잡고 시간도 10% 더 준다.
             // ⚠️ `dispatchGesture` 는 비동기다 — **끝날 때까지 기다려 줘야** 다음 동작과 안 겹친다.
             val chargeMs = Prefs.bossChargeMs
+            Runner.tap(Screen.BOSS_SUMMON, Prefs.bossDelayMs.toLong())
             if (chargeMs > 0 && Runner.running) {
                 Bot.log("  오른쪽으로 " + (chargeMs / 1000.0) + "초 밀어붙임")
+                val ms = (chargeMs * 1.10).toLong()
                 TapService.swipe(Screen.CHARGE_FROM[0], Screen.CHARGE_FROM[1],
-                    Screen.CHARGE_TO[0], Screen.CHARGE_TO[1], chargeMs.toLong())
-                Runner.sleep(chargeMs + 300L)
+                    Screen.CHARGE_TO[0], Screen.CHARGE_TO[1], ms)
+                Runner.sleep(ms + 300L)
             }
 
             // 기다리는 동안 진행률을 채워 준다(멈춘 것처럼 보이지 않게).

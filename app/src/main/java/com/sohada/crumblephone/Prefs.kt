@@ -78,6 +78,15 @@ object Prefs {
      * 대부분의 보스가 달려들었을 때 효과가 좋다(사용자 확인). 보스마다 알맞은 시간이 달라 직접 고른다.
      */
     val BOSS_CHARGE_CHOICES = intArrayOf(0, 1000, 1500, 2000, 2500, 3000, 4000, 5000)
+
+    /**
+     * 보스 소환 뒤 '조이스틱이 먹기 시작할 때'까지 기다릴 시간(ms).
+     * 소환 직후엔 전투 시작 연출이라 밀어도 그냥 버려진다(실기 확인) — 그 시점이 보스마다 조금 다르다.
+     */
+    val BOSS_DELAY_CHOICES = intArrayOf(2000, 3000, 4000, 5000, 6000, 7000, 8000, 10000)
+    var bossDelayMs: Int
+        get() = sp?.getInt("bossDelayMs", 6000) ?: 6000
+        set(v) { sp?.edit()?.putInt("bossDelayMs", v)?.apply() }
     var bossChargeMs: Int
         get() = sp?.getInt("bossChargeMs", 2000) ?: 2000
         set(v) { sp?.edit()?.putInt("bossChargeMs", v)?.apply() }
