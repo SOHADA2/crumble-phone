@@ -139,14 +139,37 @@ object Deck {
             // ★ **움직임이 멈춘 뒤에 찍는다.** 스크롤 직후에 찍으면 그 줄 지문이 흐려져서,
             //   나중에 그 다섯 마리를 영영 못 알아본다.
             //   실기에서 정확히 그랬다 — 못 알아본 9마리가 '연속 5개 + 연속 4개', 곧 두 줄이었다.
-            val shot = settle()
+            // ★ **두 번 찍어 같을 때만 받는다.**
+            //   `settle()` 만으로는 모자랐다 — 화면 캡처가 직전 프레임을 돌려주면 '안 움직였다'로
+            //   착각한다. 실기에서 이것 때문에 한 줄(5마리)이 흐리게 떠져 영영 못 알아봤다.
+            //   같은 줄을 두 번 떠서 서로 닮았을 때만 담으면, 움직이는 중에 뜬 건 자동으로 걸러진다.
+            var shot = settle()
             if (shot == null || !Screen.atDeckEdit(shot)) { fail("편집 모드를 벗어났어요"); return }
-            val stars = Screen.findStarRows(shot)
+            var stars = Screen.findStarRows(shot)
             if (stars.isEmpty()) { fail("카드 줄을 못 찾았어요"); return }
+            var first = stars.map { sy -> Array(Screen.CARD_COLS) { Screen.cardThumb(shot!!, it, sy) } }
+
+            var steady = false
+            for (k in 1..4) {
+                if (!Runner.running) return
+                Runner.sleep(400)
+                val again2 = Runner.shot() ?: break
+                val st2 = Screen.findStarRows(again2)
+                if (st2.size == stars.size && st2.indices.all { Math.abs(st2[it] - stars[it]) <= 4 }) {
+                    val second = st2.map { sy -> Array(Screen.CARD_COLS) { Screen.cardThumb(again2, it, sy) } }
+                    // '같은 카드인가'(0.90)보다 **훨씬 엄하게** 본다 — 여기서 보려는 건
+                    // '조금이라도 움직였나'다. 살짝 미끄러진 것도 걸러야 지문이 선명해진다.
+                    if (first.indices.all { rowScore(first[it], second[it]) > 0.985f }) { steady = true; break }
+                }
+                shot = again2; stars = st2
+                first = stars.map { sy -> Array(Screen.CARD_COLS) { Screen.cardThumb(again2, it, sy) } }
+                Bot.log("  아직 움직여요 - 다시 봅니다 (" + k + ")")
+            }
+            if (!steady) Bot.log("  ⚠ 멈춘 걸 확인 못 했어요 - 이 쪽 지문이 흐릴 수 있어요")
 
             var appended = 0
-            for (sy in stars) {
-                val row = Array(Screen.CARD_COLS) { Screen.cardThumb(shot, it, sy) }
+            for ((ri, sy) in stars.withIndex()) {
+                val row = first[ri]
                 // 이미 담은 행인가? 뒤쪽 8행만 견줘 보면 충분하다.
                 var dup = false
                 var k = rowsOut.size - 1
@@ -457,13 +480,16 @@ object Deck {
         Runner.sleep(900)
     }
 
-    /** 두 행이 같은 카드들인가. 다섯 칸 지문의 평균이 충분히 닮았으면 같다고 본다. */
-    private fun sameRow(a: Array<FloatArray>, b: Array<FloatArray>): Boolean {
-        if (a.size != b.size) return false
+    /** 두 행이 얼마나 닮았나. 다섯 칸 지문의 평균. */
+    private fun rowScore(a: Array<FloatArray>, b: Array<FloatArray>): Float {
+        if (a.size != b.size || a.isEmpty()) return -1f
         var sum = 0f
         for (i in a.indices) sum += Screen.thumbScore(a[i], b[i])
-        return sum / a.size > 0.90f
+        return sum / a.size
     }
+
+    /** 두 행이 **같은 카드들**인가(겹치는 줄 찾기용). 움직임 판정보다 느슨하다. */
+    private fun sameRow(a: Array<FloatArray>, b: Array<FloatArray>): Boolean = rowScore(a, b) > 0.90f
 
     /**
      * **화면이 잠잠해질 때까지** 기다렸다가 찍는다.
