@@ -368,7 +368,9 @@ object Screen {
             " · 하단X=" + (if (hasCloseButton(b)) "있음" else "없음") +
             " · 메인=" + atMain(b) +
             " · 토벌로비=" + atTobolLobby(b) +
-            " · 일일진입=" + atDailyEntry(b)
+            " · 일일진입=" + atDailyEntry(b) +
+            " · 보스배너=" + bannerScan(b).let { it[0].toString() + "px@y" + it[1] } +
+            "(기준 " + BANNER_MIN_RUN + ")"
     }
 
     private fun f(v: Double) = String.format("%.2f", v)
@@ -673,45 +675,74 @@ object Screen {
     }
 
     // ── 보스 소환 / 쿠키 조합(프리셋) ──
-    val BOSS_SUMMON = intArrayOf(710, 406)           // 상단 '보스 소환' 빨간 배너 중앙
+    // 소환 배너는 **고정 좌표를 두지 않는다**. 화면에서 찾아 누른다(아래 `bossSummonPoint`).
+    // 예전의 `BOSS_SUMMON=(710,406)` 은 PC 좌표라 폰에서는 배너 위 허공이었다.
     // 보스전 '우측 돌진' 조이스틱. 전장 빈 곳을 누른 채 오른쪽으로 끌면 캐릭터가 그쪽으로 달려든다.
     val CHARGE_FROM = intArrayOf(500, 1500)
     val CHARGE_TO   = intArrayOf(1300, 1500)
 
     /**
-     * 상단 '보스 소환' 빨간 배너가 있나? = **아직 이 보스를 못 깼다**.
-     * 깨서 스테이지가 밀리면 이 자리는 하늘·배경이 되어 빨강이 아니다 — 승패를 이걸로 가른다.
-     * PC 봇 실측: (562,380) R245 G78 B34 / (620,410) R233 G108 B34.
+     * 상단 **'보스 소환' 빨간 배너**를 찾는다. = **아직 이 보스를 못 깼다**.
+     * 깨서 스테이지가 밀리면 그 자리는 하늘·배경이 되어 빨강이 아니다 — 승패를 이걸로 가른다.
      *
-     * ⚠️ 전투 **중**에도 배너는 사라진다(PC 봇이 여기서 세 번 틀렸다). 그래서 소환 직후에 보면
-     *    안 되고, 전투가 끝날 만큼 기다렸다가 봐야 한다.
+     * ⚠️ 전투 **중**에도 배너는 사라진다(PC 봇이 여기서 세 번 틀렸다). 소환 직후에 보면 안 되고,
+     *    전투가 끝날 만큼 기다렸다가 봐야 한다.
+     *
+     * ⚠️ 예전엔 PC 봇의 두 점 `(562,380)`·`(620,410)` 을 그대로 봤는데,
+     *    **폰에서 그 자리는 배너가 아니다.** 폰은 게임이 상태표시줄 아래에서 시작해
+     *    같은 UI 가 150px 쯤 내려와 있다(스테이지 바 실측 y 500~610).
+     *    그래서 배너가 떠 있어도 판정이 한 번도 안 걸렸고, **퀘스트가 보스에 진입하지 못했다.**
+     *    `PRESET_TABS` 와 똑같은 사고다 — **PC 좌표를 폰에서 다시 재지 않고 쓴 것.**
+     *
+     * 그래서 고정 좌표를 버리고 **띠를 찾는다**: 스테이지 바 근처를 훑어
+     * **가로로 길게 이어진 빨강**이 있으면 배너다. 배너는 폭이 넓고, 배경 빨강(용암 등)은 끊긴다.
+     * 실측(배너 없는 메인 화면 셋): 가장 긴 연속 빨강이 **146px / 0px / 6px**.
+     *
+     * 좌표를 안 믿고 **찾아서** 누르니, 기종마다 UI 가 몇십 px 밀려도 그대로 맞는다.
      */
-    private val BOSS_PTS = arrayOf(intArrayOf(562, 380), intArrayOf(620, 410))
+    private const val BANNER_MIN_RUN = 260   // 이보다 길게 이어지면 배너로 본다
+    /** 느슨한 기준. '탐색도 실패했으니 보스가 맞다'고 거의 확신할 때만 쓴다(이펙트에 가린 배너용). */
+    const val BANNER_LOOSE_RUN = 130
 
-    fun hasBossBanner(b: Bitmap): Boolean {
-        for (p in BOSS_PTS) {
-            val c = px(b, p[0], p[1])
-            if (!(Color.red(c) > 200 && Color.green(c) < 130 && Color.blue(c) < 90)) return false
+    /** 훑은 결과 `[가장 긴 연속 빨강(px), 그 줄의 y]`. 진단 줄에도 그대로 쓴다. */
+    fun bannerScan(b: Bitmap): IntArray {
+        var bestY = -1
+        var bestRun = 0
+        var y = 440
+        while (y <= 660) {
+            var run = 0
+            var mx = 0
+            var x = 380
+            while (x <= 1080) {
+                val c = px(b, x, y)
+                if (Color.red(c) > 190 && Color.green(c) < 120 && Color.blue(c) < 95) {
+                    run += 2; if (run > mx) mx = run
+                } else run = 0
+                x += 2
+            }
+            if (mx > bestRun) { bestRun = mx; bestY = y }
+            y += 4
         }
-        return true
+        return intArrayOf(bestRun, bestY)
     }
-    val NAV_COOKIE  = intArrayOf(70, 2972)           // 하단 좌측 '쿠키' 탭 → 편성 화면
-    val NAV_BATTLE  = intArrayOf(718, 2972)          // 하단 '전투/홈' 탭 → 메인 전투로 복귀
+
+    /** 배너의 세로 중심. 없으면 -1. */
+    fun findBossBanner(b: Bitmap, minRun: Int = BANNER_MIN_RUN): Int {
+        val s = bannerScan(b)
+        return if (s[0] >= minRun) s[1] else -1
+    }
+
+    /** 지금 보스에 막혀 있나? = 상단 빨간 배너가 있나. */
+    fun hasBossBanner(b: Bitmap): Boolean = findBossBanner(b) >= 0
+
     /**
-     * 쿠키 편성 화면의 프리셋 1~5 탭. **2026-09-07 실기 스크린샷에서 다시 쟀다.**
-     *
-     * ⚠️ 옛 값 `y=698` 은 **PC 봇 좌표를 그대로 복사한 것**인데 폰에서는 그 자리가
-     *    편성 화면 위쪽 **팀 진열대 배경**(198,151,203)이었다. 눌러도 조합이 안 바뀌고
-     *    **쿠키 상세 화면이 열려** 봇이 거기서 길을 잃었다(실기 확인).
-     *    x 는 우연히 맞았고 **y 만 122px 위**였다 — 그래서 더 늦게 들켰다.
-     *
-     * 실측: y **820** · x **74 / 191 / 308 / 425 / 543**
-     * (선택된 탭은 노랑 `(255,246,71)`, 나머지는 청록 `(80,187,193)`)
+     * 배너를 누를 자리. 배너는 가로 가운데에 있으므로 x 는 화면 중앙을 쓰고,
+     * y 는 **방금 찾은 배너의 줄**을 쓴다. 못 찾으면 `null` — 그때는 아무것도 누르지 않는다.
      */
-    val PRESET_TABS = arrayOf(
-        intArrayOf(74, 820), intArrayOf(191, 820), intArrayOf(308, 820),
-        intArrayOf(425, 820), intArrayOf(543, 820)
-    )
+    fun bossSummonPoint(b: Bitmap, minRun: Int = BANNER_MIN_RUN): IntArray? {
+        val y = findBossBanner(b, minRun)
+        return if (y < 0) null else intArrayOf(720, y)
+    }
 
     /**
      * 쿠키 **편성 화면**인가? 프리셋 탭 다섯 자리가 청록(비선택) 또는 노랑(선택)이면 참.

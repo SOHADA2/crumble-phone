@@ -247,16 +247,21 @@ object Chores {
             // 한 프레임 오탐을 막으려고 **두 바퀴 연속** 보일 때만 인정한다.
             //
             // ⚠️ 옛날에 이 색 판정을 뺐던 이유는 **영역 평균**으로 봤기 때문이다 — 배너 위로 전투
-            //    이펙트·데미지 숫자가 겹쳐 값이 흔들려 버튼을 놓치고 갇혔다. 지금은 `Boss` 처럼
-            //    **두 점을 직접** 본다. 놓쳐도(거짓 음성) 아래 '탐색 실패 → 보스' 가 받아 준다.
+            //    이펙트·데미지 숫자가 겹쳐 값이 흔들려 버튼을 놓치고 갇혔다. 지금은 스테이지 바 근처를
+            //    훑어 **가로로 길게 이어진 빨강**을 찾는다(`Screen.bannerScan`) — 이펙트가 조금 덮어도
+            //    띠 자체가 길어서 남는다. 놓쳐도(거짓 음성) 아래 '탐색 실패 → 보스' 가 받아 준다.
             if (Screen.hasBossBanner(b)) {
                 bannerSeen++
                 if (bannerSeen >= 2 && bossTries < Boss.PRESETS) {
-                    bossTries++
-                    Bot.log("보스 소환 배너 확인 - 쿠키 조합 " + bossTries + " 번으로 도전 (" + bossTries + "/" + Boss.PRESETS + ")")
-                    Runner.set("보스전 준비 중", "쿠키 조합 " + bossTries + "/" + Boss.PRESETS)
-                    Boss.challengeOnce(bossTries)
-                    bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
+                    val try_ = bossTries + 1
+                    Bot.log("보스 소환 배너 확인 - 쿠키 조합 " + try_ + " 번으로 도전 (" + try_ + "/" + Boss.PRESETS + ")")
+                    Runner.set("보스전 준비 중", "쿠키 조합 " + try_ + "/" + Boss.PRESETS)
+                    // 실제로 소환을 눌렀을 때만 한 칸을 쓴다. 배너를 못 찾아 그냥 돌아왔으면
+                    // 싸우지도 않고 '1~5 모두 실패' 로 가 버린다(예전 사고와 같은 모양).
+                    if (Boss.challengeOnce(try_)) {
+                        bossTries = try_
+                        bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
+                    } else { bannerSeen = 0; Runner.sleep(3000) }
                     continue
                 }
                 if (bannerSeen >= 2 && bossTries >= Boss.PRESETS && !bossNoticed) {
@@ -301,12 +306,18 @@ object Chores {
             // 탐색으로도 안 풀렸다 = 스테이지 클리어형이다. 보스를 깨야 넘어간다.
             // 위의 배너 판정이 놓쳤을 때를 위한 **폴백 경로**다(PC 봇도 둘 다 갖고 있다).
             if (bossTries < Boss.PRESETS) {
-                bossTries++
-                Bot.log("탐색 실패 - 쿠키 조합 " + bossTries + " 번으로 보스 도전 (" + bossTries + "/" + Boss.PRESETS + ")")
-                Runner.set("보스전 준비 중", "쿠키 조합 " + bossTries + "/" + Boss.PRESETS)
-                Boss.challengeOnce(bossTries)
-                bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
-                continue
+                val try_ = bossTries + 1
+                Bot.log("탐색 실패 - 쿠키 조합 " + try_ + " 번으로 보스 도전 (" + try_ + "/" + Boss.PRESETS + ")")
+                Runner.set("보스전 준비 중", "쿠키 조합 " + try_ + "/" + Boss.PRESETS)
+                // 여기까지 왔으면 '스테이지 클리어형'이 거의 확실하다 = 배너는 있는데 이펙트에 가렸을 수 있다.
+                // 그래서 이 경로에서만 배너 기준을 느슨하게 본다(그래도 **찾은 자리**만 누른다).
+                if (Boss.challengeOnce(try_, loose = true)) {
+                    bossTries = try_
+                    bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
+                    continue
+                }
+                Bot.log("  배너를 못 찾아 보스 도전을 건너뜁니다 - 잠시 뒤 다시 봅니다")
+                Runner.sleep(8000); continue
             }
             if (!bossNoticed) {
                 bossNoticed = true

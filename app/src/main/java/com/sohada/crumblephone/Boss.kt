@@ -52,7 +52,12 @@ object Boss {
         for (n in 1..PRESETS) {
             if (!Runner.running) break
             Runner.set("보스전 준비 중", "쿠키 조합 " + n + "/" + PRESETS)
-            challengeOnce(n)
+            if (!challengeOnce(n)) {
+                // 소환 배너가 사라졌다 = 그 사이에 깼거나 화면이 바뀐 것. 기다릴 이유가 없다.
+                Runner.set("도전할 보스가 없어요", "소환 배너가 사라졌어요")
+                Runner.lastResult = "소환 배너가 사라져 중단했어요"
+                return
+            }
 
             // 기다리는 동안 진행률을 채워 준다(멈춘 것처럼 보이지 않게).
             var s = 0L
@@ -89,7 +94,7 @@ object Boss {
      * [보스전] 버튼과 **퀘스트(`Chores`)가 같은 함수를 쓴다.** 보스에 가는 길이 두 곳에 생기면
      * 한쪽만 고쳐 놓고 잊는다 — PC 봇도 두 경로(배너·탐색 실패)가 같은 함수를 부른다.
      */
-    internal fun challengeOnce(n: Int) {
+    internal fun challengeOnce(n: Int, loose: Boolean = false): Boolean {
         // 오븐 퀘스트 직후엔 장비 '장착/판매' 비교 팝업이 남아 있을 수 있다.
         // 그대로 두면 아래 탭이 전부 '팝업 바깥 누르기'로 먹혀 조합 변경도 보스 소환도 안 되는데,
         // 조합은 한 칸 써 버려서 싸우지도 않고 '1~5 모두 실패'까지 간다. 먼저 치운다.
@@ -104,8 +109,19 @@ object Boss {
         // ⚠️ 미는 거리는 속도에 영향이 없다(조이스틱). 다만 선형으로 끌기 때문에 처음 얼마간은
         //    데드존 안이라 버려진다 → 거리를 800px 로 크게 잡고 시간도 10% 더 준다.
         // ⚠️ `dispatchGesture` 는 비동기다 — **끝날 때까지 기다려 줘야** 다음 동작과 안 겹친다.
+        //
+        // ⚠️ 소환 자리는 **고정 좌표가 아니라 찾아서** 누른다. 예전엔 PC 좌표 `(710,406)` 을 그대로
+        //    눌렀는데 폰에서 그 자리는 배너 위 허공이라, 조합만 한 칸씩 까먹고 한 번도 안 싸웠다.
+        val shot = Runner.shot()
+        val at = if (shot == null) null
+                 else if (loose) Screen.bossSummonPoint(shot, Screen.BANNER_LOOSE_RUN)
+                 else Screen.bossSummonPoint(shot)
+        if (at == null) {
+            Bot.log("  '보스 소환' 배너를 못 찾았어요 - 아무것도 누르지 않고 넘어갑니다")
+            return false
+        }
         val chargeMs = Prefs.bossChargeMs
-        Runner.tap(Screen.BOSS_SUMMON, Prefs.bossDelayMs.toLong())
+        Runner.tap(at, Prefs.bossDelayMs.toLong())
         if (chargeMs > 0 && Runner.running) {
             Bot.log("  오른쪽으로 " + (chargeMs / 1000.0) + "초 밀어붙임")
             val ms = (chargeMs * 1.10).toLong()
@@ -113,6 +129,7 @@ object Boss {
                 Screen.CHARGE_TO[0], Screen.CHARGE_TO[1], ms)
             Runner.sleep(ms + 300L)
         }
+        return true
     }
 
     /**
