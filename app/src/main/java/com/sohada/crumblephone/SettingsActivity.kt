@@ -153,12 +153,13 @@ class SettingsActivity : ListActivity() {
         gChk.addView(separator())
         gChk.addView(row("쿠키 사전 만들기",
             value = if (Prefs.deckDictSize > 0) "다시" else "아직",
-            subtitle = "덱을 이름으로 채우려면 한 번은 읽어 둬야 해요") {
+            subtitle = "이름과 그림을 한 번 읽어 둬요 · 2~3분") {
             Overlay.show(applicationContext); Deck.buildDict(applicationContext); finish()
         })
         if (Prefs.deckDictSize > 0) {
             gChk.addView(separator())
-            gChk.addView(row("쿠키 사전 보기", value = Prefs.deckDictSize.toString() + "마리",
+            gChk.addView(row("쿠키 사전 보기",
+                value = Prefs.deckDictSize.toString() + "마리" + (if (DeckDict.ready(this)) "" else " ⚠"),
                 subtitle = "잘못 읽힌 이름을 고칠 수 있어요") {
                 startActivity(android.content.Intent(this, DeckDictActivity::class.java))
             })

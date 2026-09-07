@@ -893,6 +893,63 @@ object Screen {
         return hit >= 4
     }
 
+    /**
+     * 카드의 **초상화 지문**을 뽑는다. 32x26 회색조.
+     *
+     * ## 왜 지문이 필요한가 — 순번은 못 믿는다
+     * 목록은 **편성중인 쿠키가 맨 앞으로 올라오는** 정렬이라, 프리셋을 바꾸면 순서가 통째로 달라진다.
+     * 실측: 프리셋5 에서 1·2·5번이던 쿠키가 프리셋2 에서는 3·4·1번이었다.
+     * 쿠키가 늘거나 레벨이 오르면 또 바뀐다. **그래서 그림으로 확인하고 누른다.**
+     *
+     * ## 자르는 자리
+     * 별줄에서 200~90 위, 열 중심 ±95. 위의 `Lv.NN`·속성 아이콘과
+     * 아래의 `편성중` 글자를 **둘 다 피한** 그림 한복판이다.
+     *
+     * 편성중 카드는 어둡게 덮이지만, 비교를 **평균·표준편차로 정규화**해서 보므로(NCC)
+     * 밝기가 달라져도 같은 그림으로 잡힌다 — 실측에서 편성중↔아님 짝이 0.75~0.96 로 붙었다.
+     */
+    const val THUMB_W = 32
+    const val THUMB_H = 26
+
+    fun cardThumb(b: Bitmap, col: Int, row: Int, edit: Boolean, dy: Int = 0): FloatArray {
+        val cx = CARD_COL0 + CARD_COL_PITCH * col
+        val sy = starRow(row, edit) + dy
+        val x0 = Coords.x(cx - 95); val x1 = Coords.x(cx + 95)
+        val y0 = Coords.y(sy - 200); val y1 = Coords.y(sy - 90)
+        val out = FloatArray(THUMB_W * THUMB_H)
+        val w = x1 - x0; val h = y1 - y0
+        if (w <= 0 || h <= 0) return out
+        var i = 0
+        for (ty in 0 until THUMB_H) {
+            val py = y0 + (ty * h) / THUMB_H + h / (2 * THUMB_H)
+            for (tx in 0 until THUMB_W) {
+                val px2 = x0 + (tx * w) / THUMB_W + w / (2 * THUMB_W)
+                val c = if (px2 in 0 until b.width && py in 0 until b.height) b.getPixel(px2, py) else 0
+                out[i++] = (Color.red(c) + Color.green(c) + Color.blue(c)) / 3f
+            }
+        }
+        return out
+    }
+
+    /**
+     * 두 지문이 얼마나 닮았나 (정규화 상호상관, -1~1).
+     * 평균과 표준편차를 걷어내고 보므로 **밝기·대비가 달라도** 같은 그림이면 높게 나온다.
+     */
+    fun thumbScore(a: FloatArray, b: FloatArray): Float {
+        if (a.size != b.size || a.isEmpty()) return -1f
+        var ma = 0f; var mb = 0f
+        for (v in a) ma += v
+        for (v in b) mb += v
+        ma /= a.size; mb /= b.size
+        var sa = 0f; var sb = 0f; var sab = 0f
+        for (i in a.indices) {
+            val da = a[i] - ma; val db = b[i] - mb
+            sa += da * da; sb += db * db; sab += da * db
+        }
+        if (sa <= 0f || sb <= 0f) return -1f
+        return (sab / Math.sqrt((sa.toDouble() * sb))).toFloat()
+    }
+
     // 편집 모드 하단 바 — 실측: 주황 취소 X 가 x610~808 · y2850~3051 (중심 709,2950)
     val DECK_SAVE   = intArrayOf(1051, 2950)   // [편성 저장]
     val DECK_CANCEL = intArrayOf(709, 2950)    // 가운데 주황 ✕ (저장 안 하고 나감)

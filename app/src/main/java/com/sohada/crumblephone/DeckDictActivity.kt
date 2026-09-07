@@ -60,7 +60,7 @@ class DeckDictActivity : ListActivity() {
             })
         })
 
-        val names = Prefs.deckDict.split("\n").filter { it.isNotBlank() }
+        val names = DeckDict.names
 
         root.addView(text(
             if (names.isEmpty()) "아직 비어 있어요. 점검 → [쿠키 사전 만들기] 를 먼저 눌러 주세요."
@@ -110,11 +110,16 @@ class DeckDictActivity : ListActivity() {
         }
     }
 
-    /** 나갈 때 조용히 저장한다 — [저장] 을 못 찾아 고친 게 날아가는 일이 없게. */
+    /**
+     * 나갈 때 조용히 저장한다 — [저장] 을 못 찾아 고친 게 날아가는 일이 없게.
+     *
+     * ⚠️ **줄 수를 바꾸면 안 된다.** 이름 목록과 초상화 지문이 **같은 순서로 짝지어져** 있어서,
+     *    한 줄을 비워 지워 버리면 그 뒤가 통째로 한 칸씩 밀려 엉뚱한 그림과 붙는다.
+     *    그래서 비운 칸은 지우지 않고 `?` 로 채운다.
+     */
     private fun save() {
         if (boxes.isEmpty()) return
-        val out = boxes.map { it.text.toString().trim() }.filter { it.isNotEmpty() }
-        if (out.isEmpty()) return
+        val out = boxes.map { it.text.toString().trim().ifEmpty { "?" } }
         if (out.joinToString("\n") != Prefs.deckDict) {
             Prefs.deckDict = out.joinToString("\n")
             Toast.makeText(this, "사전을 저장했어요", Toast.LENGTH_SHORT).show()
