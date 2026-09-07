@@ -94,7 +94,7 @@ class SettingsActivity : ListActivity() {
         // 봇이 '한 싸이클'이 얼마나 큰지 알고 상한을 제대로 잡는다.
         rowOven = row("오븐 1회 개수", value = Prefs.ovenPerRun.toString() + "개",
             subtitle = "게임의 '자동 열기 → 1회에 여는 개수'와 같게") { cycle(Prefs.OVEN_CHOICES, false) }
-        rowDelay = row("돌진 시작 지연", value = (Prefs.bossDelayMs / 1000).toString() + "초",
+        rowDelay = row("돌진 시작 지연", value = delayLabel(),
             subtitle = "보스 소환 직후엔 아직 조이스틱이 안 먹어요") { cycleDelay() }
         rowCharge = row("보스전 돌진 시간", value = chargeLabel(),
             subtitle = "보스가 나오면 오른쪽으로 밀어붙여요 · 달려들면 잘 잡히는 보스가 많아요") { cycleCharge() }
@@ -387,6 +387,12 @@ class SettingsActivity : ListActivity() {
     }
 
     /** 보스전 돌진 시간 표시. 0 이면 '안 함'. */
+    /** 0.5초 같은 소수를 정수 나눗셈으로 찍으면 '0초'가 된다. 딱 떨어질 때만 정수로 보인다. */
+    private fun delayLabel(): String {
+        val s = Prefs.bossDelayMs / 1000.0
+        return (if (s == s.toInt().toDouble()) s.toInt().toString() else s.toString()) + "초"
+    }
+
     private fun chargeLabel(): String {
         val ms = Prefs.bossChargeMs
         if (ms <= 0) return "안 함"
@@ -405,6 +411,6 @@ class SettingsActivity : ListActivity() {
         val c = Prefs.BOSS_DELAY_CHOICES
         val i = c.indexOf(Prefs.bossDelayMs)
         Prefs.bossDelayMs = c[(if (i < 0) 0 else i + 1) % c.size]
-        rowDelay.setValue((Prefs.bossDelayMs / 1000).toString() + "초", t.label2)
+        rowDelay.setValue(delayLabel(), t.label2)
     }
 }

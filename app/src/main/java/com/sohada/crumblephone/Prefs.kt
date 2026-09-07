@@ -83,7 +83,7 @@ object Prefs {
      * 보스 소환 뒤 '조이스틱이 먹기 시작할 때'까지 기다릴 시간(ms).
      * 소환 직후엔 전투 시작 연출이라 밀어도 그냥 버려진다(실기 확인) — 그 시점이 보스마다 조금 다르다.
      */
-    val BOSS_DELAY_CHOICES = intArrayOf(2000, 3000, 4000, 5000, 6000, 7000, 8000, 10000)
+    val BOSS_DELAY_CHOICES = intArrayOf(500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000)
     var bossDelayMs: Int
         get() = sp?.getInt("bossDelayMs", 6000) ?: 6000
         set(v) { sp?.edit()?.putInt("bossDelayMs", v)?.apply() }
