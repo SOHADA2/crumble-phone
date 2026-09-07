@@ -27,9 +27,24 @@
 - `local.properties` 의 `sdk.dir` 는 역슬래시가 이스케이프로 먹힌다 → `D:/android-dev/sdk` 처럼 슬래시로.
 
 ## 빌드
+
+**어느 컴퓨터에서든 이 세 줄이면 된다.** 도구 위치는 `env.ps1` 이 알아서 찾는다.
+
 ```powershell
-$env:JAVA_HOME='D:\android-dev\jdk'; $env:ANDROID_HOME='D:\android-dev\sdk'
-$env:GRADLE_USER_HOME='D:\android-dev\.gradle'
-D:\android-dev\gradle\bin\gradle.bat assembleDebug --no-daemon
-D:\android-dev\sdk\platform-tools\adb.exe -s <시리얼> install -r -g app\build\outputs\apk\debug\app-debug.apk
+git clone https://github.com/SOHADA2/crumble-phone.git; cd crumble-phone
+powershell -ExecutionPolicy Bypass -File setup-dev.ps1   # 처음 한 번 (JDK17 + 안드로이드 SDK 를 한 폴더에)
+.\dev.ps1 check                                          # 뭐가 있고 없는지 확인
 ```
+
+| 명령 | 하는 일 |
+|---|---|
+| `.\dev.ps1 check` | JDK·SDK·폰이 잡히는지 점검 (+ `local.properties` 자동 생성) |
+| `.\dev.ps1 compile` | 코틀린만 컴파일 — 문법·타입 빠르게 확인 |
+| `.\dev.ps1 build` | APK 빌드 |
+| `.\dev.ps1 install` | 빌드 + 폰에 설치 + 권한 되살리기 |
+| `.\dev.ps1 log` / `shot` | 로그 보기 / 화면 캡처 |
+
+- 도구를 다른 자리에 두려면 `-Root C:\android-dev` 또는 `$env:CRUMBLE_DEV_ROOT`.
+- **빌드만 하려면 폰이 없어도 된다.** 설치·로그·캡처만 폰이 필요하다.
+- 컴퓨터가 아예 없어도 된다 — `main` 에 push 하면 **GitHub Actions 가 APK 를 만들어**
+  `latest` 릴리스에 올린다(폰 브라우저로 바로 설치 / 앱 안 [업데이트]).

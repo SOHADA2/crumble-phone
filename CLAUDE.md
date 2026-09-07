@@ -6,6 +6,46 @@ PC용 봇([SOHADA2/crumble-bot](https://github.com/SOHADA2/crumble-bot))의 판�
 
 ---
 
+## 0. 새 컴퓨터에서 이어가기
+
+```powershell
+git clone https://github.com/SOHADA2/crumble-phone.git; cd crumble-phone
+powershell -ExecutionPolicy Bypass -File setup-dev.ps1   # 처음 한 번 (JDK17 + 안드로이드 SDK)
+.\dev.ps1 check                                          # 준비됐는지 확인
+.\dev.ps1 compile                                        # 코드 고친 뒤 빠른 확인
+```
+
+| 명령 | 하는 일 |
+|---|---|
+| `check` | JDK·SDK·폰이 잡히는지 점검. **`local.properties` 도 여기서 만들어 준다** |
+| `compile` | 코틀린만 컴파일(APK 안 만듦) — 문법·타입 빠르게 확인 |
+| `build` / `install` | APK 빌드 / 빌드+설치(+접근성·오버레이 권한 되살리기) |
+| `log` / `shot` | logcat 30줄 / 화면 캡처(`shots/`) |
+
+### 경로를 박아 두지 않는다 (`env.ps1`)
+예전엔 **`D:\android-dev` 가 `dev.ps1`·`setup-dev.ps1`·`local.properties`·README 네 곳에 박혀** 있었다.
+D 드라이브가 없는 컴퓨터에서는 클론해도 못 돌렸고, `gradlew` 를 직접 부르면 `JAVA_HOME is not set` 으로 죽었다.
+
+이제 **`env.ps1` 하나가 찾고** 나머지는 전부 그걸 부른다. 찾는 순서:
+1. `-Root` 인자 → 2. `$env:CRUMBLE_DEV_ROOT` → 3. `local.properties` 의 `sdk.dir` 가 가리키는 곳
+→ 4. `D:\android-dev` / `C:\android-dev` / `%LOCALAPPDATA%\android-dev`
+→ 5. **시스템에 이미 깔린 것** (`JAVA_HOME` · Android Studio 의 `jbr` · `ANDROID_HOME` · `%LOCALAPPDATA%\Android\Sdk`)
+
+- `local.properties` 는 gitignore 라 **새 클론에는 없다.** `check`/`compile`/`build`/`install` 이 찾은 SDK 로 만들어 준다.
+- ⚠️ **없는 드라이브에 `Join-Path` 를 쓰면 PS 5.1 이 `DriveNotFound` 를 뱉는다.** 후보를 훑는 게 목적이라
+  조용해야 하므로 문자열로 붙이고 `Test-Path` 로만 본다(`Has-Path`/`Sub-Path`). 실제로 겪고 고쳤다.
+- ⚠️ `$ErrorActionPreference='Stop'` 금지 — PS 5.1 이 네이티브 exe 의 stderr 를 오류로 감싼다.
+
+### 컴퓨터가 아예 없어도 된다
+`main` 에 push 하면 **GitHub Actions 가 APK 를 빌드**해 `latest` 릴리스에 올린다
+(`app-debug.apk` + `latest.json`). 저장소가 public 이라 앱이 인증 없이 받아 간다(앱 안 [업데이트]).
+→ **클라우드/다른 PC 에서도 코드·커밋·릴리스까지 전부 가능하고, 폰 실기 검증만 못 한다.**
+
+- 서명 키(`debug.keystore`)는 **저장소에 넣어 뒀다.** 지우거나 바꾸면 기존 설치본 위에 업데이트가 안 된다.
+- CI 는 `app/**`·`*.gradle.kts`·`gradle/**`·워크플로 변경에만 돈다. 스크립트·문서만 고치면 APK 는 안 나온다.
+
+---
+
 ## 1. 좌표와 해상도 (`Coords.kt`)
 
 코드의 모든 좌표는 **1440x3120 설계 좌표**로 적는다(PC 봇과 같은 기준. 대상 폰인 갤럭시 S25 울트라가

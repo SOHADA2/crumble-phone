@@ -1,10 +1,16 @@
 ﻿# 새 PC 준비 — 안드로이드 개발 도구를 한 폴더에 받는다(시스템은 안 건드린다).
-#   사용: powershell -ExecutionPolicy Bypass -File setup-dev.ps1 [-Root D:\android-dev]
+#   사용: powershell -ExecutionPolicy Bypass -File setup-dev.ps1 [-Root C:\android-dev]
 #   ※ Android Studio 는 필요 없다. 터미널에서 gradlew 로 빌드한다.
-param([string]$Root = 'D:\android-dev')
+#   ※ 자리를 안 주면 env.ps1 이 고른다 — 이미 깔린 게 있으면 거기를, 없으면 있는 드라이브에.
+#     (예전엔 D:\android-dev 가 박혀 있어서 D 드라이브가 없는 PC 에서는 그냥 실패했다.)
+param([string]$Root = '')
 
 $ErrorActionPreference = 'Continue'   # ⚠️ 'Stop' 을 쓰면 안 된다: PowerShell 5.1 은 네이티브 exe 의 stderr 를
                                       #    오류로 감싸서(NativeCommandError) java -version 같은 정상 출력에도 죽는다.
+
+. (Join-Path $PSScriptRoot 'env.ps1')
+if (-not $Root) { $Root = (Resolve-DevEnv).Root }
+Write-Host "설치 자리: $Root"
 $DL = Join-Path $Root '_dl'
 New-Item -ItemType Directory -Force $DL | Out-Null
 
@@ -46,8 +52,8 @@ $lic = "$Root\sdk\licenses"; New-Item -ItemType Directory -Force $lic | Out-Null
 $env:JAVA_HOME = "$Root\jdk"
 & cmd /c "`"$Root\sdk\cmdline-tools\latest\bin\sdkmanager.bat`" --sdk_root=`"$Root\sdk`" platform-tools `"platforms;android-34`" `"build-tools;34.0.0`"" | Select-Object -Last 3
 
-# 프로젝트가 SDK 를 찾도록. ⚠️ 역슬래시는 이스케이프로 먹히니 반드시 슬래시로 쓴다.
-Set-Content (Join-Path $PSScriptRoot 'local.properties') ("sdk.dir=" + $Root.Replace('\', '/') + "/sdk") -Encoding ASCII
+# 프로젝트가 SDK 를 찾도록. ⚠️ 역슬래시는 이스케이프로 먹히니 반드시 슬래시로 쓴다(env.ps1 이 처리).
+Sync-LocalProperties (Join-Path $Root 'sdk') | Out-Null
 
 Write-Host ""
 Write-Host "=== 준비 결과 ==="

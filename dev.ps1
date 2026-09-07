@@ -1,14 +1,26 @@
-﻿# 빌드·설치 도우미.  사용: .\dev.ps1 build | install | log | shot
+﻿# 빌드·설치 도우미.  사용: .\dev.ps1 check | compile | build | install | log | shot
 #   기기는 자동으로 찾는다(에뮬레이터가 아닌 실제 폰을 고른다).
-param([string]$Cmd = 'install', [string]$Root = 'D:\android-dev')
+#   도구 위치는 env.ps1 이 찾는다 — 컴퓨터마다 다를 수 있어서 경로를 여기 박지 않는다.
+param([string]$Cmd = 'install', [string]$Root = '')
 
 $ErrorActionPreference = 'Continue'
-$env:JAVA_HOME = "$Root\jdk"
-$env:ANDROID_HOME = "$Root\sdk"
-$env:GRADLE_USER_HOME = "$Root\.gradle"
-$ADB = "$Root\sdk\platform-tools\adb.exe"
-if (-not (Test-Path $ADB)) { $ADB = 'adb' }
+
+. (Join-Path $PSScriptRoot 'env.ps1')
+$DEV = Resolve-DevEnv $Root
+$ADB = $DEV.Adb
 $PKG = 'com.sohada.crumblephone'
+
+# 빌드하기 전에 도구가 있는지 확인하고, 새 클론이면 local.properties 를 만들어 준다.
+function Assert-Ready {
+    if ($DEV.Ok) {
+        if (Sync-LocalProperties $DEV.Sdk) { Write-Host "local.properties 를 맞췄어요 -> $($DEV.Sdk)" }
+        return $true
+    }
+    Write-Host "개발 도구가 없어요: $($DEV.Missing -join ', ')"
+    Write-Host "  준비:  powershell -ExecutionPolicy Bypass -File setup-dev.ps1"
+    Write-Host "  (다른 자리에 깔려면 -Root 로 지정)"
+    return $false
+}
 $APK = Join-Path $PSScriptRoot 'app\build\outputs\apk\debug\app-debug.apk'
 
 function Get-Phone {
@@ -21,10 +33,40 @@ function Get-Phone {
 }
 
 switch ($Cmd) {
+    'check' {
+        Write-Host "=== 개발 환경 점검 ==="
+        Write-Host ("  {0,-10} {1}" -f 'root', $DEV.Root)
+        $jdkTxt = '없음'; if ($DEV.Jdk) { $jdkTxt = $DEV.Jdk }
+        $sdkTxt = '없음'; if ($DEV.Sdk) { $sdkTxt = $DEV.Sdk }
+        Write-Host ("  {0,-10} {1}" -f 'JDK', $jdkTxt)
+        Write-Host ("  {0,-10} {1}" -f 'SDK', $sdkTxt)
+        Write-Host ("  {0,-10} {1}" -f 'adb', $ADB)
+        if ($DEV.Ok) {
+            Sync-LocalProperties $DEV.Sdk | Out-Null
+            $S = Get-Phone
+            $ph = '안 붙어 있음 (USB 디버깅 확인 · 빌드는 됩니다)'; if ($S) { $ph = $S }
+            Write-Host ("  {0,-10} {1}" -f '폰', $ph)
+            Write-Host ""
+            Write-Host "준비됐어요.  .\dev.ps1 compile (빠른 문법 확인) / build / install"
+        }
+        else {
+            Write-Host ""
+            Write-Host "없는 것: $($DEV.Missing -join ', ')"
+            Write-Host "  powershell -ExecutionPolicy Bypass -File setup-dev.ps1"
+        }
+    }
+    'compile' {
+        # 코틀린만 컴파일한다(APK 는 안 만든다). 코드 고치고 문법·타입만 빠르게 볼 때.
+        if (-not (Assert-Ready)) { break }
+        & (Join-Path $PSScriptRoot 'gradlew.bat') compileDebugKotlin --console=plain -q
+        if ($?) { Write-Host "컴파일 통과" }
+    }
     'build' {
+        if (-not (Assert-Ready)) { break }
         & (Join-Path $PSScriptRoot 'gradlew.bat') assembleDebug --no-daemon
     }
     'install' {
+        if (-not (Assert-Ready)) { break }
         & (Join-Path $PSScriptRoot 'gradlew.bat') assembleDebug --no-daemon
         if (-not (Test-Path $APK)) { Write-Host "빌드 실패"; break }
         $S = Get-Phone
@@ -54,5 +96,5 @@ switch ($Cmd) {
         & $ADB -s $S pull /sdcard/_s.png $f | Out-Null
         Write-Host $f
     }
-    default { Write-Host "사용: .\dev.ps1 build | install | log | shot" }
+    default { Write-Host "사용: .\dev.ps1 check | compile | build | install | log | shot" }
 }
