@@ -154,7 +154,17 @@ object Deck {
             Runner.set("쿠키 사전 만드는 중",
                 "그림 " + (rowsOut.size * Screen.CARD_COLS).coerceAtMost(names.size) + "/" + names.size)
             Runner.setProgress(rowsOut.size * Screen.CARD_COLS, names.size)
+            // ⚠️ **겹치는 행이 하나는 있어야** 이어 붙인 게 맞다고 할 수 있다.
+            //   한 쪽이 통째로 새것이면 사이가 빈 것일 수 있다 — 그러면 이름과 그림의 짝이
+            //   조용히 밀린다. 그 상태로 만드느니 멈추고 알린다.
+            if (pages > 0 && appended >= stars.size && stars.size >= Screen.CARD_ROWS_VISIBLE) {
+                Bot.log("겹치는 줄이 없어요 (" + appended + "줄 전부 새것) - 사이가 빌 수 있어 멈춥니다")
+                Runner.tap(Screen.DECK_CANCEL, 2000)
+                Runner.set("사전을 못 끝냈어요", "스크롤이 너무 많이 내려갔어요 · 다시 해 주세요")
+                return
+            }
             if (appended == 0 && pages > 0) { Bot.log("더 내려갈 데가 없어요"); break }
+            Bot.log("  한 쪽: 새 줄 " + appended + "개 (누적 " + rowsOut.size * Screen.CARD_COLS + ")")
             pageDown(); pages++
         }
 
