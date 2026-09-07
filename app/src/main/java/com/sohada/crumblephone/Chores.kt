@@ -103,7 +103,6 @@ object Chores {
         var bossNoticed = false   // '보스에 막혔다'는 안내를 한 번만 남기려고
         var bossTries = 0         // 이 스테이지에서 조합을 몇 번 바꿔 도전했는지
         var bossWaitUntil = 0L    // 내가 소환한 보스전이 끝날 때까지
-        var bannerSeen = 0        // 보스 배너가 연속 몇 바퀴 보였나(한 프레임 오탐 방지)
         var bulkTries = 0         // '한번에 클리어'를 몇 번 눌러 봤는지(안 먹으면 그만 두려고)
         var loggedFirst = false   // 시작 화면 판정값을 한 번만 남기려고
         tapsProven = false        // 증거는 실행마다 새로 모은다
@@ -236,34 +235,25 @@ object Chores {
                 // 백오프도 같이 푼다 — 안 그러면 앞 퀘스트 때문에 걸린 15분이
                 // 이미 교체된 새 퀘스트의 탐색까지 막아 버린다.
                 ovenTried = false
-                // ⚠️ `bannerSeen` 은 **여기서 지우면 안 된다.** 이건 '어느 퀘스트냐'와 무관한
-                //    한 프레임 오탐 방지용 카운터다. 지웠더니 몹이 빨리 죽는 계정에서
-                //    수령 → 배너 1회 → 수령 → 배너 1회 … 로 **영영 2 에 못 닿아 보스에 못 갔다.**
                 bossNoticed = false; bossTries = 0
                 probeAllowedAt = 0L
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 continue
             }
 
-            // ── ★ 보스 배너가 보이면 탐색을 기다리지 않고 바로 간다 (PC 봇 'B안') ──
+            // ── ★ 보스 배너가 보이면 **바로** 간다 (PC 봇 'B안') ──
             // 배너가 떠 있다 = 스테이지가 막혀 있다는 뜻이라, 탐색을 먼저 돌려 봐야 시간만 버린다.
-            // 한 프레임 오탐을 막으려고 **두 바퀴 연속** 보일 때만 인정한다.
             //
             // ⚠️ 옛날에 이 색 판정을 뺐던 이유는 **영역 평균**으로 봤기 때문이다 — 배너 위로 전투
             //    이펙트·데미지 숫자가 겹쳐 값이 흔들려 버튼을 놓치고 갇혔다. 지금은 스테이지 바 근처를
-            //    훑어 **가로로 길게 이어진 빨강**을 찾는다(`Screen.bannerScan`) — 이펙트가 조금 덮어도
-            //    띠 자체가 길어서 남는다. 놓쳐도(거짓 음성) 아래 '탐색 실패 → 보스' 가 받아 준다.
+            //    훑어 **가로로 길게 이어진 빨강**을 찾는다(`Screen.bannerScan`) — 길이와 띠 높이를
+            //    같이 봐서 실기 20장 전수 통과다. 놓쳐도 아래 '탐색 실패 → 보스' 가 받아 준다.
+            //
+            // ⚠️ **여기서 두 바퀴 연속 보기를 기다리지 않는다.** 예전엔 오탐이 무서워 그렇게 했는데,
+            //    기다리는 사이 퀘스트 수령이 카운터를 지워 **영영 못 들어가는** 사고가 났다.
+            //    오탐 방어는 `Boss.challengeOnce` 맨 앞으로 옮겼다 — 거기서 걸리면 조합도 안 바꾸고
+            //    돌아오니 **오탐 비용이 0** 이라, 여기서 굳이 기다릴 이유가 없다.
             if (Screen.hasBossBanner(b)) {
-                bannerSeen++
-                if (bannerSeen == 1) {
-                    // 한 프레임 오탐을 막으려고 한 바퀴 더 본다 — 다만 **여기서 바로** 다시 찍는다.
-                    // 예전엔 그냥 흘려보내 탐색·수령을 한 바퀴 다 돌고 왔는데, 그 사이에 퀘스트가
-                    // 완료돼 수령 경로가 카운터를 지워 버렸다. 몹이 빨리 죽는 계정에서는
-                    // 그게 매번이라 **영영 2 에 못 닿아 보스에 한 번도 못 갔다.**
-                    Bot.log("보스 소환 배너가 보여요 - 한 바퀴 더 확인합니다")
-                    Runner.set("보스 배너 확인 중")
-                    Runner.sleep(1500); continue
-                }
                 if (bossTries < Boss.PRESETS) {
                     val try_ = bossTries + 1
                     Bot.log("보스 소환 배너 확인 - 쿠키 조합 " + try_ + " 번으로 도전 (" + try_ + "/" + Boss.PRESETS + ")")
@@ -273,10 +263,10 @@ object Chores {
                     if (Boss.challengeOnce(try_)) {
                         bossTries = try_
                         bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
-                    } else { bannerSeen = 0; Runner.sleep(3000) }
+                    } else Runner.sleep(3000)
                     continue
                 }
-                if (bossTries >= Boss.PRESETS && !bossNoticed) {
+                if (!bossNoticed) {
                     // 조합을 한 바퀴 다 돌렸는데 배너가 그대로다 = 손으로 밀어야 하는 보스.
                     // 계속 두드리지 않고 사람에게 넘긴다. 쉬는 동안에도 완료 퀘스트는 계속 받는다.
                     bossNoticed = true
@@ -285,7 +275,7 @@ object Chores {
                     probeAllowedAt = System.currentTimeMillis() + BACKOFF_MINUTES * 60_000
                     Runner.sleep(8000); continue
                 }
-            } else bannerSeen = 0
+            }
 
             // ── 미완료 퀘스트 ──
             Runner.status = "퀘스트 기다리는 중"
@@ -309,9 +299,6 @@ object Chores {
                 quests++
                 Runner.set("퀘스트 보상 받는 중", "지금까지 " + quests + "개")
                 ovenTried = false
-                // ⚠️ `bannerSeen` 은 **여기서 지우면 안 된다.** 이건 '어느 퀘스트냐'와 무관한
-                //    한 프레임 오탐 방지용 카운터다. 지웠더니 몹이 빨리 죽는 계정에서
-                //    수령 → 배너 1회 → 수령 → 배너 1회 … 로 **영영 2 에 못 닿아 보스에 못 갔다.**
                 bossNoticed = false; bossTries = 0
                 probeAllowedAt = 0L
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"

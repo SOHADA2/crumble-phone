@@ -768,7 +768,7 @@ object Screen {
     }
 
     /** 지금 보스에 막혀 있나? = 상단 빨간 배너가 있나. */
-    fun hasBossBanner(b: Bitmap): Boolean = findBossBanner(b) >= 0
+    fun hasBossBanner(b: Bitmap, loose: Boolean = false): Boolean = findBossBanner(b, loose) >= 0
 
     /**
      * 배너를 누를 자리. 배너는 가로 가운데에 있으므로 x 는 화면 중앙을 쓰고,
