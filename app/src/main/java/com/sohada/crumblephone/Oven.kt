@@ -53,7 +53,19 @@ object Oven {
 
             Runner.set("오븐에서 장비 뽑는 중", "시작 " + attempt + "/2")
             Runner.tap(Screen.OVEN_AUTO, 1500)
-            Runner.tap(Screen.OVEN_GO, 1500)
+            // ★ 어느 패널이 열렸는지 보고 나서 누른다.
+            //   좌표가 같아서 눈 감고 누르면 [시작]/[정리 하기] 로 의미가 정반대일 수 있다.
+            var kind = Runner.shot()?.let { Screen.ovenPanelKind(it) } ?: "none"
+            if (kind == "result") {
+                Bot.log("  오븐: 지난 '자동 열기 결과'가 남아 있어요 - 먼저 정리하고 다시 엽니다")
+                Runner.tap(Screen.OVEN_GO, 2000)      // [정리 하기]
+                clearDialog()
+                clearPopups(3, 1500)
+                Runner.tap(Screen.OVEN_AUTO, 1500)
+                kind = Runner.shot()?.let { Screen.ovenPanelKind(it) } ?: "none"
+            }
+            if (kind != "open") { Bot.log("  오븐: '자동 열기' 패널이 안 열렸어요 (판정 " + kind + ")"); continue }
+            Runner.tap(Screen.OVEN_GO, 1500)          // [시작]
 
             // 가동 확인: 14초 안에 (a)비교 팝업 (b)뱃지 증가 (c)퀘스트 완료 중 하나면 돌고 있는 것.
             val until = System.currentTimeMillis() + 14_000
@@ -103,6 +115,13 @@ object Oven {
                     continue
                 }
 
+                // ★ 싸이클이 끝나면 게임이 '자동 열기 결과' 패널을 스스로 띄운다 — 가장 확실한 종료 신호다.
+                //   (뱃지 유휴보다 훨씬 낫다. PC 실측: 뱃지는 2590~2744 로 흔들리기만 해 가동/정지를 못 가른다.)
+                if (Screen.ovenPanelKind(cur) == "result") {
+                    Bot.log("  오븐: 한 싸이클 끝 ('자동 열기 결과' 패널, 넘김 " + dismissed + "회)")
+                    break
+                }
+
                 // 뱃지가 오르고 있으면 아직 도는 중이다.
                 val badge = Screen.ovenBadge(cur)
                 if (badge != lastBadge) { lastBadge = badge; lastMove = System.currentTimeMillis() }
@@ -150,60 +169,46 @@ object Oven {
      *      Auto 꺼짐 → '자동 열기' 패널 → **[시작]** → **켜진다** (정반대!)
      *    그래서 Auto 가 스스로 한 싸이클을 끝낸 뒤에 부르면 **오히려 다시 켜고 나간다.**
      *    PC 봇에서 이 탓에 '오븐에서 장비 뽑기 50개' 가 **123/50** 까지 초과 진행됐다(사용자 제보).
-     *    → **끈 뒤에 정말 꺼졌는지 확인하고, 아직 돌면 다시 끈다.**
+     *    → **누르기 전에 `Screen.ovenPanelKind` 로 어느 패널인지 가린다.**
+     *      'result' 면 [정리 하기], 'open' 이면 Auto 가 안 도는 것이니 안 누르고 X 로 닫는다.
      */
     private fun stopAuto() {
-        clearDialog()
-        clearPopups(3, 1500)
-
-        // ★ 켜져 있을 때만 누른다.
-        //   '1회에 여는 개수'만큼 열고 나면 **게임이 알아서 멈춘다**(사용자 확인: 보통 15개면 충분하고
-        //   20개짜리 한 싸이클이면 퀘스트가 바로 채워진다). 그래서 여기 도달했을 땐 대개 이미 꺼져 있다.
-        //   그 상태에서 누르면 '자동 열기' 패널이 열려 [시작]을 누르는 꼴이라 **오히려 켜진다**.
-        //   → 확인부터 하고, 꺼져 있으면 아무것도 누르지 않고 나간다. 빠르고 안전하다.
-        //   ※ 그러면 [정리 하기]를 못 누르지만, 장비가 꽉 차면 게임이 '자동 정리' 창을 띄우고
-        //     clearDialog 가 그걸 처리하므로 문제되지 않는다.
-        if (!autoRunning()) { Bot.log("  오븐: Auto 는 이미 꺼져 있어요 - 그대로 나갑니다"); return }
-
         for (t in 1..3) {
-            Bot.log("  오븐: Auto 끄고 정리")
-            clearDialog()
-            clearPopups(3, 1500)                   // 팝업이 있으면 Auto 패널이 제대로 안 열린다
-            Runner.tap(Screen.OVEN_AUTO, 2000)     // '자동 열기 결과' 패널
-            Runner.tap(Screen.OVEN_GO, 2000)       // [정리 하기]
-            clearPopups(2, 1000)
             if (!Runner.running) return
-            if (!autoRunning()) {
-                if (t > 1) Bot.log("  오븐: Auto 꺼진 것 확인 (" + t + "번째에)")
+            clearDialog()
+            clearPopups(3, 1500)
+            var kind = Runner.shot()?.let { Screen.ovenPanelKind(it) } ?: "none"
+            if (kind == "none") {
+                Runner.tap(Screen.OVEN_AUTO, 2000)   // 패널이 안 보이면 열어서 어느 쪽인지 본다
+                kind = Runner.shot()?.let { Screen.ovenPanelKind(it) } ?: "none"
+            }
+
+            if (kind == "result") {
+                // Auto 가 한 싸이클을 마치면 게임이 스스로 이 패널을 띄운다. [정리 하기]가 마무리다.
+                Bot.log("  오븐: '자동 열기 결과' - [정리 하기]로 마무리")
+                Runner.tap(Screen.OVEN_GO, 2000)
+                clearDialog()                        // '전투력 오르는 것만 착용하고 나머지 판매' 확인창
+                clearPopups(2, 1000)
                 return
             }
-            Bot.log("  오븐: Auto 가 아직 돌고 있어요 - 다시 끕니다 (" + t + "/3)")
+            if (kind == "open") {
+                // [시작] 버튼이 보인다 = Auto 는 돌고 있지 않다. **절대 누르지 말고** 닫는다.
+                // 여기를 눌렀던 것이 '끄려다 켜는' 사고의 정체였다.
+                Bot.log("  오븐: Auto 는 꺼져 있어요 ('자동 열기' 패널) - 누르지 않고 닫습니다")
+                Runner.tap(Screen.OVEN_PANEL_X, 1500)
+                return
+            }
+            Bot.log("  오븐: 패널이 안 열려요 - 다시 시도 (" + t + "/3)")
         }
-        Bot.log("  오븐: Auto 를 못 껐어요")
+        Bot.log("  오븐: Auto 상태를 확인하지 못했어요")
     }
 
-    /**
-     * Auto 가 지금도 돌고 있나. 뱃지(오븐에 쌓인 장비)가 **늘고 있으면** 돌고 있는 것이다.
-     * 시작 확인(baseBadge + 800)과 같은 재료라 새 좌표가 필요 없다.
-     *
-     * ⚠️ **줄어드는 건 세면 안 된다.** [정리 하기]는 쌓인 장비를 없애서 뱃지를 크게 **줄인다** —
-     *    절대값으로 보면 '제대로 껐다'를 '아직 돈다'로 오판하고, 그 오판이 곧 **다시 켜기**다.
-     */
     private fun clearPopups(n: Int, waitMs: Long) {
         for (k in 1..n) {
             val s = Runner.shot() ?: return
             if (!Screen.isOvenPopup(s)) return
             Runner.tap(Screen.OUTSIDE, waitMs)
         }
-    }
-
-    private fun autoRunning(): Boolean {
-        Runner.sleep(2000L)                 // 정리 연출이 끝나고 나서 재기 시작한다
-        val a = Runner.shot() ?: return false
-        val n1 = Screen.ovenBadge(a)
-        Runner.sleep(4000L)
-        val b = Runner.shot() ?: return false
-        return Screen.ovenBadge(b) - n1 > 400
     }
 
     /**

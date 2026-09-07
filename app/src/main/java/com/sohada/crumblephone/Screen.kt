@@ -705,8 +705,35 @@ object Screen {
     // ── 오븐(oven.ps1) ──
     val OVEN_AUTO   = intArrayOf(516, 2840)          // 오븐 왼쪽 'Auto' 버튼
     val OVEN_GO     = intArrayOf(713, 2815)          // '자동 열기'의 [시작] 과 '자동 열기 결과'의 [정리 하기] 가 같은 자리다
+    val OVEN_PANEL_X = intArrayOf(713, 3030)         // 패널 하단 주황 X (아무것도 실행하지 않고 닫을 때)
+    private val OVEN_HDR  = intArrayOf(713, 2280)    // 패널 헤더 — 결과 패널이 더 높이 올라온다
+    private val OVEN_SELL = intArrayOf(1240, 2775)   // 결과 패널에만 있는 [모두 팔기] 청록 버튼
     private val OVEN_EQUIP = intArrayOf(826, 2300)   // 장착 버튼 자리 — 팝업이 떴는지 보는 데만 쓰고 누르지 않는다
     private val OVEN_BADGE = intArrayOf(770, 845, 2675, 2750)   // 오븐에 쌓인 장비 뱃지(빨간 원)
+
+    /**
+     * 지금 화면에 오븐 패널이 떠 있나, 떠 있다면 어느 쪽인가 — **이 파일의 모든 사고가 여기서 났다.**
+     *   "open"   = '자동 열기'      → OVEN_GO 는 [시작]      (누르면 Auto 가 **켜진다**)
+     *   "result" = '자동 열기 결과' → OVEN_GO 는 [정리 하기] (누르면 정리하고 **꺼진다**)
+     *   "none"   = 패널 없음
+     *
+     * 좌표가 같아서 그동안 이 둘을 구분 못 하고 그냥 눌렀고, 그래서 끄려다 켜곤 했다.
+     * PC 봇에서 봇을 멈추고 직접 눌러 실측한 값(폰도 좌표가 같다):
+     *
+     *   자리                 '자동 열기'      '자동 열기 결과'   패널 없음
+     *   (516,2840) OVEN_AUTO  253,149,0       253,149,0         110,148,142(청록)
+     *   (713,2280) OVEN_HDR   0,126,145       0, 81, 99   ← 결과가 더 높이 올라온다
+     *   (1240,2775) OVEN_SELL 189,242,253     114,206,212 ← 결과에만 [모두 팔기]
+     */
+    fun ovenPanelKind(b: Bitmap): String {
+        val a = px(b, OVEN_AUTO[0], OVEN_AUTO[1])
+        // 패널이 뜨면 Auto 버튼 자리를 덮어 주황이 된다
+        if (!(Color.red(a) > 200 && Color.blue(a) < 80)) return "none"
+        val h = px(b, OVEN_HDR[0], OVEN_HDR[1])
+        val v = px(b, OVEN_SELL[0], OVEN_SELL[1])
+        if (Color.blue(h) < 120 && Color.red(v) < 160) return "result"
+        return "open"
+    }
 
     /**
      * 장착/판매 비교 팝업이 떠 있나? '장착' 버튼 자리가 청록이면 참.
