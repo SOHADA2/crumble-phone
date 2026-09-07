@@ -29,6 +29,7 @@ class SettingsActivity : ListActivity() {
 
     private lateinit var rowArena: LinearLayout
     private lateinit var rowOven: LinearLayout
+    private lateinit var rowCharge: LinearLayout
     private lateinit var rowGame: LinearLayout
     private lateinit var rowUpdate: LinearLayout
     private lateinit var rowCapOff: LinearLayout
@@ -92,12 +93,15 @@ class SettingsActivity : ListActivity() {
         // 봇이 '한 싸이클'이 얼마나 큰지 알고 상한을 제대로 잡는다.
         rowOven = row("오븐 1회 개수", value = Prefs.ovenPerRun.toString() + "개",
             subtitle = "게임의 '자동 열기 → 1회에 여는 개수'와 같게") { cycle(Prefs.OVEN_CHOICES, false) }
+        rowCharge = row("보스전 돌진 시간", value = chargeLabel(),
+            subtitle = "보스가 나오면 오른쪽으로 밀어붙여요 · 달려들면 잘 잡히는 보스가 많아요") { cycleCharge() }
         val (rAd, _) = switchRow("광고 제거 있음",
             "일일 던전에서 [SKIP]으로 횟수를 더 받아요", Prefs.adFree) { Prefs.adFree = it }
         gRun.addView(rTest); gRun.addView(separator())
         gRun.addView(rAd); gRun.addView(separator())
         gRun.addView(rowArena); gRun.addView(separator())
-        gRun.addView(rowOven)
+        gRun.addView(rowOven); gRun.addView(separator())
+        gRun.addView(rowCharge)
         root.addView(gRun)
 
         // ── 화면 ──
@@ -376,5 +380,20 @@ class SettingsActivity : ListActivity() {
         val next = choices[(if (i < 0) 0 else i + 1) % choices.size]
         if (arena) { Prefs.arenaFights = next; rowArena.setValue(next.toString() + "판", t.label2) }
         else { Prefs.ovenPerRun = next; rowOven.setValue(next.toString() + "개", t.label2) }
+    }
+
+    /** 보스전 돌진 시간 표시. 0 이면 '안 함'. */
+    private fun chargeLabel(): String {
+        val ms = Prefs.bossChargeMs
+        if (ms <= 0) return "안 함"
+        val s = ms / 1000.0
+        return (if (s == s.toInt().toDouble()) s.toInt().toString() else s.toString()) + "초"
+    }
+
+    private fun cycleCharge() {
+        val c = Prefs.BOSS_CHARGE_CHOICES
+        val i = c.indexOf(Prefs.bossChargeMs)
+        Prefs.bossChargeMs = c[(if (i < 0) 0 else i + 1) % c.size]
+        rowCharge.setValue(chargeLabel(), t.label2)
     }
 }

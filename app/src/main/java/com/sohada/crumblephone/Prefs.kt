@@ -71,4 +71,14 @@ object Prefs {
         set(v) { sp?.edit()?.putInt("ovenPerRun", v)?.apply() }
 
     val ARENA_CHOICES = intArrayOf(5, 10, 20, 30)
+
+    /**
+     * 보스전이 시작되면 오른쪽으로 밀어붙이는 시간(ms). 0 이면 안 한다.
+     * 전장을 누른 채 끌면 조이스틱이라 그 방향으로 캐릭터가 달려든다 —
+     * 대부분의 보스가 달려들었을 때 효과가 좋다(사용자 확인). 보스마다 알맞은 시간이 달라 직접 고른다.
+     */
+    val BOSS_CHARGE_CHOICES = intArrayOf(0, 1000, 1500, 2000, 2500, 3000, 4000, 5000)
+    var bossChargeMs: Int
+        get() = sp?.getInt("bossChargeMs", 2000) ?: 2000
+        set(v) { sp?.edit()?.putInt("bossChargeMs", v)?.apply() }
 }

@@ -55,6 +55,18 @@ object Boss {
             switchPreset(n)
             Runner.tap(Screen.BOSS_SUMMON, 3000)
 
+            // ── 전투가 시작되면 잠깐 오른쪽으로 밀어붙인다 ──
+            // 전장을 누른 채 끌면 **조이스틱**이라 그 방향으로 캐릭터가 달려든다.
+            // 대부분의 보스가 달려들었을 때 효과가 좋다. 시간은 ⚙ 에서 고른다(0 이면 안 함).
+            // ⚠️ `dispatchGesture` 는 비동기다 — **끝날 때까지 기다려 줘야** 다음 동작과 안 겹친다.
+            val chargeMs = Prefs.bossChargeMs
+            if (chargeMs > 0 && Runner.running) {
+                Bot.log("  오른쪽으로 " + (chargeMs / 1000.0) + "초 밀어붙임")
+                TapService.swipe(Screen.CHARGE_FROM[0], Screen.CHARGE_FROM[1],
+                    Screen.CHARGE_TO[0], Screen.CHARGE_TO[1], chargeMs.toLong())
+                Runner.sleep(chargeMs + 300L)
+            }
+
             // 기다리는 동안 진행률을 채워 준다(멈춘 것처럼 보이지 않게).
             var s = 0L
             while (s < WAIT_SEC && Runner.running) {
