@@ -64,8 +64,11 @@ object Deck {
         // ── 1) 이름 ──
         // 상세 화면에는 좌우 넘김(▶)이 있어서 목록으로 돌아올 필요가 없다.
         scrollTop()
-        Runner.tap(Screen.cardAt(0, 0, false), 1800)
-        var b = Runner.shot()
+        // 첫 칸 자리도 **찾아서** 누른다. 맨 위로 올린 뒤라도 몇 px 어긋나 있을 수 있다.
+        val top = Runner.shot()?.let { Screen.findStarRows(it) } ?: IntArray(0)
+        if (top.isEmpty()) { fail("카드 줄을 못 찾았어요"); return }
+        Runner.tap(Screen.cardAt(0, top[0]), 1800)
+        val b = Runner.shot()
         if (b == null || !Screen.atCookieDetail(b)) { fail("첫 칸의 상세를 못 열었어요"); return }
 
         // ★ 여기서 **한 칸도 건너뛰면 안 된다.**
