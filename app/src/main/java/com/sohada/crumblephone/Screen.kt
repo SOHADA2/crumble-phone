@@ -706,7 +706,8 @@ object Screen {
     val OVEN_AUTO   = intArrayOf(516, 2840)          // 오븐 왼쪽 'Auto' 버튼
     val OVEN_GO     = intArrayOf(713, 2815)          // '자동 열기'의 [시작] 과 '자동 열기 결과'의 [정리 하기] 가 같은 자리다
     val OVEN_PANEL_X = intArrayOf(713, 3030)         // 패널 하단 주황 X (아무것도 실행하지 않고 닫을 때)
-    private val OVEN_HDR  = intArrayOf(713, 2280)    // 패널 헤더 — 결과 패널이 더 높이 올라온다
+    private val OVEN_TOP  = intArrayOf(713, 2200)    // 패널 유무 — 두 패널 다 여기가 (0,126,14x) 짙은 청록
+    private val OVEN_HDR  = intArrayOf(713, 2280)    // 종류 — 자동 열기 B=145 / 결과 B=99
     private val OVEN_SELL = intArrayOf(1240, 2775)   // 결과 패널에만 있는 [모두 팔기] 청록 버튼
     private val OVEN_EQUIP = intArrayOf(826, 2300)   // 장착 버튼 자리 — 팝업이 떴는지 보는 데만 쓰고 누르지 않는다
     private val OVEN_BADGE = intArrayOf(770, 845, 2675, 2750)   // 오븐에 쌓인 장비 뱃지(빨간 원)
@@ -731,9 +732,15 @@ object Screen {
         // ⚠️ 처음엔 'OVEN_AUTO 자리가 주황이면 패널'로 봤다가 크게 틀렸다 —
         //    **Auto 가 돌 때 그 자리가 판매 이펙트로 빨강/주황이 된다**(PC 실측 R255 G73 B77 · R255 G155 B0).
         //    그래서 가동 중을 '자동 열기 패널'로 오인하고 '안 누르고 닫기'로 빠져 Auto 를 켜둔 채 나갔다.
-        // → 패널 유무는 **헤더가 짙은 청록인가**로만 본다. 두 패널만 R≈0 이다:
-        //    자동 열기 0,126,145 · 결과 0,81,99 · 이펙트 196,17,165 · 오븐화면 197,16,165 · 확인창 161,8,35
-        if (!(Color.red(h) < 60 && Color.blue(h) > 80)) return "none"
+        // → 그 다음엔 헤더 (713,2280) 으로 옮겼는데 이번엔 **쿠키 뽑기 화면의 짙은 청록 배경(25,68,81)** 을
+        //    '결과'로 오판했다. 최종: **유무는 한 줄 위 (713,2200)**, 종류만 (713,2280).
+        //    (713,2200)  자동 열기 0,126,145 · 결과 0,126,144  ← 두 패널만 이 값
+        //                뽑기화면 25,68,81 · 이펙트 99,181,255 · 오븐화면 254,178,14 · 확인창 42,51,43
+        //    (713,2280)  자동 열기 B=145 · 결과 B=99
+        //    PC 실측 스크린샷 19장 전수 검증 통과.
+        val t = px(b, OVEN_TOP[0], OVEN_TOP[1])
+        val tr = Color.red(t); val tg = Color.green(t); val tb = Color.blue(t)
+        if (!(tr < 40 && tg in 101..159 && tb in 121..179)) return "none"
         if (Color.blue(h) < 120 && Color.red(v) < 160) return "result"
         return "open"
     }
