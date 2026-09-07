@@ -91,10 +91,14 @@ class DeckSetupActivity : ListActivity() {
             }
         }
 
-        addContentView(ScrollView(this).apply {
-            isFillViewport = true
+        // ⚠️ `setContentView` 다. 처음에 `addContentView` 를 썼다가 화면이 안 떴다 —
+        //    창의 기본 부모는 FrameLayout 인데 LinearLayout.LayoutParams 를 얹어서 어긋났다.
+        //    다른 화면(`SettingsActivity`·`MainActivity`)과 같은 방식으로 맞춘다.
+        setContentView(ScrollView(this).apply {
+            setBackgroundColor(t.bg)
+            layoutParams = android.view.ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
             addView(root, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        }, LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        })
     }
 
     private fun deckBox(n: Int): LinearLayout {
