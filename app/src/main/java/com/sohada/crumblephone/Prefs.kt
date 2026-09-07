@@ -54,6 +54,20 @@ object Prefs {
     /** 덱 n 에 적어 둔 쿠키 수. */
     fun deckCount(n: Int): Int = deckNames(n).split("\n").count { it.isNotBlank() }
 
+    /**
+     * **화면에서 못 알아본** 쿠키의 순번들(쉼표로 구분). `Deck.checkDict` 가 채운다.
+     * 사전 화면에서 그 줄에 표시를 달아, 어떤 쿠키가 지금 못 쓰이는지 **눈으로 보이게** 한다.
+     * 비어 있으면 '아직 점검 안 함'.
+     */
+    var deckUnseen: String
+        get() = sp?.getString("deckUnseen", "") ?: ""
+        set(v) { sp?.edit()?.putString("deckUnseen", v)?.apply() }
+
+    /** 점검을 한 번이라도 돌렸나. */
+    var deckChecked: Boolean
+        get() = sp?.getBoolean("deckChecked", false) ?: false
+        set(v) { sp?.edit()?.putBoolean("deckChecked", v)?.apply() }
+
     /** 아레나를 몇 판까지 할지. 재화가 먼저 떨어지면 거기서 스스로 끝난다. */
     var arenaFights: Int
         get() = sp?.getInt("arenaFights", 10) ?: 10

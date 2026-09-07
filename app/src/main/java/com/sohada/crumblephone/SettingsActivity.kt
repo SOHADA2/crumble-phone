@@ -158,6 +158,16 @@ class SettingsActivity : ListActivity() {
         })
         if (Prefs.deckDictSize > 0) {
             gChk.addView(separator())
+            // 배치는 그림으로 찾으므로, 못 알아보는 쿠키는 덱에 적어도 안 들어간다.
+            // 어떤 쿠키가 그런지 미리 알 수 있어야 한다.
+            gChk.addView(row("쿠키 사전 점검",
+                value = if (!Prefs.deckChecked) "아직"
+                        else Prefs.deckUnseen.split(",").count { it.isNotBlank() }.let {
+                            if (it == 0) "전부 OK" else it.toString() + "마리 ✕" },
+                subtitle = "어떤 쿠키가 덱에 안 들어가는지 봐요 · 안 건드려요") {
+                Overlay.show(applicationContext); Deck.checkDict(applicationContext); finish()
+            })
+            gChk.addView(separator())
             gChk.addView(row("쿠키 사전 보기",
                 value = Prefs.deckDictSize.toString() + "마리" + (if (DeckDict.ready(this)) "" else " ⚠"),
                 subtitle = "잘못 읽힌 이름을 고칠 수 있어요") {

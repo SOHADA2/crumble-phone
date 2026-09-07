@@ -61,18 +61,23 @@ class DeckDictActivity : ListActivity() {
         })
 
         val names = DeckDict.names
+        // 점검에서 '화면에서 못 알아본' 쿠키들 — 그 줄에 표시를 단다.
+        val unseen = Prefs.deckUnseen.split(",").mapNotNull { it.trim().toIntOrNull() }.toHashSet()
 
         root.addView(text(
             if (names.isEmpty()) "아직 비어 있어요. 점검 → [쿠키 사전 만들기] 를 먼저 눌러 주세요."
-            else "편성 목록에 있는 " + names.size + "마리예요. 순서도 목록과 같아요.\n" +
-                 "글자가 깨진 것만 고치면 돼요 — 한두 글자 오독은 찾을 때 알아서 맞춰 봅니다.",
+            else "편성 목록에 있는 " + names.size + "마리예요.\n" +
+                 "글자가 깨진 것만 고치면 돼요 — 한두 글자 오독은 찾을 때 알아서 맞춰 봅니다." +
+                 (if (!Prefs.deckChecked) "\n⚠ 아직 점검 안 했어요 — 점검 → [쿠키 사전 점검] 을 눌러 보세요."
+                  else if (unseen.isEmpty()) "\n✓ 점검 완료 — 전부 덱에 넣을 수 있어요."
+                  else "\n⚠ 표시된 " + unseen.size + "마리는 화면에서 못 알아봐요 — 덱에 적어도 안 들어갑니다."),
             13f, t.label3).apply { setPadding(dp(22), dp(4), dp(22), dp(10)) })
 
         if (names.isNotEmpty()) {
             val g = group()
             names.forEachIndexed { i, n ->
                 if (i > 0) g.addView(separator())
-                g.addView(nameRow(i + 1, n))
+                g.addView(nameRow(i + 1, n, unseen.contains(i)))
             }
             root.addView(g)
         }
@@ -87,8 +92,11 @@ class DeckDictActivity : ListActivity() {
         })
     }
 
-    /** 번호 + 고칠 수 있는 이름 칸. 번호는 편성 목록의 순번이라 눈으로 대조할 수 있다. */
-    private fun nameRow(no: Int, name: String): LinearLayout {
+    /**
+     * 번호 + 고칠 수 있는 이름 칸.
+     * `bad` 면 오른쪽에 표시를 단다 — **이 쿠키는 지금 덱에 넣을 수 없다**는 뜻이다.
+     */
+    private fun nameRow(no: Int, name: String, bad: Boolean = false): LinearLayout {
         val box = EditText(this).apply {
             setText(name)
             setTextColor(t.label)
@@ -111,6 +119,9 @@ class DeckDictActivity : ListActivity() {
                 layoutParams = LinearLayout.LayoutParams(dp(30), WRAP_CONTENT).apply { rightMargin = dp(12) }
             })
             addView(box)
+            if (bad) addView(text("못 알아봄", 12f, t.gold).apply {
+                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(8) }
+            })
         }
     }
 

@@ -181,9 +181,83 @@ object Deck {
         }
         Prefs.deckDict = names.joinToString("\n")
         DeckDict.saveThumbs(ctx, thumbs)
+        // 사전이 바뀌면 지난 점검 결과는 낡은 것이다. 지워서 '아직 점검 안 함'으로 되돌린다.
+        Prefs.deckUnseen = ""; Prefs.deckChecked = false
         Runner.set("쿠키 사전 완성", names.size.toString() + "마리 (이름+그림)")
         Runner.lastResult = "쿠키 사전 " + names.size + "마리"
         Bot.log("── 쿠키 사전 " + names.size + "마리 (이름+그림) 저장 ──")
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  ①-2 사전 점검 — **어떤 쿠키가 지금 안 되는지** 알려 준다
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * 편성 목록을 한 바퀴 훑으며 **사전의 어느 쿠키를 화면에서 알아보는지** 센다.
+     *
+     * 배치는 그림으로 찾으므로, 못 알아보는 쿠키는 **덱에 적어도 안 들어간다.**
+     * 그걸 [시험] 을 돌려 로그로만 알 수 있으면 불편하다 — 여기서 미리 확인하고
+     * 사전 화면에 표시를 달아 **눈으로 보이게** 한다.
+     *
+     * 카드를 **하나도 누르지 않는다.** 편집 모드에 들어갔다 주황 ✕ 로 나오기만 한다.
+     */
+    fun checkDict(ctx: Context) {
+        if (!Runner.guard()) return
+        Runner.running = true; Runner.task = "사전 점검"
+        thread(name = "deckcheck") {
+            try {
+                if (!Runner.bringGameToFront(ctx)) { Runner.set("시작 못 함", "게임을 찾지 못했어요"); return@thread }
+                val (ok, why) = Runner.resetToMain()
+                if (!ok) { Runner.failByReason(why); return@thread }
+                check(ctx)
+            }
+            catch (e: Exception) { Runner.set("오류", e.message ?: "알 수 없음") }
+            finally { Runner.running = false; Runner.task = "" }
+        }
+    }
+
+    private fun check(ctx: Context) {
+        if (!DeckDict.ready(ctx)) { Runner.set("사전이 아직이에요", "[쿠키 사전 만들기] 를 먼저 해 주세요"); return }
+        Runner.set("사전 점검 중", "편성 화면으로")
+        Runner.tap(Screen.NAV_COOKIE, 2500)
+        if (!atRoster()) { fail("편성 화면을 못 열었어요"); return }
+        Runner.tap(Screen.ROSTER_EQUIP, 2200)
+        if (!atEdit()) { fail("편집 모드로 못 들어갔어요"); return }
+        scrollTop()
+
+        val seen = HashSet<Int>()
+        var cards = 0
+        var pages = 0
+        var quiet = 0
+        while (Runner.running && pages < 40) {
+            val shot = settle()
+            if (shot == null || !Screen.atDeckEdit(shot)) { fail("편집 모드를 벗어났어요"); return }
+            val stars = Screen.findStarRows(shot)
+            if (stars.isEmpty()) { fail("카드 줄을 못 찾았어요"); return }
+            var newHere = 0
+            for (sy in stars) for (c in 0 until Screen.CARD_COLS) {
+                cards++
+                val who = DeckDict.identify(ctx, listOf(Screen.cardThumb(shot, c, sy)))
+                if (who >= 0 && seen.add(who)) newHere++
+            }
+            Runner.set("사전 점검 중", "알아본 쿠키 " + seen.size + "/" + DeckDict.names.size)
+            Runner.setProgress(seen.size, DeckDict.names.size)
+            if (newHere == 0) { quiet++; if (quiet >= 2) break } else quiet = 0
+            pageDown(); pages++
+        }
+        Runner.tap(Screen.DECK_CANCEL, 2000)
+
+        val miss = DeckDict.names.indices.filter { !seen.contains(it) }
+        Prefs.deckUnseen = miss.joinToString(",")
+        Prefs.deckChecked = true
+        Bot.log("── 사전 점검: " + seen.size + "/" + DeckDict.names.size + "마리 확인 ──")
+        if (miss.isEmpty()) Bot.log("전부 알아봐요 - 어떤 쿠키든 덱에 넣을 수 있어요")
+        else Bot.log("못 알아본 " + miss.size + "마리: " +
+            miss.joinToString(", ") { DeckDict.names.getOrElse(it) { "?" } })
+        Runner.set("사전 점검 끝",
+            if (miss.isEmpty()) "전부 알아봐요 (" + seen.size + "마리)"
+            else seen.size.toString() + "마리 알아봄 · " + miss.size + "마리 못 알아봄")
+        Runner.lastResult = "사전 점검: " + seen.size + "/" + DeckDict.names.size + "마리"
     }
 
     // ══════════════════════════════════════════════════════════
@@ -223,6 +297,14 @@ object Deck {
             else { want.add(i); Bot.log("'" + nm + "' → " + DeckDict.names[i] + " (" + why + ")") }
         }
         if (want.isEmpty()) { Runner.set("이름을 하나도 못 찾았어요", "사전을 다시 만들어 보세요"); return }
+
+        // 점검에서 이미 '못 알아본다'고 나온 쿠키는 **시작 전에** 알려 준다.
+        // 한참 돌린 뒤에야 아는 것보다 낫다.
+        val known = Prefs.deckUnseen.split(",").mapNotNull { it.trim().toIntOrNull() }.toHashSet()
+        val risky = want.filter { known.contains(it) }
+        if (risky.isNotEmpty())
+            Bot.log("⚠ 지난 점검에서 못 알아본 쿠키가 섞여 있어요: " +
+                risky.joinToString(", ") { DeckDict.names.getOrElse(it) { "?" } })
 
         Runner.set("덱 " + n + "번 맞추는 중", "편성 화면으로")
         Runner.tap(Screen.NAV_COOKIE, 2500)
