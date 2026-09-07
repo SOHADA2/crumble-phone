@@ -131,16 +131,27 @@ object Daily {
                 adUsed++
                 Runner.set("일일 던전 " + idx + "번째", name + " · 횟수 더 받는 중 (" + adUsed + ")")
                 Bot.log("던전 " + idx + ": [SKIP] 으로 도전 횟수를 더 받습니다 (" + adUsed + "/" + AD_MAX + ")")
-                Runner.tap(Screen.DAILY_AD_SKIP, 2500)
-                // ⚠️ 광고 제거가 없는데 설정이 켜져 있으면 **진짜 광고가 재생된다.**
-                //    던전 화면을 벗어나면 그걸로 보고 빠져나온 뒤, 이 실행에서는 다시 안 쓴다.
+                Runner.tap(Screen.DAILY_AD_SKIP, 3000)
+                // ★ [SKIP] 은 횟수만 받고 끝나는 게 아니라 **곧바로 전투가 시작된다**(2026-09-07 실측).
+                //   그래서 '던전 화면으로 6초 안에 돌아오나' 로 광고를 가리면 **전투를 광고로 오판**한다
+                //   (실제로 그랬다 — 봇이 스스로 adFree 를 꺼 버리고 일일 던전을 끝냈다).
+                //
+                //   광고와 전투를 가르는 건 **하단 주황 닫기 버튼**이다. 실측(같은 화면들):
+                //     던전 화면 5/7 · 던전 전투 중 5/7 · (광고는 전체화면이라 게임 UI 가 아예 없다)
+                //   그래서 '게임 UI 가 보이는 동안' 은 전투로 보고 기다리고,
+                //   게임 UI 가 연속으로 사라지면 그때만 광고로 본다.
+                var offGame = 0
                 var back = false
-                for (k in 1..6) {
-                    if (Runner.shot()?.let { Screen.atDailyEntry(it) } == true) { back = true; break }
-                    Runner.sleep(1000)
+                val adDeadline = System.currentTimeMillis() + 150_000
+                while (System.currentTimeMillis() < adDeadline && Runner.running) {
+                    val s = Runner.shot()
+                    if (s != null && Screen.atDailyEntry(s)) { back = true; break }   // 전투 끝 · 복귀
+                    offGame = if (s != null && Screen.hasCloseButton(s)) 0 else offGame + 1
+                    if (offGame >= 6) break                                            // 15초쯤 게임 밖 = 광고
+                    Runner.sleep(2500)
                 }
-                if (!back) {
-                    Bot.log("  화면을 벗어났어요 - 광고가 재생된 것 같습니다. [SKIP] 은 이번 실행에서 그만 씁니다")
+                if (!back && offGame >= 6) {
+                    Bot.log("  게임 화면이 사라졌어요 - 광고가 재생된 것 같습니다. [SKIP] 은 이번 실행에서 그만 씁니다")
                     Bot.log("  ⚙ → '광고 제거 있음' 을 꺼 주세요")
                     Prefs.adFree = false
                     for (k in 1..4) {
@@ -221,7 +232,13 @@ object Daily {
      * 남은 열쇠를 **하나씩 다 쓴다.** 몇 판 돌았는지 돌려준다.
      *
      * 열쇠는 낱개로 남는다(시간·상자·퀘스트로 들어온다). 그래서 '4번' 같은 횟수를 박지 않고
-     * **도전하기 버튼 색**과 **빨간 점**만 본다 — 주황/닷 있으면 남았고, 청록/닷 없으면 끝이다.
+     * **도전하기 버튼 색**만 본다 — 주황이면 남았고 청록이 되면 그 던전은 끝이다.
+     *
+     * ⚠️ **빨간 점으로 가르지 말 것 (2026-09-07 실측으로 확인).**
+     *   도전하기가 **주황(2/3 남음)인데 빨간 점은 0/25 = 없었다.** 닷을 문지기로 두었더니
+     *   남은 열쇠가 있는 던전에서 **한 판도 안 싸우고** 빠져나왔다.
+     *   광고로 받는 도전(=[SKIP])에도 닷이 안 붙는다(사용자 확인). 닷은 '있으면 있다' 정도의
+     *   신호일 뿐 **없다고 없는 게 아니다.** 버튼 색이 유일하게 믿을 수 있는 신호다.
      */
     private fun runKeys(idx: Int, name: String): Int {
         var fought = 0
@@ -231,9 +248,6 @@ object Daily {
             val s = Runner.shot()
             if (s == null) { Runner.sleep(900); continue }
             if (Screen.atDailyEntry(s)) {
-                // 빨간 점이 없으면 **할 게 없는 것**이다. 게임이 직접 알려 주는 신호라
-                // 색 임계보다 깨끗하다 — 다 쓴 던전은 여기서 즉시 끊긴다(기다리지 않는다).
-                if (!Screen.hasRedDot(s, Screen.DOT_CHALLENGE)) break
                 if (Screen.dailyChallengeDone(s)) break        // 청록 = 남은 열쇠 없음
                 if (Screen.dailyChallengeOpen(s)) {            // 주황 = 아직 남음
                     idle = 0
