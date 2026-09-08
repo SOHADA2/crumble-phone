@@ -214,7 +214,7 @@ object Chores {
                     Runner.tap(Screen.QUEST_BAR, 350)
                     if (waitBarChanged(ratio)) {
                         tapsProven = true; quests++; bulkTries = 0
-                        ovenTried = false; bossNoticed = false; bossTries = 0; probeAllowedAt = 0L
+                        ovenTried = false; probeAllowedAt = 0L
                         Bot.log("  받았어요 - 띠가 바뀌었습니다")
                         Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                     }
@@ -235,7 +235,6 @@ object Chores {
                 // 백오프도 같이 푼다 — 안 그러면 앞 퀘스트 때문에 걸린 15분이
                 // 이미 교체된 새 퀘스트의 탐색까지 막아 버린다.
                 ovenTried = false
-                bossNoticed = false; bossTries = 0
                 probeAllowedAt = 0L
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 continue
@@ -275,6 +274,15 @@ object Chores {
                     probeAllowedAt = System.currentTimeMillis() + BACKOFF_MINUTES * 60_000
                     Runner.sleep(8000); continue
                 }
+            } else if (bossTries > 0 || bossNoticed) {
+                // ★ **배너가 사라졌다 = 이 보스는 끝났다**(깼거나 애초에 없다).
+                //   조합 순번은 **여기서만** 되돌린다.
+                //
+                //   ⚠️ 예전엔 퀘스트를 받을 때마다 되돌렸는데, 스테이지가 높은 계정은 퀘스트가
+                //      초 단위로 완료된다 — 그래서 조합 1·2 만 반복하고 **3·4·5 로 넘어가지
+                //      못했다**(사용자 신고). 퀘스트가 바뀌는 것과 보스가 바뀌는 것은 별개다.
+                Bot.log("보스 배너가 사라졌어요 - 쿠키 조합을 1번부터 다시 셉니다")
+                bossTries = 0; bossNoticed = false
             }
 
             // ── 미완료 퀘스트 ──
@@ -299,7 +307,6 @@ object Chores {
                 quests++
                 Runner.set("퀘스트 보상 받는 중", "지금까지 " + quests + "개")
                 ovenTried = false
-                bossNoticed = false; bossTries = 0
                 probeAllowedAt = 0L
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 Runner.sleep(3000); continue
