@@ -107,66 +107,32 @@ class SetupActivity : AppCompatActivity() {
 
         // 설치할 때 겁을 먹고 여기까지 못 오는 사람이 있다. 이미 온 사람에게는
         // '그게 정상이었다' 고 알려 주는 것만으로 충분하고, 다음 업데이트 때 또 만나므로 미리 말해 둔다.
-        root.addView(text("설치할 때 겁나는 창을 봤다면", 15f, t.label, medium).apply {
+        root.addView(text("설치할 때 '알 수 없는 개발자' 라고 막혔죠?", 15f, t.label, medium).apply {
             setPadding(dp(20), dp(16), dp(20), dp(2))
         })
         root.addView(text(
-            "구글 Play 프로텍트가 '알 수 없는 개발자' · '유해한 앱일 수 있음' 이라고 막았을 거예요. " +
-            "정상입니다 — 스토어를 거치지 않은 앱은 전부 그렇게 뜹니다.\n" +
-            "[세부정보] 또는 [자세히] → [무시하고 설치] 로 넘기면 돼요. " +
-            "앱 안 [업데이트] 로 새 판을 받을 때도 똑같이 한 번 물어봅니다.",
+            "정상이에요. [세부정보] → [무시하고 설치] 로 넘기면 됩니다.",
             14f, t.label2).apply { setPadding(dp(20), 0, dp(20), dp(4)) })
 
         val s1 = step(1, "접근성 서비스", "봇이 화면을 대신 눌러 줘요. 이게 없으면 아무것도 못 합니다.",
             { TapService.isReady }) { body ->
             body.addView(button("접근성 설정 열기", t.blue, Color.WHITE) { openAccessibility() })
-
-            // 여기서 제일 많이 헤맨다. 삼성은 접근성 첫 화면에 카테고리만 있고
-            // 우리 항목은 [설치된 앱] 안에 들어 있다. '목록에서 찾으세요' 로는 못 찾는다.
-            body.addView(head("① 목록에서 찾기"))
-            body.addView(text(
-                "설정이 열리면 화면을 아래로 내려 [설치된 앱] 을 누르세요. 그 안에 " +
-                "'크럼블 폰봇 조작' 이 있습니다.\n" +
-                "기기에 따라 [설치된 서비스] · [다운로드한 앱] · [다운로드한 서비스] 로 적혀 있어요. " +
-                "첫 화면에 바로 보이는 기기도 있습니다.",
-                14f, t.label2))
-
-            body.addView(head("② 켜기"))
-            body.addView(text(
-                "스위치를 켜면 '기기를 완전히 제어하도록 허용할까요?' 창이 떠요. [허용] 을 누르면 끝이에요.\n" +
-                "이 창이 무섭게 쓰여 있는데, 화면을 눌러 주려면 안드로이드가 이 등급을 요구합니다.",
-                14f, t.label2))
-
-            body.addView(warn("스위치가 회색이거나 '보안을 위해 이 설정은 사용할 수 없습니다' 로 막히면 " +
-                "아래 [막혔을 때] 로 가세요. 스토어를 안 거친 앱이라 잠겨 있는 겁니다."))
+            // 실측(One UI 8.0.5): 첫 화면에 앱 이름이 아예 안 나온다. [설치된 앱] 안에 있다.
+            body.addView(path("맨 아래 [설치된 앱] → 크럼블 폰봇 조작 → 켜기"))
 
             body.addView(head("'앱의 액세스가 거부됨' 이 뜨면"))
             body.addView(text(
-                "스토어를 안 거치고 깐 앱이라 안드로이드가 접근성을 잠가 둔 거예요. 푸는 순서가 있습니다.",
-                14f, t.label2))
-            // 실기(SM-S938N · One UI 8.0.5)에서 재현해 확인했다:
-            //   풀린 상태의 앱 정보에는 ⋮ 가 **아예 없다**. 막힌 동안에만 생기고,
-            //   그 메뉴 안에는 [제한된 설정 허용] 딱 하나만 들어 있다.
-            //   그래서 '⋮ 가 없다' 는 대부분 '아직 안 막혔다' 는 뜻이다.
-            body.addView(text(
-                "① 그 창의 [닫기] 를 누른다\n" +
-                "② 아래 [앱 정보 열기] 를 누른다\n" +
-                "③ 오른쪽 위 ⋮ (옵션 더보기) → [제한된 설정 허용]\n" +
-                "④ 지문이나 PIN 을 물어보면 확인해 주세요\n" +
-                "⑤ 다시 [접근성 설정 열기] → [설치된 앱] → 크럼블 폰봇 조작 을 켠다",
-                14f, t.label2).apply { setPadding(0, dp(10), 0, 0) })
+                "① [닫기]\n" +
+                "② 아래 [앱 정보 열기]\n" +
+                "③ 오른쪽 위 ⋮ → [제한된 설정 허용]\n" +
+                "④ 위로 돌아가 다시 켜기",
+                15f, t.label2))
             body.addView(button("앱 정보 열기", t.fill, t.label) { openAppInfo() })
-
-            body.addView(warn("⋮ 가 안 보이나요? 아직 막힌 상태가 아니라서 그래요.\n" +
-                "이 메뉴는 막혀 있는 동안에만 생깁니다. 위 [접근성 설정 열기] 로 가서 " +
-                "'앱의 액세스가 거부됨' 창을 한 번 본 뒤에 오세요.\n" +
-                "다 풀리고 나면 ⋮ 는 다시 사라져요 — 그건 정상입니다."))
-
-            body.addView(head("PC 가 있으면 확실한 길"))
+            // 실측: ⋮ 는 막혀 있는 동안에만 생기고 풀리면 사라진다.
+            //       '⋮ 가 없다' 는 대개 '아직 안 막혔다' 는 뜻이라 이 한 줄이 꼭 필요하다.
             body.addView(text(
-                "USB 로 연결하고(개발자 옵션 → USB 디버깅) PC 에서 이 한 줄이면 잠금이 풀려요. " +
-                "눌러서 복사할 수 있어요.", 14f, t.label2))
-            body.addView(code("adb shell appops set " + packageName + " ACCESS_RESTRICTED_SETTINGS allow"))
+                "⋮ 가 없으면 아직 안 막힌 거예요. 위에서 한 번 켜 보고 오세요.",
+                13f, t.label3).apply { setPadding(0, dp(10), 0, 0) })
         }
 
         val s2 = step(2, "화면 읽기", "게임 화면을 읽어서 지금 무슨 화면인지 판단해요.",
@@ -175,10 +141,8 @@ class SetupActivity : AppCompatActivity() {
                 "그대로 두면 이 앱 자신만 찍혀서 게임을 못 봅니다."))
             body.addView(button("화면 읽기 허용", t.blue, Color.WHITE) { askProjection() })
             body.addView(text(
-                "[전체 화면] 으로 바꾸고 → [다음] → [지금 시작] 을 누르면 돼요.\n" +
-                "이 허락은 한 번만 유효해서, 폰을 다시 켜거나 앱을 껐다 켜면 다시 눌러야 해요. " +
-                "녹화하거나 어디로 보내지 않습니다.",
-                14f, t.label2).apply { setPadding(0, dp(10), 0, 0) })
+                "폰을 껐다 켜면 이것만 다시 눌러야 해요.",
+                13f, t.label3).apply { setPadding(0, dp(10), 0, 0) })
         }
 
         val s3 = step(3, "게임 위에 표시", "게임 위에 작은 상태 알약을 띄웁니다. 무엇을 하는 중인지 게임을 보면서 알 수 있어요.",
@@ -205,6 +169,16 @@ class SetupActivity : AppCompatActivity() {
             fitsSystemWindows = true
         })
         tick()
+    }
+
+    /**
+     * **이 단계에서 할 일 한 줄.** 설명이 아니라 경로다 — 이것만 보고 따라갈 수 있어야 한다.
+     * 눈에 걸리라고 크게, 한 칸 안에 넣는다.
+     */
+    private fun path(s: String) = text(s, 16f, t.label, medium).apply {
+        background = t.round(t.fill, dpf(12f))
+        setPadding(dp(14), dp(13), dp(14), dp(13))
+        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) }
     }
 
     /** 작은 소제목. 한 단계 안이 길어지면 눈이 어디를 읽는지 잃는다. */
