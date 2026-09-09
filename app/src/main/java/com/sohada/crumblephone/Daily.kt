@@ -63,7 +63,15 @@ object Daily {
         for (d in 1..maxDungeons) {
             if (!Runner.running) break
 
-            var b = Runner.shot() ?: break
+            // ⚠️ 화면 읽기가 한 번 실패했다고 **한 바퀴 전체를 끝내면 안 된다**(예전엔 `?: break` 였다).
+            //    캡처는 가끔 null 을 준다 — 몇 번 다시 찍어 보고 그래도 안 되면 그때 끝낸다.
+            var b: android.graphics.Bitmap? = null
+            for (t in 1..4) {
+                b = Runner.shot()
+                if (b != null || !Runner.running) break
+                Runner.sleep(800)
+            }
+            if (b == null) { Bot.log("화면을 못 읽어요 - 종료"); break }
 
             // ── 던전 화면이 아니면 목록에서 하나 골라 들어간다 ──
             if (!Screen.atDailyEntry(b)) {
@@ -243,8 +251,16 @@ object Daily {
     private fun runKeys(idx: Int, name: String): Int {
         var fought = 0
         var idle = 0
-        val deadline = System.currentTimeMillis() + 260_000
-        while (System.currentTimeMillis() < deadline && Runner.running) {
+        // ⚠️ 2026-09-09: 예전엔 던전당 260초 고정이었다. 전투 한 판이 40~60초라 기회가 4~5개면
+        //    **남은 기회가 있는데도 시간에 걸려 끊겼다**(PC 로그: 던전 하나에 296초 쓴 판이 있다).
+        //    끊길 때 로그도 없어서 '그냥 끝나버린다'로 보였다(사장님 지적).
+        //    → 한 판을 시작할 때마다 시계를 다시 준다. '기회가 있으면 계속' 이 이 함수의 의도다.
+        //      대신 전체 상한(15분)을 따로 둬서 무한히 매달리지는 않게 한다.
+        val stallMs = 180_000L
+        var deadline = System.currentTimeMillis() + stallMs
+        val hardStop = System.currentTimeMillis() + 900_000L
+        while (System.currentTimeMillis() < deadline
+            && System.currentTimeMillis() < hardStop && Runner.running) {
             val s = Runner.shot()
             if (s == null) { Runner.sleep(900); continue }
             if (Screen.atDailyEntry(s)) {
@@ -255,6 +271,7 @@ object Daily {
                     Runner.set("일일 던전 " + idx + "번째", name + " · " + fought + "번째 도전")
                     Runner.setProgress(2, 4)
                     Runner.tap(Screen.DAILY_CHALLENGE, 3000)
+                    deadline = System.currentTimeMillis() + stallMs   // 진전 있음 → 시계 다시
                     continue
                 }
                 idle++
@@ -269,6 +286,12 @@ object Daily {
             Runner.detail = name + " · 자동 전투 중"
             Runner.setProgress(3, 4)
             Runner.sleep(5000)
+        }
+        // 조용히 넘어가지 않게 — 왜 끝났는지 남긴다.
+        if (Runner.running) {
+            val now = System.currentTimeMillis()
+            if (now >= hardStop) Bot.log("던전 " + idx + ": 전체 상한(15분) 도달 - 남은 기회가 있어도 넘어갑니다")
+            else if (now >= deadline) Bot.log("던전 " + idx + ": " + (stallMs / 1000) + "초 동안 진전이 없어 넘어갑니다")
         }
         return fought
     }
