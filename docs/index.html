@@ -83,6 +83,26 @@ h1{font-size:36px;line-height:1.2;letter-spacing:-.6px;font-weight:800;
 @keyframes nudge{0%,100%{transform:translateY(0)}50%{transform:translateY(3px)}}
 .tiny{margin-top:12px;text-align:center;color:var(--label3);font-size:13px}
 
+/* ── 길드 확인 ── 받기를 누르면 단추 자리 아래로 펼쳐진다. */
+.gate{margin-top:14px;padding:18px;border-radius:20px;background:var(--fill);
+  border:1px solid rgba(255,255,255,.06);animation:drop .42s cubic-bezier(.2,.8,.3,1) both}
+.gate[hidden]{display:none}
+@keyframes drop{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+.gate.no{animation:shake .45s}
+@keyframes shake{15%,85%{transform:translateX(-3px)}35%,65%{transform:translateX(5px)}50%{transform:translateX(-7px)}}
+.gq{text-align:center;font-size:16px;color:var(--label);font-weight:600}
+.grow{display:flex;gap:8px;margin-top:14px}
+.grow input{flex:1;min-width:0;padding:14px 16px;border-radius:14px;
+  background:rgba(0,0,0,.28);border:1px solid var(--sep);color:var(--label);
+  font-size:17px;text-align:center;outline:none;font-family:inherit}
+.grow input:focus{border-color:var(--orange)}
+.grow button{padding:0 20px;border-radius:14px;border:none;border-bottom:4px solid #8A4A08;
+  background:linear-gradient(#FFCB6E,var(--orange-deep));color:#3B1D02;
+  font-size:16px;font-weight:800;font-family:inherit}
+.grow button:active{transform:translateY(2px);border-bottom-width:2px}
+.gmsg{margin-top:12px;text-align:center;font-size:13px;color:var(--label3)}
+.gmsg.bad{color:var(--red)}
+
 /* ── 세 걸음 ── 글 대신 번호와 두세 낱말. */
 .steps{display:flex;gap:8px;margin-top:40px;list-style:none}
 .steps li{flex:1;text-align:center;padding:16px 6px 15px;border-radius:16px;
@@ -149,11 +169,22 @@ h1{font-size:36px;line-height:1.2;letter-spacing:-.6px;font-weight:800;
     <span class="chip r r3" id="chip">안드로이드</span>
   </header>
 
-  <a class="cta r r3" id="get" href="https://github.com/SOHADA2/crumble-phone/releases/download/latest/crumble-phone.apk">
-    앱 받기
+  <a class="cta r r3" id="get" href="#">
+    <span id="getlabel">앱 받기</span>
     <svg viewBox="0 0 24 24" fill="none" stroke="#3B1D02" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 4v12M6 12l6 6 6-6"/></svg>
   </a>
+
+  <div class="gate" id="gate" hidden>
+    <p class="gq">길드 이름을 적어 주세요</p>
+    <div class="grow">
+      <input id="gin" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+             placeholder="길드 이름" aria-label="길드 이름">
+      <button type="button" id="gok">확인</button>
+    </div>
+    <p class="gmsg" id="gmsg">우리 길드 사람만 받을 수 있어요</p>
+  </div>
+
   <p class="tiny r r3" id="tiny">안드로이드용이에요</p>
 
   <div id="desk">
@@ -215,7 +246,7 @@ h1{font-size:36px;line-height:1.2;letter-spacing:-.6px;font-weight:800;
       var chip = document.getElementById('chip');
       chip.textContent = (ver ? 'v' + ver + ' · ' : '') + (apk.size / 1048576).toFixed(1) + 'MB';
       chip.classList.add('on');
-      document.getElementById('get').href = apk.browser_download_url;
+      window.__apk = apk.browser_download_url;
       var w = new Date(apk.updated_at);
       document.getElementById('tiny').textContent =
         '안드로이드용 · ' + (w.getMonth() + 1) + '월 ' + w.getDate() + '일에 올린 판';
@@ -224,6 +255,64 @@ h1{font-size:36px;line-height:1.2;letter-spacing:-.6px;font-weight:800;
   document.getElementById('chip').classList.add('on');
 
   if (!/Android/i.test(navigator.userAgent)) document.getElementById('desk').style.display = 'block';
+})();
+
+/* 길드 이름을 맞혀야 받아진다.
+   ⚠️ 이건 '아는 사람만' 을 위한 문이지 자물쇠가 아니다 — 저장소가 공개라
+      릴리스 페이지에 가면 APK 는 그냥 있다. 링크가 엉뚱한 데로 흘렀을 때
+      한 번 걸러 주는 것까지가 이 문이 하는 일이다. */
+(function () {
+  var KEY = 'crumble-guild-ok';
+  var WANT = 1491572929;                       // 답을 그대로 적어 두지 않으려고 값으로 바꿔 둔다
+  function hash(v) {
+    var x = 5381;
+    for (var i = 0; i < v.length; i++) x = (((x * 33) ^ v.charCodeAt(i)) >>> 0);
+    return x;
+  }
+  function norm(v) { return String(v).replace(/\s+/g, '').toLowerCase(); }
+
+  var cta = document.getElementById('get'), gate = document.getElementById('gate');
+  var input = document.getElementById('gin'), msg = document.getElementById('gmsg');
+  var passed = false;
+  try { passed = localStorage.getItem(KEY) === '1'; } catch (e) {}   // 한 번 맞혔으면 다시 안 묻는다
+
+  function go() {
+    document.getElementById('getlabel').textContent = '받는 중…';
+    location.href = window.__apk ||
+      'https://github.com/SOHADA2/crumble-phone/releases/download/latest/crumble-phone.apk';
+  }
+
+  cta.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (passed) { go(); return; }
+    if (gate.hidden) {
+      gate.hidden = false;
+      gate.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setTimeout(function () { input.focus(); }, 260);
+    } else {
+      input.focus();
+    }
+  });
+
+  function check() {
+    if (hash(norm(input.value)) === WANT) {
+      passed = true;
+      try { localStorage.setItem(KEY, '1'); } catch (e) {}
+      msg.className = 'gmsg';
+      msg.textContent = '맞아요. 받아 갈게요';
+      gate.hidden = true;
+      go();
+    } else {
+      gate.classList.remove('no');
+      void gate.offsetWidth;                   // 애니메이션을 다시 태우려면 한 번 끊어야 한다
+      gate.classList.add('no');
+      msg.className = 'gmsg bad';
+      msg.textContent = input.value.trim() ? '그 길드가 아닌데요?' : '길드 이름을 적어 주세요';
+      input.select();
+    }
+  }
+  document.getElementById('gok').addEventListener('click', check);
+  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') check(); });
 })();
 </script>
 </body>
