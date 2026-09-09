@@ -38,13 +38,28 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ hashFiles('**/*.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
 
+      - name: 서명 키 풀기
+        # 키는 저장소에 없다. Secrets 에서 받아 러너 안에만 잠깐 파일로 만든다.
+        env:
+          KS_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+        run: |
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          ls -l "$RUNNER_TEMP/release.jks"
+
       - name: 빌드
         env:
           # 앱의 versionCode 가 된다. 실행 번호라 계속 커진다 → 앱이 새 판인지 비교할 수 있다.
           BUILD_NUMBER: ${{ github.run_number }}
+          SIGNING_STORE_FILE: ${{ runner.temp }}/release.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
+          # 배포 파일명은 고정한다 — 앱의 Updater 가 이 이름으로 받아 간다.
+          cp app/build/outputs/apk/release/app-release.apk crumble-phone.apk
+          ls -l crumble-phone.apk
 
       - name: 버전 정보 만들기
         id: v
@@ -64,7 +79,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: crumble-phone-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: crumble-phone.apk
 
       - name: latest 릴리스에 붙이기 (앱이 여기서 받아 간다)
         uses: softprops/action-gh-release@v2
@@ -75,9 +90,21 @@ jobs:
             크럼블 폰봇 ${{ steps.v.outputs.name }} · ${{ steps.v.outputs.tag }}
             커밋: ${{ github.sha }}
 
-            앱 안 [업데이트] 를 누르면 여기서 받아 갑니다.
-            처음 설치할 때만 아래 app-debug.apk 를 직접 받으세요.
+            ## 설치 방법
+            1. 폰 브라우저로 이 페이지를 열고 아래 **crumble-phone.apk** 를 받으세요.
+            2. "이 출처의 앱 설치" 를 허용해야 설치됩니다(안드로이드가 한 번 물어봅니다).
+            3. 앱을 열고 **처음 안내**를 따라가면 됩니다.
+
+            ### 권한이 왜 필요한가요
+            - **접근성** — 봇이 화면을 대신 눌러 줍니다(이게 없으면 아무것도 못 합니다).
+            - **화면 읽기** — 게임 화면을 보고 판단합니다. 녹화하거나 어디로 보내지 않습니다.
+            - **다른 앱 위에 표시** — 게임 위에 작은 조작 버튼을 띄웁니다.
+
+            다음부터는 앱 안 **[업데이트]** 를 누르면 여기서 알아서 받아 갑니다.
+
+            > ⚠️ **1.110 이하를 쓰던 분은 기존 앱을 지우고 새로 설치해 주세요.**
+            > 서명 키가 바뀌어서 덮어쓰기 설치가 안 됩니다(이번 한 번만).
           files: |
-            app/build/outputs/apk/debug/app-debug.apk
+            crumble-phone.apk
             latest.json
           prerelease: true

@@ -21,16 +21,27 @@ android {
     //   ~/.android/debug.keystore 를 새로 만드는데, CI 러너는 매번 새 기계라 **매 빌드 서명이 달라진다.**
     //   서명이 다르면 안드로이드가 덮어쓰기 설치를 거부한다("앱이 설치되지 않았습니다") →
     //   앱 안 자동 업데이트가 아예 성립하지 않는다.
-    //   debug 키라 비밀번호는 안드로이드 관례값 그대로다.
+    //   debug 키라 비밀번호는 안드로이드 관례값 그대로다. 저장소가 공개라 이 키도 공개돼 있다.
     //
-    //   ⚠️ **이 주석은 예전엔 '이 키는 비공개 저장소에만 있다' 였는데 사실이 아니다**(2026-09-09 확인).
-    //      저장소가 공개로 바뀌면서 이 키도 같이 공개됐다 — `gh repo view` = PUBLIC.
-    //      즉 **누구나 같은 서명의 APK 를 만들 수 있고**, 그건 안드로이드가 '같은 앱'으로 보므로
-    //      기존 설치본 위에 덮어쓰기 설치가 된다(원격 공격은 아니지만 '정식 업데이트인 척' 은 가능).
-    //      혼자 쓰는 동안은 감수할 만하지만, **남에게 배포한다면 전용 릴리스 키로 바꾸고
-    //      키는 GitHub Secrets 로 옮겨야 한다**(CLAUDE.md '폰 봇 배포' 절 참고).
-    //      ⚠️ 서명을 바꾸면 기존 설치본 위에 업데이트가 안 된다 — 한 번은 지우고 새로 깔아야 한다.
+    //   ⚠️ **이건 이제 '로컬 개발 설치' 전용이다**(2026-09-09부터).
+    //      배포판은 위의 `release` 서명(GitHub Secrets 의 전용 키)으로 나간다 —
+    //      그래서 이 debug 키가 공개돼 있어도 **배포판을 사칭할 수는 없다.**
+    //      여기 남겨 두는 이유는 `dev.ps1 install` 이 컴퓨터를 옮겨 다녀도 같은 서명을 쓰게 하려는 것뿐이다.
     signingConfigs {
+        // 배포용 서명. **키는 저장소에 없다** — CI 가 GitHub Secrets(SIGNING_KEYSTORE_B64)에서
+        // 파일로 풀고 아래 환경변수로 알려 준다. 로컬에서 시험하려면 같은 이름의 환경변수를 넣으면 된다.
+        // ⚠️ 이 키를 잃어버리면 **설치된 앱을 다시는 업데이트할 수 없다**(지우고 새로 깔아야 한다).
+        //    사본은 저장소 밖에 보관한다 — 바탕화면 '크럼블_폰봇_서명키' 폴더.
+        create("release") {
+            val ksPath = System.getenv("SIGNING_STORE_FILE")
+            if (ksPath != null && file(ksPath).exists()) {
+                storeFile = file(ksPath)
+                storeType = "PKCS12"
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
         getByName("debug") {
             storeFile = rootProject.file("debug.keystore")
             storeType = "PKCS12"
@@ -42,7 +53,14 @@ android {
 
     buildTypes {
         debug { signingConfig = signingConfigs.getByName("debug") }
-        release { isMinifyEnabled = false }
+        release {
+            // ⚠️ 난독화는 켜지 않는다 — ML Kit 이 리플렉션을 써서 이름이 바뀌면 깨진다.
+            isMinifyEnabled = false
+            isDebuggable = false
+            val rel = signingConfigs.getByName("release")
+            // 키가 없으면(로컬 개발) 서명 없이 만든다 — 배포는 CI 만 한다.
+            if (rel.storeFile != null) signingConfig = rel
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -30,7 +30,10 @@ object Updater {
     // 태그를 직접 가리킨다. `/releases/latest` 는 프리릴리스를 건너뛰어서 404 가 난다.
     private const val BASE = "https://github.com/SOHADA2/crumble-phone/releases/download/latest"
     private const val MANIFEST = "$BASE/latest.json"
-    private const val APK = "$BASE/app-debug.apk"
+    // 2026-09-09: debug 빌드 -> release 빌드로 바꾸면서 파일명도 바뀌었다.
+    //   서명이 달라져 어차피 덮어쓰기 설치가 안 되므로, 옛 판이 이 이름을 못 찾는 건 문제가 아니다
+    //   (옛 판 쓰는 사람은 지우고 새로 깔아야 한다 — 릴리스 노트에 적어 둔다).
+    private const val APK = "$BASE/crumble-phone.apk"
 
     /** 아직 확인 안 함 / 최신 / 새 판 있음 / 받는 중 … 관제 화면이 이걸 그대로 보여 준다. */
     @Volatile var state = ""

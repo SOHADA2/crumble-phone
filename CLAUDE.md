@@ -2043,15 +2043,36 @@ PC 는 실기 검증 완료(흐트러뜨린 목록에서 경험치로 정확히 
 | **아는 친구 몇 명** | **release 빌드 + 전용 키(GitHub Secrets)** 로 전환 |
 | **불특정 다수** | 권하지 않는다 — 접근성+화면캡처 조합이라 오해·악용 소지가 크고 Play 정책에도 걸린다 |
 
-### 친구 배포로 갈 때 할 일 (순서대로)
-1. 전용 릴리스 키스토어를 만들고 **GitHub Secrets** 에 넣는다
-   (`SIGNING_KEYSTORE_B64` · `SIGNING_STORE_PASSWORD` · `SIGNING_KEY_ALIAS` · `SIGNING_KEY_PASSWORD`).
-2. `build.gradle.kts` 에 `release` signingConfig 추가, CI 를 `assembleRelease` 로.
-   `isMinifyEnabled` 는 **false 유지** — ML Kit 이 리플렉션을 쓰므로 난독화하면 깨질 수 있다.
-3. `debug.keystore` 를 저장소에서 지우고 `.gitignore` 에 넣는다.
-4. ⚠️ **서명이 바뀌면 기존 설치본 위에 업데이트가 안 된다** — 쓰던 사람은 **한 번 지우고 새로 깔아야 한다.**
-   **쓰는 사람이 적은 지금이 바꾸기 가장 싼 시점이다.** 나중에 갈수록 비싸진다.
-5. 릴리스 노트에 설치 안내를 적는다 — '알 수 없는 앱 설치' 허용 + 접근성/화면읽기 권한이 왜 필요한지.
+### ✅ 소수 배포로 전환 완료 (2026-09-09)
+사장님 결정: **소수에게 배포한다 · 저장소는 공개 유지.** 그래서 키만 빼는 쪽으로 갔다.
 
-> 저장소를 **비공개로 되돌리는 건 답이 아니다** — 앱이 인증 없이 릴리스를 받아야 자동 업데이트가 성립한다.
-> 공개는 유지하되 **키만 빼는 것**이 핵심이다.
+| | 전 | 후 |
+|---|---|---|
+| 빌드 | `assembleDebug` | **`assembleRelease`** (`isDebuggable=false`) |
+| 서명 | 저장소에 공개된 `debug.keystore` | **전용 키 · GitHub Secrets** |
+| 배포 파일 | `app-debug.apk` | **`crumble-phone.apk`** |
+| 난독화 | — | **안 켠다** (ML Kit 이 리플렉션을 쓴다 — 켜면 깨진다) |
+
+- 시크릿 4개: `SIGNING_KEYSTORE_B64` · `SIGNING_STORE_PASSWORD` · `SIGNING_KEY_ALIAS` · `SIGNING_KEY_PASSWORD`
+- CI 가 base64 를 러너 임시 폴더에 풀고 환경변수로 넘긴다. **키는 저장소에 없다.**
+- `debug.keystore` 는 **남겨 뒀다** — 이제 `dev.ps1 install`(로컬 개발) 전용이다.
+  공개돼 있어도 배포판은 다른 키로 서명되므로 **사칭에 못 쓴다.**
+- 로컬 검증: 같은 키로 `assembleRelease` → `apksigner verify` 로
+  `CN=Crumble Phone Bot, O=SOHADA2, C=KR` · SHA-256 `153cb520…` 확인.
+
+> 🔑 **키 백업이 제일 중요하다.** 바탕화면 `크럼블_폰봇_서명키` 폴더에 `crumble-release.jks` 와 비밀번호가 있다.
+> **이걸 잃어버리면 설치된 앱을 다시는 업데이트할 수 없다**(모두가 지우고 새로 깔아야 한다).
+> 클라우드에 사본을 하나 더 두는 게 좋다.
+
+### 배포 방법 (사람에게 줄 때)
+1. `main` 에 push → CI 가 빌드해 **`latest` 릴리스**에 `crumble-phone.apk` 를 올린다.
+2. 친구에게 **릴리스 페이지 링크**만 준다:
+   `https://github.com/SOHADA2/crumble-phone/releases/tag/latest`
+3. 친구는 **폰 브라우저로** 열어 APK 를 받고, '이 출처의 앱 설치'를 허용한 뒤 설치한다.
+4. 그 다음부터는 앱 안 **[업데이트]** 가 알아서 받아 간다.
+
+설치 안내와 권한 설명은 **릴리스 노트에 자동으로 붙는다**(워크플로에 본문을 넣어 뒀다) —
+따로 설명을 적어 보낼 필요가 없다.
+
+> ⚠️ **1.110 이하를 쓰던 사람은 기존 앱을 지우고 새로 깔아야 한다**(이번 한 번만).
+> 서명이 바뀌어 덮어쓰기 설치가 거부된다. 사장님 폰도 해당된다.
