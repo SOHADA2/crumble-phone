@@ -291,6 +291,11 @@ object Daily {
             && System.currentTimeMillis() < hardStop && Runner.running) {
             val s = Runner.shot()
             if (s == null) { Runner.sleep(900); continue }
+            if (Screen.isDailyKeyPopup(s)) {
+                Bot.log("던전 " + idx + ": 입장 열쇠가 부족합니다 - 이 던전은 넘어갑니다")
+                Runner.tap(intArrayOf(720, 430), 1500)   // 판 바깥을 눌러 닫는다
+                break
+            }
             if (Screen.atDailyEntry(s)) {
                 if (Screen.dailyChallengeDone(s)) break        // 청록 = 남은 열쇠 없음
                 if (Screen.dailyChallengeOpen(s)) {            // 주황 = 아직 남음

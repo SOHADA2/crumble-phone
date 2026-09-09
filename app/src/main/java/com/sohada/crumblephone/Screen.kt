@@ -685,6 +685,33 @@ object Screen {
     val DCHARGE_TO   = intArrayOf(720, 2000)
 
     /**
+     * 도전 기회가 0인데 [도전하기]를 누르면 뜨는 **'입장 열쇠가 부족합니다' 팝업**인가?
+     * (획득처 안내 + [바로 가기] 버튼들)
+     *
+     * 보통은 버튼 색(청록)으로 먼저 걸러서 여기까지 안 온다 —
+     * PC 실측: 0/6 인 반죽 던전의 도전하기가 `R20 G174 B184` 청록이라 `dailyChallengeDone` 이 잡는다.
+     * 그래도 만에 하나 뜨면 `atDailyEntry` 가 false 라 봇이 '전투 중'으로 오해해 **180초를 버린다.**
+     *
+     * 판정: 팝업 판은 **완전한 단색**이라 멀리 떨어진 네 점이 전부 같은 청록이다(PC 실측 `R21 G142 B160`).
+     *       던전 배경은 그림이라 점마다 색이 달라 안 걸린다(실측 6장 전수 확인).
+     */
+    fun isDailyKeyPopup(b: Bitmap): Boolean {
+        val pts = arrayOf(
+            intArrayOf(720, 1250), intArrayOf(720, 1400),
+            intArrayOf(200, 1400), intArrayOf(1240, 1400)
+        )
+        var r0 = -1; var g0 = -1; var b0 = -1
+        for (p in pts) {
+            val c = px(b, p[0], p[1])
+            val r = Color.red(c); val g = Color.green(c); val bl = Color.blue(c)
+            if (!(r < 60 && g in 111..189 && bl in 131..199)) return false
+            if (r0 < 0) { r0 = r; g0 = g; b0 = bl }
+            else if (Math.abs(r - r0) > 12 || Math.abs(g - g0) > 12 || Math.abs(bl - b0) > 12) return false
+        }
+        return true
+    }
+
+    /**
      * 상단 **'보스 소환' 빨간 배너**를 찾는다. = **아직 이 보스를 못 깼다**.
      * 깨서 스테이지가 밀리면 그 자리는 하늘·배경이 되어 빨강이 아니다 — 승패를 이걸로 가른다.
      *
