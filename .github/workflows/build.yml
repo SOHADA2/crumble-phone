@@ -43,8 +43,14 @@ jobs:
         env:
           KS_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
         run: |
-          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
-          ls -l "$RUNNER_TEMP/release.jks"
+          # ⚠️ 값에 CR/개행/공백이 섞이면 `base64 -d` 가 'invalid input' 으로 죽는다(한 번 겪었다).
+          #    시크릿을 어떤 셸에서 넣었든 안전하도록 여기서 걷어내고 푼다.
+          printf '%s' "$KS_B64" | tr -d '
+ ' | base64 -d > "$RUNNER_TEMP/release.jks"
+          # 제대로 풀렸는지 확인 — 조용히 빈 파일이 만들어지면 뒤에서 엉뚱한 오류가 난다.
+          SZ=$(stat -c%s "$RUNNER_TEMP/release.jks")
+          echo "keystore 크기: ${SZ} 바이트"
+          if [ "$SZ" -lt 1000 ]; then echo "::error::서명 키가 제대로 안 풀렸어요(SIGNING_KEYSTORE_B64 확인)"; exit 1; fi
 
       - name: 빌드
         env:
