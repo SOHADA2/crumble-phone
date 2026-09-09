@@ -205,22 +205,22 @@ class MainActivity : ListActivity() {
         root.addView(sectionHeader("자동 실행"))
         runRows = group()
         val rQuest = row("퀘스트", subtitle = "보상 받고 · 뽑기 · 상자 · 오븐 · 보스 밀기") {
-            Overlay.show(applicationContext); Chores.start(applicationContext)
+            withCapture { Chores.start(applicationContext) }
         }
         val rBoss = row("보스전", subtitle = "막힌 보스만 한 번 · 조합 1~5") {
-            Overlay.show(applicationContext); Boss.start(applicationContext)
+            withCapture { Boss.start(applicationContext) }
         }
         val rTobol = row("토벌전", subtitle = "멈출 때까지 계속 도전 · 최고 점수 기록") {
-            Overlay.show(applicationContext); Runner.startTobol(applicationContext)
+            withCapture { Runner.startTobol(applicationContext) }
         }
         val rDaily = row("일일 던전", value = "입장권", subtitle = "기회 다 쓰고 달성 보상까지") {
-            Overlay.show(applicationContext); Daily.start(applicationContext)
+            withCapture { Daily.start(applicationContext) }
         }
         val rArena = row("아레나", value = "재화", subtitle = "약한 상대만 골라 도전") {
-            Overlay.show(applicationContext); Arena.start(applicationContext)
+            withCapture { Arena.start(applicationContext) }
         }
         val rReward = row("일일 보상", value = "안전", subtitle = "미션 · 출석 한 번만 받고 끝") {
-            Overlay.show(applicationContext); Chores.startRewardsOnly(applicationContext)
+            withCapture { Chores.startRewardsOnly(applicationContext) }
         }
         runRows.addView(rQuest); runRows.addView(separator())
         runRows.addView(rBoss); runRows.addView(separator())
@@ -284,8 +284,11 @@ class MainActivity : ListActivity() {
         super.onResume()
         Overlay.onAppForeground(true)
         // 켤 것이 남아 있으면 안내부터 보여 준다. 목록만 던져 두면 무엇부터 눌러야 할지 알 수 없다.
-        // 한 번 띄우고 나면 다시 강요하지 않는다(목록의 '차근차근 안내 받기' 로 언제든 다시 열 수 있다).
-        if (!setupShown && (!TapService.isReady || CaptureService.instance == null)) {
+        //
+        // ⚠️ 여기에 '화면 읽기' 를 넣으면 안 된다. 그건 **1회용 허락**이라 앱을 켤 때마다 없는 상태다
+        //    → 켤 때마다 안내가 뜨고, 아무것도 안 할 사람에게까지 허락을 받아 냈다.
+        //    화면 읽기는 [withCapture] 가 '진짜 필요한 순간' 에 묻는다.
+        if (!setupShown && !TapService.isReady) {
             setupShown = true
             openSetup()
         }
@@ -308,12 +311,13 @@ class MainActivity : ListActivity() {
         val accOk = TapService.isReady
         val capOk = CaptureService.instance != null
         val ovOk = Overlay.canDraw(this)
-        val ready = accOk && capOk
+        // 시작 버튼을 여는 조건에서 화면 읽기를 뺐다 — 누르는 순간 물어보기 때문이다.
+        val ready = accOk
 
         rowAcc.setValue(if (accOk) "켜짐" else "필요", if (accOk) t.green else t.orange)
         rowCap.setValue(if (capOk) "켜짐" else "필요", if (capOk) t.green else t.orange)
         rowOverlay.setValue(if (ovOk) "켜짐" else "권장", if (ovOk) t.green else t.label2)
-        setupSection.visibility = if (accOk && capOk && ovOk) View.GONE else View.VISIBLE
+        setupSection.visibility = if (accOk && ovOk) View.GONE else View.VISIBLE
 
         lblSubtitle.text = when {
             !Coords.ratioOk && !Coords.detected ->
@@ -379,13 +383,55 @@ class MainActivity : ListActivity() {
         startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAP)
     }
 
+    /** 허락을 받고 나서 이어서 할 일. 동의 창이 다른 화면이라 여기 맡겨 둔다. */
+    private var pending: (() -> Unit)? = null
+
+    /**
+     * **화면 읽기가 있어야 하는 일**을 감싼다.
+     *
+     * 이 허락은 안드로이드가 저장해 주지 않아서 앱을 켤 때마다 다시 받아야 한다. 그래서
+     * 켜자마자 묻지 않고 **콘텐츠를 시작하는 순간** 묻는다 — 그때가 실제로 화면이 필요한 때고,
+     * 사용자도 '왜 지금 묻는지' 를 안다. 이미 켜져 있으면 아무것도 안 묻고 바로 시작한다.
+     */
+    private fun withCapture(action: () -> Unit) {
+        if (CaptureService.instance != null) {
+            Overlay.show(applicationContext); action(); return
+        }
+        pending = action
+        askProjection()
+    }
+
+    /**
+     * 서비스가 실제로 올라온 뒤에 이어서 한다.
+     * `startForegroundService` 는 바로 뜨지 않아서, 곧장 시작하면 첫 캡처가 빈손으로 돌아온다.
+     */
+    private fun resumePending(tries: Int = 0) {
+        val act = pending ?: return
+        if (CaptureService.instance != null) {
+            pending = null
+            Overlay.show(applicationContext)
+            act()
+            return
+        }
+        if (tries > 50) {                       // 5초를 기다려도 안 뜨면 포기한다
+            pending = null
+            Bot.log("화면 읽기가 안 켜졌어요 - 다시 눌러 주세요")
+            return
+        }
+        ui.postDelayed({ resumePending(tries + 1) }, 100)
+    }
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQ_CAP) {
-            if (resultCode == RESULT_OK && data != null) CaptureService.start(this, resultCode, data)
-            else Bot.log("화면 읽기를 거부했습니다")
+            if (resultCode == RESULT_OK && data != null) {
+                CaptureService.start(this, resultCode, data)
+                resumePending()
+            } else {
+                pending = null
+                Bot.log("화면 읽기를 거부했습니다")
+            }
         }
     }
 }

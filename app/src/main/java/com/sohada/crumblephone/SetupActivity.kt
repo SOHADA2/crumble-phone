@@ -268,7 +268,8 @@ class SetupActivity : AppCompatActivity() {
             s.title.setTextColor(if (done) t.label2 else t.label)
         }
 
-        val ready = TapService.isReady && CaptureService.instance != null
+        // 화면 읽기는 1회용 허락이라 여기서 안 켜도 된다 — 콘텐츠를 시작할 때 그 자리에서 물어본다.
+        val ready = TapService.isReady
         lblSub.text = if (ready) "다 됐어요. 이제 시작할 수 있습니다" else "세 가지만 켜면 됩니다 (마지막은 선택)"
         btnDone.isEnabled = ready
         btnDone.alpha = if (ready) 1f else 0.35f

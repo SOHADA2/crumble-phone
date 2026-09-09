@@ -267,6 +267,14 @@ object Overlay {
                 setOnClickListener {
                     val c = appCtx ?: return@setOnClickListener
                     closePanel()
+                    // 알약은 창(Activity)이 아니라서 화면 읽기 동의 창을 띄울 수 없다.
+                    // 꺼져 있으면 앱을 열어 준다 — 거기서 누르면 그 자리에서 물어본다.
+                    if (CaptureService.instance == null) {
+                        Runner.set("화면 읽기가 꺼져 있어요", "앱에서 다시 눌러 주세요")
+                        c.startActivity(android.content.Intent(c, MainActivity::class.java)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                        return@setOnClickListener
+                    }
                     go(c)
                 }
                 layoutParams = LinearLayout.LayoutParams(
