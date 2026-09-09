@@ -92,6 +92,24 @@ object Overlay {
     private fun dp(ctx: Context, v: Int) = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), ctx.resources.displayMetrics).toInt()
 
+    /** 패널 맨 아래 한 줄에 들어가는 작은 버튼. 셋이 자리를 똑같이 나눠 갖는다. */
+    private fun smallBtn(ctx: Context, label: String, color: String, onTap: () -> Unit) =
+        TextView(ctx).apply {
+            text = label
+            setTextColor(Color.parseColor(color))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            gravity = Gravity.CENTER
+            setPadding(dp(ctx, 4), dp(ctx, 7), dp(ctx, 4), dp(ctx, 7))
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#26FFFFFF"))
+                cornerRadius = dp(ctx, 12).toFloat()
+            }
+            isClickable = true
+            setOnClickListener { onTap() }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { leftMargin = dp(ctx, 3); rightMargin = dp(ctx, 3) }
+        }
+
     /** 관제 화면에서 부르는 '띄워 줘'. 사용자가 숨겨 뒀더라도 다시 띄운다. */
     fun show(ctx: Context) { dismissed = false; create(ctx) }
 
@@ -284,14 +302,36 @@ object Overlay {
             contentBtns.add(b2)
             pnl.addView(b2)
         }
-        pnl.addView(TextView(ctx).apply {
-            text = "알약 숨기기"
-            setTextColor(Color.parseColor("#C8B79F"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            gravity = Gravity.CENTER
-            setPadding(dp(ctx, 8), dp(ctx, 8), dp(ctx, 8), dp(ctx, 4))
-            isClickable = true
-            setOnClickListener { dismissed = true; hide() }
+        // ── 맨 아래 한 줄 ── 게임을 보는 중에도 손이 가는 것들.
+        //
+        // 앱을 한 번 켜고 나면 사람은 게임 화면만 본다. 그래서 관제 화면에만 있는 기능은
+        // 사실상 없는 것과 같다 — 자주 쓰는 것은 여기까지 내려와 있어야 한다.
+        //
+        // ⚠️ 세로로 더 쌓지 않고 **한 줄에 셋**을 넣는다. 패널이 길어지면 알약이
+        //    y120~900 띠를 넘어 내려앉아, 게임 판정 지점과 봇이 누르는 자리를 덮는다.
+        pnl.addView(LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(ctx, 8) }
+
+            // 설정 — 오븐 개수·아레나 판수처럼 게임을 보다가 고치고 싶어지는 값들이 있다.
+            addView(smallBtn(ctx, "⚙ 설정", "#C8B79F") {
+                val c = appCtx ?: return@smallBtn
+                closePanel()
+                c.startActivity(android.content.Intent(c, SettingsActivity::class.java)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            })
+            addView(smallBtn(ctx, "숨기기", "#C8B79F") { dismissed = true; hide() })
+            // 끄기 — 다 하고 나서 '이제 그만' 할 자리가 알약에 없으면 앱을 찾아 들어가야 했다.
+            addView(smallBtn(ctx, "끄기", "#E8503C") {
+                val c = appCtx ?: return@smallBtn
+                closePanel()
+                Runner.stop()
+                CaptureService.stop(c)
+                dismissed = true
+                hide()
+            })
         })
 
         box.addView(pill); box.addView(pnl)
