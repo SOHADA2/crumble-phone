@@ -37,8 +37,6 @@ class SettingsActivity : ListActivity() {
     private lateinit var rowDelay: LinearLayout
     private lateinit var rowGame: LinearLayout
     private lateinit var rowUpdate: LinearLayout
-    private lateinit var rowCapOff: LinearLayout
-    private lateinit var capOffSep: View
     private val ui = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -131,11 +129,6 @@ class SettingsActivity : ListActivity() {
             }
         }
         gScr.addView(rDim)
-        capOffSep = separator()
-        rowCapOff = row("화면 읽기 끄기", subtitle = "봇도 같이 멈춰요", tint = t.red) {
-            CaptureService.stop(applicationContext); finish()
-        }
-        gScr.addView(capOffSep); gScr.addView(rowCapOff)
         root.addView(gScr)
 
         // ── 점검 ──
@@ -162,6 +155,11 @@ class SettingsActivity : ListActivity() {
         gApp.addView(row("처음 안내 다시 보기", subtitle = "권한 켜는 순서를 하나씩") {
             startActivity(Intent(this, SetupActivity::class.java))
         })
+        gApp.addView(separator())
+        // '껐다' 고 생각했는데 알림과 녹화 표시가 남아 있으면 안 꺼진 것으로 보인다.
+        // 한 번에 다 내리는 자리를 하나 만들어 둔다 — 끄는 길이 여러 개면 그것도 안 명확하다.
+        gApp.addView(row("앱 끄기", subtitle = "봇 · 화면 읽기 · 알약 모두 끄고 나가요",
+            chevron = false, tint = t.red) { quitAll() })
         root.addView(gApp)
 
         // ── 실험실 ── 평소엔 아예 안 보인다. [labSection] 참고.
@@ -272,9 +270,6 @@ class SettingsActivity : ListActivity() {
             },
             if (Updater.latestCode > Updater.currentCode(this)) t.gold else t.label2
         )
-        val capOk = CaptureService.instance != null
-        rowCapOff.visibility = if (capOk) View.VISIBLE else View.GONE
-        capOffSep.visibility = rowCapOff.visibility
         ui.postDelayed({ tick() }, 1000)
     }
 
@@ -291,6 +286,19 @@ class SettingsActivity : ListActivity() {
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
         super.onDestroy()
+    }
+
+    /**
+     * 앱을 **완전히** 끈다 — 봇을 멈추고, 화면 읽기를 내리고, 알약을 지우고 나간다.
+     *
+     * 접근성만은 앱이 못 끈다(시스템 설정에서만 꺼진다). 그건 꺼져 있어도 아무 일도
+     * 일어나지 않으니 남겨 둬도 된다 — 알림도 표시도 없다.
+     */
+    private fun quitAll() {
+        Runner.stop()
+        Overlay.hide()
+        CaptureService.stop(applicationContext)
+        finishAffinity()
     }
 
     /** 새 판이 있으면 바로 받고, 아직 모르면 먼저 확인한다. */

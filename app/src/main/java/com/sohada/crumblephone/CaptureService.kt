@@ -217,6 +217,22 @@ class CaptureService : Service() {
         instance = null
     }
 
+    /**
+     * 앱을 **최근 목록에서 쓸어 없앴을 때**.
+     *
+     * 포그라운드 서비스라 앱을 지워도 이건 살아남는다. 봇이 도는 중이면 그게 맞다 —
+     * 게임을 보면서 시켜 두는 게 이 앱의 쓰임이라 앱 화면은 없어도 된다.
+     * 하지만 **아무것도 안 돌고 있으면** 화면 읽기만 켜진 채 알림과 녹화 표시가 남는다.
+     * 껐다고 생각한 사람에게는 그게 안 꺼진 것으로 보인다. 그때는 같이 내려간다.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        if (!Runner.running) {
+            Overlay.hide()
+            shutdown()
+        }
+    }
+
     override fun onDestroy() {
         release()
         super.onDestroy()
