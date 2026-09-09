@@ -24,6 +24,8 @@ import androidx.core.view.WindowCompat
  * 자주 누르는 것과 어쩌다 한 번 쓰는 것이 한 목록에 섞이면 스크롤만 길어지고 눈에 안 들어온다.
  *
  * 묶음 순서는 **얼마나 자주 쓰는가** 순이다: 게임 → 자동 실행 → 화면 → 점검 → 앱.
+ *
+ * 맨 끝의 **실험실**은 평소엔 아예 안 보인다 — [labSection] 을 볼 것.
  */
 class SettingsActivity : ListActivity() {
 
@@ -70,6 +72,7 @@ class SettingsActivity : ListActivity() {
             })
             addView(text("설정", 30f, t.gold, Typeface.DEFAULT_BOLD).apply {
                 setPadding(dp(14), dp(12), dp(20), 0)
+                setOnClickListener { onTitleTap() }   // 일곱 번 → 실험실
             })
         })
         root.addView(text("바꾼 값은 바로 저장돼요.", 14f, t.label2).apply {
@@ -82,21 +85,11 @@ class SettingsActivity : ListActivity() {
         rowGame = row("게임 앱", subtitle = "스토어마다 이름이 달라서 여기서 골라요") { pickGame() }
         gGame.addView(rowGame); gGame.addView(separator())
         gGame.addView(row("게임 켜기", subtitle = "봇 없이 게임만 열어요") { launchGame() })
-        gGame.addView(separator())
-        // 보스전이 조합 1~5 를 하나씩 바꿔 가며 도전하므로 다섯 덱이 서로 달라야 의미가 있다.
-        gGame.addView(row("덱 구성",
-            value = (1..5).count { Prefs.deckCount(it) > 0 }.let { if (it > 0) it.toString() + "개" else "" },
-            subtitle = "덱 1~5에 넣을 쿠키를 이름으로 적어 둬요") {
-            startActivity(android.content.Intent(this, DeckSetupActivity::class.java))
-        })
         root.addView(gGame)
 
         // ── 자동 실행 ──
         root.addView(sectionHeader("자동 실행"))
         val gRun = group()
-        val (rTest, _) = switchRow("시험 모드", "재화·입장권을 안 쓰고 진입까지만", Prefs.testMode) {
-            Prefs.testMode = it
-        }
         rowArena = row("아레나 판수", value = Prefs.arenaFights.toString() + "판",
             subtitle = "재화가 먼저 떨어지면 거기서 끝나요") { cycle(Prefs.ARENA_CHOICES, true) }
         // 오븐은 레벨마다 한 번에 여는 개수가 달라서, 게임 쪽 값을 여기에 맞춰 둬야
@@ -113,7 +106,6 @@ class SettingsActivity : ListActivity() {
             subtitle = "경험치 던전에서만 아래로 밀어붙여요 · 보스전 돌진과는 별개 값이에요") { cycleDCharge() }
         val (rAd, _) = switchRow("광고 제거 있음",
             "일일 던전에서 [SKIP]으로 횟수를 더 받아요", Prefs.adFree) { Prefs.adFree = it }
-        gRun.addView(rTest); gRun.addView(separator())
         gRun.addView(rAd); gRun.addView(separator())
         gRun.addView(rowArena); gRun.addView(separator())
         gRun.addView(rowOven); gRun.addView(separator())
@@ -148,7 +140,7 @@ class SettingsActivity : ListActivity() {
 
         // ── 점검 ──
         root.addView(sectionHeader("점검"))
-        root.addView(text("잘 안 될 때만 쓰면 돼요. 다섯 다 게임을 진행시키지 않아요.",
+        root.addView(text("잘 안 될 때만 쓰면 돼요. 넷 다 게임을 진행시키지 않아요.",
             13f, t.label3).apply { setPadding(dp(22), 0, dp(22), dp(8)) })
         val gChk = group()
         gChk.addView(row("화면 점검", subtitle = "게임을 띄워 좌표와 판정값을 재요") {
@@ -156,32 +148,6 @@ class SettingsActivity : ListActivity() {
         })
         gChk.addView(separator())
         gChk.addView(row("탭 점검", subtitle = "탭이 게임에 먹히는지 봐요") { tapTest() })
-        gChk.addView(separator())
-        gChk.addView(row("글자 읽기 점검", subtitle = "지금 게임 화면의 한글을 읽어 봐요") { textTest() })
-        gChk.addView(separator())
-        gChk.addView(row("쿠키 사전 만들기",
-            value = if (Prefs.deckDictSize > 0) "다시" else "아직",
-            subtitle = "이름과 그림을 한 번 읽어 둬요 · 2~3분") {
-            Overlay.show(applicationContext); Deck.buildDict(applicationContext); finish()
-        })
-        if (Prefs.deckDictSize > 0) {
-            gChk.addView(separator())
-            // 배치는 그림으로 찾으므로, 못 알아보는 쿠키는 덱에 적어도 안 들어간다.
-            // 어떤 쿠키가 그런지 미리 알 수 있어야 한다.
-            gChk.addView(row("쿠키 사전 점검",
-                value = if (!Prefs.deckChecked) "아직"
-                        else Prefs.deckUnseen.split(",").count { it.isNotBlank() }.let {
-                            if (it == 0) "전부 OK" else it.toString() + "마리 ✕" },
-                subtitle = "어떤 쿠키가 덱에 안 들어가는지 봐요 · 안 건드려요") {
-                Overlay.show(applicationContext); Deck.checkDict(applicationContext); finish()
-            })
-            gChk.addView(separator())
-            gChk.addView(row("쿠키 사전 보기",
-                value = Prefs.deckDictSize.toString() + "마리" + (if (DeckDict.ready(this)) "" else " ⚠"),
-                subtitle = "잘못 읽힌 이름을 고칠 수 있어요") {
-                startActivity(android.content.Intent(this, DeckDictActivity::class.java))
-            })
-        }
         gChk.addView(separator())
         gChk.addView(row("진단 보내기", value = "글", subtitle = "기기 정보와 최근 기록") { sendDiag() })
         gChk.addView(separator())
@@ -198,12 +164,100 @@ class SettingsActivity : ListActivity() {
         })
         root.addView(gApp)
 
+        // ── 실험실 ── 평소엔 아예 안 보인다. [labSection] 참고.
+        if (Prefs.labUnlocked) root.addView(labSection())
+
         setContentView(ScrollView(this).apply {
             setBackgroundColor(t.bg)
             layoutParams = android.view.ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
             addView(root, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         })
         tick()
+    }
+
+    /**
+     * **실험실** — 아직 다 못 만든 것들만 모아 둔 묶음. 기본으로는 안 보인다.
+     *
+     * 지우면 이어 만들 때 다시 짜야 하고, 그냥 두면 받은 사람이 눌러 보고 고장인 줄 안다.
+     * 그래서 **코드는 그대로 두고 문만 닫았다** — 여는 법은 제목 '설정' 일곱 번 누르기([onTitleTap]).
+     * 여기 있는 건 다 실기로 끝까지 못 본 것들이다(시험 모드 · 덱 배치 · 쿠키 사전).
+     */
+    private fun labSection(): LinearLayout {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(sectionHeader("실험실"))
+        box.addView(text("아직 만드는 중인 것들이에요. 뜻대로 안 되는 게 섞여 있어요.",
+            13f, t.label3).apply { setPadding(dp(22), 0, dp(22), dp(8)) })
+        val g = group()
+
+        val (rTest, _) = switchRow("시험 모드", "재화·입장권을 안 쓰고 진입까지만", Prefs.testMode) {
+            Prefs.testMode = it
+        }
+        g.addView(rTest); g.addView(separator())
+
+        // 보스전이 조합 1~5 를 하나씩 바꿔 가며 도전하므로 다섯 덱이 서로 달라야 의미가 있다.
+        g.addView(row("덱 구성",
+            value = (1..5).count { Prefs.deckCount(it) > 0 }.let { if (it > 0) it.toString() + "개" else "" },
+            subtitle = "덱 1~5에 넣을 쿠키를 이름으로 적어 둬요") {
+            startActivity(Intent(this, DeckSetupActivity::class.java))
+        })
+        g.addView(separator())
+        g.addView(row("쿠키 사전 만들기",
+            value = if (Prefs.deckDictSize > 0) "다시" else "아직",
+            subtitle = "이름과 그림을 한 번 읽어 둬요 · 2~3분") {
+            Overlay.show(applicationContext); Deck.buildDict(applicationContext); finish()
+        })
+        if (Prefs.deckDictSize > 0) {
+            g.addView(separator())
+            // 배치는 그림으로 찾으므로, 못 알아보는 쿠키는 덱에 적어도 안 들어간다.
+            // 어떤 쿠키가 그런지 미리 알 수 있어야 한다.
+            g.addView(row("쿠키 사전 점검",
+                value = if (!Prefs.deckChecked) "아직"
+                        else Prefs.deckUnseen.split(",").count { it.isNotBlank() }.let {
+                            if (it == 0) "전부 OK" else it.toString() + "마리 ✕" },
+                subtitle = "어떤 쿠키가 덱에 안 들어가는지 봐요 · 안 건드려요") {
+                Overlay.show(applicationContext); Deck.checkDict(applicationContext); finish()
+            })
+            g.addView(separator())
+            g.addView(row("쿠키 사전 보기",
+                value = Prefs.deckDictSize.toString() + "마리" + (if (DeckDict.ready(this)) "" else " ⚠"),
+                subtitle = "잘못 읽힌 이름을 고칠 수 있어요") {
+                startActivity(Intent(this, DeckDictActivity::class.java))
+            })
+        }
+        g.addView(separator())
+        g.addView(row("글자 읽기 점검", subtitle = "지금 게임 화면의 한글을 읽어 봐요") { textTest() })
+        g.addView(separator())
+        g.addView(row("실험실 닫기", subtitle = "다시 숨겨요 · 시험 모드도 같이 꺼진 셈이 돼요",
+            tint = t.red) {
+            Prefs.labUnlocked = false
+            Toast.makeText(this, "실험실을 닫았어요", Toast.LENGTH_SHORT).show()
+            recreate()
+        })
+
+        box.addView(g)
+        return box
+    }
+
+    private var titleTaps = 0
+
+    /**
+     * 제목 '설정' 연타 → 실험실 열기.
+     *
+     * 우연히 일곱 번 눌릴 자리가 아니라 이걸로 충분하다. 중간부터 남은 횟수를 알려 주는 건
+     * **모르고 누른 사람이 거기서 멈추게** 하려는 것이다(다 열린 뒤에 놀라는 것보다 낫다).
+     */
+    private fun onTitleTap() {
+        if (Prefs.labUnlocked) return
+        titleTaps++
+        val left = 7 - titleTaps
+        when {
+            left <= 0 -> {
+                Prefs.labUnlocked = true
+                Toast.makeText(this, "실험실이 열렸어요 — 맨 아래에 있어요", Toast.LENGTH_LONG).show()
+                recreate()
+            }
+            left <= 4 -> Toast.makeText(this, left.toString() + "번 더", Toast.LENGTH_SHORT).show()
+        }
     }
 
     /** 값이 바뀌는 줄(게임 앱·업데이트·화면 읽기)만 1초마다 갈아 끼운다. */

@@ -64,7 +64,7 @@ class DeckSetupActivity : ListActivity() {
         })
 
         if (Prefs.deckDictSize == 0) {
-            root.addView(text("먼저 ⚙ → 점검 → [쿠키 사전 만들기] 를 해 주세요.\n" +
+            root.addView(text("먼저 ⚙ → 실험실 → [쿠키 사전 만들기] 를 해 주세요.\n" +
                 "어느 칸이 어느 쿠키인지 알아야 이름으로 넣을 수 있어요.",
                 14f, t.label2).apply { setPadding(dp(22), dp(10), dp(22), dp(10)) })
         } else {

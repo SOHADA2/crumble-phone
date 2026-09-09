@@ -19,11 +19,26 @@ object Prefs {
     }
 
     /**
+     * 실험실이 열려 있나 — **만들다 만 기능을 가려 두는 칸막이**.
+     *
+     * 받은 사람이 설정을 훑다가 미완성 기능을 눌러 보고 "고장 났나" 하는 게 제일 나쁘다.
+     * 그렇다고 지우면 이어서 만들 때 다시 짜야 한다. 그래서 **코드는 남기고 문만 닫는다.**
+     * 여는 법은 설정 화면의 제목 '설정' 을 일곱 번 누르기(개발자 옵션과 같은 방식).
+     */
+    var labUnlocked: Boolean
+        get() = sp?.getBoolean("labUnlocked", false) ?: false
+        set(v) { sp?.edit()?.putBoolean("labUnlocked", v)?.apply() }
+
+    /**
      * 시험 모드 — **재화·입장권을 하나도 쓰지 않고 진입까지만** 하고 끝낸다.
      * 좌표가 맞는지 공짜로 확인하는 방법이다(PC 봇의 `-MaxDungeons 0` · `-MaxFights 0` 과 같다).
+     *
+     * ⚠️ **실험실 안에 있다.** 실험실을 닫으면 켜 뒀더라도 꺼진 것으로 읽힌다 —
+     *    안 보이는 스위치 하나 때문에 봇이 진입만 하고 끝나는 사고를 막는다.
+     *    (저장값은 그대로 두므로 실험실을 다시 열면 켜 뒀던 대로 돌아온다.)
      */
     var testMode: Boolean
-        get() = sp?.getBoolean("testMode", false) ?: false
+        get() = labUnlocked && (sp?.getBoolean("testMode", false) ?: false)
         set(v) { sp?.edit()?.putBoolean("testMode", v)?.apply() }
 
     /**

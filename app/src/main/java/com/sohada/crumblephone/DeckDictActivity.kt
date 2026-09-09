@@ -65,10 +65,10 @@ class DeckDictActivity : ListActivity() {
         val unseen = Prefs.deckUnseen.split(",").mapNotNull { it.trim().toIntOrNull() }.toHashSet()
 
         root.addView(text(
-            if (names.isEmpty()) "아직 비어 있어요. 점검 → [쿠키 사전 만들기] 를 먼저 눌러 주세요."
+            if (names.isEmpty()) "아직 비어 있어요. 실험실 → [쿠키 사전 만들기] 를 먼저 눌러 주세요."
             else "편성 목록에 있는 " + names.size + "마리예요.\n" +
                  "글자가 깨진 것만 고치면 돼요 — 한두 글자 오독은 찾을 때 알아서 맞춰 봅니다." +
-                 (if (!Prefs.deckChecked) "\n⚠ 아직 점검 안 했어요 — 점검 → [쿠키 사전 점검] 을 눌러 보세요."
+                 (if (!Prefs.deckChecked) "\n⚠ 아직 점검 안 했어요 — 실험실 → [쿠키 사전 점검] 을 눌러 보세요."
                   else if (unseen.isEmpty()) "\n✓ 점검 완료 — 전부 덱에 넣을 수 있어요."
                   else "\n⚠ 표시된 " + unseen.size + "마리는 화면에서 못 알아봐요 — 덱에 적어도 안 들어갑니다."),
             13f, t.label3).apply { setPadding(dp(22), dp(4), dp(22), dp(10)) })
