@@ -126,6 +126,20 @@ object Prefs {
      * 소환 직후엔 전투 시작 연출이라 밀어도 그냥 버려진다(실기 확인) — 그 시점이 보스마다 조금 다르다.
      */
     val BOSS_DELAY_CHOICES = intArrayOf(500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000)
+
+    /**
+     * 경험치 던전 '아래로 돌진' — **보스와 따로 둔다.** 방향도 목적도 달라 값이 겹칠 이유가 없다.
+     * 0 = 안 함(기본).
+     */
+    val DAILY_CHARGE_CHOICES = intArrayOf(0, 500, 1000, 1500, 2000, 2500, 3000, 4000, 5000)
+    var dailyChargeMs: Int
+        get() = sp?.getInt("dailyChargeMs", 0) ?: 0
+        set(v) { sp?.edit()?.putInt("dailyChargeMs", v)?.apply() }
+
+    val DAILY_DELAY_CHOICES = intArrayOf(500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000)
+    var dailyDelayMs: Int
+        get() = sp?.getInt("dailyDelayMs", 2000) ?: 2000
+        set(v) { sp?.edit()?.putInt("dailyDelayMs", v)?.apply() }
     var bossDelayMs: Int
         get() = sp?.getInt("bossDelayMs", 6000) ?: 6000
         set(v) { sp?.edit()?.putInt("bossDelayMs", v)?.apply() }

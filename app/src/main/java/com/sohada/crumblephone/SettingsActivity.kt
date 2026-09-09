@@ -30,6 +30,8 @@ class SettingsActivity : ListActivity() {
     private lateinit var rowArena: LinearLayout
     private lateinit var rowOven: LinearLayout
     private lateinit var rowCharge: LinearLayout
+    private lateinit var rowDCharge: LinearLayout
+    private lateinit var rowDDelay: LinearLayout
     private lateinit var rowDelay: LinearLayout
     private lateinit var rowGame: LinearLayout
     private lateinit var rowUpdate: LinearLayout
@@ -105,6 +107,10 @@ class SettingsActivity : ListActivity() {
             subtitle = "보스 소환 직후엔 아직 조이스틱이 안 먹어요") { cycleDelay() }
         rowCharge = row("보스전 돌진 시간", value = chargeLabel(),
             subtitle = "보스가 나오면 오른쪽으로 밀어붙여요 · 달려들면 잘 잡히는 보스가 많아요") { cycleCharge() }
+        rowDDelay = row("던전 돌진 시작 지연", value = secLabel(Prefs.dailyDelayMs),
+            subtitle = "도전 직후엔 아직 조이스틱이 안 먹어요") { cycleDDelay() }
+        rowDCharge = row("경험치 던전 돌진 시간", value = dChargeLabel(),
+            subtitle = "경험치 던전에서만 아래로 밀어붙여요 · 보스전 돌진과는 별개 값이에요") { cycleDCharge() }
         val (rAd, _) = switchRow("광고 제거 있음",
             "일일 던전에서 [SKIP]으로 횟수를 더 받아요", Prefs.adFree) { Prefs.adFree = it }
         gRun.addView(rTest); gRun.addView(separator())
@@ -112,7 +118,9 @@ class SettingsActivity : ListActivity() {
         gRun.addView(rowArena); gRun.addView(separator())
         gRun.addView(rowOven); gRun.addView(separator())
         gRun.addView(rowDelay); gRun.addView(separator())
-        gRun.addView(rowCharge)
+        gRun.addView(rowCharge); gRun.addView(separator())
+        gRun.addView(rowDDelay); gRun.addView(separator())
+        gRun.addView(rowDCharge)
         root.addView(gRun)
 
         // ── 화면 ──
@@ -465,6 +473,29 @@ class SettingsActivity : ListActivity() {
 
     /** 보스전 돌진 시간 표시. 0 이면 '안 함'. */
     /** 0.5초 같은 소수를 정수 나눗셈으로 찍으면 '0초'가 된다. 딱 떨어질 때만 정수로 보인다. */
+    /** ms 를 '2초' / '0.5초' 로. 딱 떨어질 때만 정수로 보인다. */
+    private fun secLabel(ms: Int): String {
+        val v = ms / 1000.0
+        return (if (v == v.toInt().toDouble()) v.toInt().toString() else v.toString()) + "초"
+    }
+    private fun dChargeLabel(): String {
+        val ms = Prefs.dailyChargeMs
+        if (ms <= 0) return "안 함"
+        return secLabel(ms)
+    }
+    private fun cycleDCharge() {
+        val c = Prefs.DAILY_CHARGE_CHOICES
+        val i = c.indexOf(Prefs.dailyChargeMs)
+        Prefs.dailyChargeMs = c[(if (i < 0) 0 else i + 1) % c.size]
+        rowDCharge.setValue(dChargeLabel(), t.label2)
+    }
+    private fun cycleDDelay() {
+        val c = Prefs.DAILY_DELAY_CHOICES
+        val i = c.indexOf(Prefs.dailyDelayMs)
+        Prefs.dailyDelayMs = c[(if (i < 0) 0 else i + 1) % c.size]
+        rowDDelay.setValue(secLabel(Prefs.dailyDelayMs), t.label2)
+    }
+
     private fun delayLabel(): String {
         val s = Prefs.bossDelayMs / 1000.0
         return (if (s == s.toInt().toDouble()) s.toInt().toString() else s.toString()) + "초"

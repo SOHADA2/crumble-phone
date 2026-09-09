@@ -255,6 +255,27 @@ object Daily {
      *   광고로 받는 도전(=[SKIP])에도 닷이 안 붙는다(사용자 확인). 닷은 '있으면 있다' 정도의
      *   신호일 뿐 **없다고 없는 게 아니다.** 버튼 색이 유일하게 믿을 수 있는 신호다.
      */
+    /**
+     * 경험치 던전 '아래로 돌진' — 보스전 돌진과 같은 원리다.
+     * 전장을 누른 채 끌면 **조이스틱**이라 그 방향으로 움직이는데,
+     * 보스는 오른쪽으로 달려들지만 **경험치 던전은 아래로 내려가는 게 낫다**(사장님 지정).
+     *
+     * ⚠️ 옵션은 보스와 **따로**다(`dailyChargeMs` / `dailyDelayMs`). 0 이면 안 한다.
+     * ⚠️ 도전 직후엔 아직 조이스틱이 안 먹는다 → 지연을 두고 민다.
+     * ⚠️ `swipe` 는 선형으로 끌어 처음 얼마간이 데드존에 묻힌다 → 10% 더 준다(보스와 같은 보정).
+     */
+    private fun dailyCharge() {
+        val chargeMs = Prefs.dailyChargeMs
+        if (chargeMs <= 0 || !Runner.running) return
+        Runner.sleep(Prefs.dailyDelayMs.toLong())
+        if (!Runner.running) return
+        val ms = (chargeMs * 1.10).toLong()
+        Bot.log("  경험치 던전 - 아래로 " + (chargeMs / 1000.0) + "초 밀어붙임")
+        TapService.swipe(Screen.DCHARGE_FROM[0], Screen.DCHARGE_FROM[1],
+            Screen.DCHARGE_TO[0], Screen.DCHARGE_TO[1], ms)
+        Runner.sleep(ms + 300L)
+    }
+
     private fun runKeys(idx: Int, name: String): Int {
         var fought = 0
         var idle = 0
@@ -278,6 +299,9 @@ object Daily {
                     Runner.set("일일 던전 " + idx + "번째", name + " · " + fought + "번째 도전")
                     Runner.setProgress(2, 4)
                     Runner.tap(Screen.DAILY_CHALLENGE, 3000)
+                    // 경험치 던전에서만 아래로 밀어붙인다. 이름은 순번으로 붙지만
+                    // 진입 직후 목록을 맨 위로 정리하므로 1번은 항상 경험치다(실측 확인).
+                    if (name == "경험치") dailyCharge()
                     deadline = System.currentTimeMillis() + stallMs   // 진전 있음 → 시계 다시
                     continue
                 }

@@ -680,6 +680,9 @@ object Screen {
     // 보스전 '우측 돌진' 조이스틱. 전장 빈 곳을 누른 채 오른쪽으로 끌면 캐릭터가 그쪽으로 달려든다.
     val CHARGE_FROM = intArrayOf(500, 1500)
     val CHARGE_TO   = intArrayOf(1300, 1500)
+    // 경험치 던전은 **아래로** 내려가는 게 낫다(사장님 지정). 보스와 같은 원리·같은 거리(800px).
+    val DCHARGE_FROM = intArrayOf(720, 1200)
+    val DCHARGE_TO   = intArrayOf(720, 2000)
 
     /**
      * 상단 **'보스 소환' 빨간 배너**를 찾는다. = **아직 이 보스를 못 깼다**.
