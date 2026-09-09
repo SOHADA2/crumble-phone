@@ -22,10 +22,15 @@ object Daily {
     /** [SKIP] 으로 횟수를 더 받는 최대 횟수(던전 하나당). 무한히 눌리지 않게 상한을 둔다. */
     private const val AD_MAX = 3
 
-    private val NAMES = arrayOf("경험치", "코인", "반죽", "연구석", "룬결정", "던전6", "던전7", "던전8")
+    // 실측(2026-09-09): 목록을 맨 위로 올리면 위→아래가 이 순서로 고정되고,
+    // 던전 안에서 ▶ 를 누르면 같은 순서로 넘어가며 룬결정 다음이 경험치다(한 바퀴).
+    // ⚠️ 이름을 **화면에서 읽는 게 아니다** — 방문 순번으로 갖다 붙인다.
+    //    그래서 아래 scrollListTop() 이 없으면 라벨이 통째로 밀린다. 둘은 한 몸이다.
+    private val NAMES = arrayOf("경험치", "코인", "반죽", "연구석", "룬결정")
     private fun nameOf(i: Int) = if (i in 1..NAMES.size) NAMES[i - 1] else "던전$i"
 
-    fun start(ctx: Context, maxDungeons: Int = if (Prefs.testMode) 0 else 8) {
+    // maxDungeons = 한 바퀴에 돌 던전 수. 실측상 일일 던전은 **5개**가 전부다.
+    fun start(ctx: Context, maxDungeons: Int = if (Prefs.testMode) 0 else 5) {
         if (!Runner.guard()) return
         Runner.running = true; Runner.task = "일일 던전"
         thread(name = "daily") {
@@ -48,6 +53,8 @@ object Daily {
             Runner.lastResult = "일일 던전 진입 실패"
             return
         }
+        // 목록이면 맨 위로 정리한다 — 첫 배너가 '경험치 던전'이어야 이름이 안 밀린다.
+        Runner.shot()?.let { if (Screen.atDailyList(it)) scrollListTop() }
         if (maxDungeons <= 0) {          // 진입만 시험하는 안전한 방법(입장권을 안 쓴다)
             Runner.set("일일 던전", "진입까지만 확인했어요")
             Runner.lastResult = "일일 던전 진입 확인"
@@ -324,6 +331,22 @@ object Daily {
      *    그런데 그 고정 좌표가 배너 사이 **검은 띠**여서 탭이 늘 헛돌았고, 목록 앞에 서 있으면서도
      *    "가림막 치우는 중"으로 되돌아가기를 반복했다. 화면을 보고 배너를 찾아 누른다.
      */
+    /**
+     * 목록을 **맨 위로** 올린다. 첫 배너가 항상 '경험치 던전'이 되게 하려는 것이다.
+     *
+     * 목록이 스크롤된 채로 첫 배너를 고르면 경험치가 아니라 다른 던전으로 들어가고,
+     * 이름은 방문 순번으로 붙이므로 **라벨이 통째로 밀린다**(PC 에서 실측 확인).
+     * 이미 맨 위면 이 스와이프는 아무 일도 안 한다(무해).
+     */
+    private fun scrollListTop() {
+        for (i in 1..5) {
+            if (!Runner.running) return
+            TapService.swipe(720, 1100, 720, 2400, 350)
+            Runner.sleep(450)
+        }
+        Runner.sleep(600)
+    }
+
     private fun enter(): Boolean {
         for (t in 1..3) {
             if (!Runner.running) return false
