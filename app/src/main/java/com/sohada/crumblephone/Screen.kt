@@ -1309,7 +1309,7 @@ object Shortcut {
         val x1 = Coords.x(X1); val y1 = Coords.y(Y1)
         val w = Coords.x(X2) - x1
         val h = Coords.y(Y2) - y1
-        val half = Coords.y(HALF)
+        val half = Coords.len(HALF)   // 반높이는 '길이' 다 — 점 환산(원점 포함)을 쓰면 안 된다
         // 넓이에 비례하는 임계값이라 배율의 제곱으로 줄어든다(Coords.area 가 그 계산이다).
         val need = Coords.area(NEED)
         if (w <= 0 || h <= 0 || b.width < x1 + w || b.height < y1 + h) return null
@@ -1338,7 +1338,7 @@ object Shortcut {
         }
         if (best < need) return null
         // 돌려주는 값은 다시 **설계 좌표**다. 탭은 TapService 가 또 환산한다.
-        val cy = if (Coords.sy == 0.0) Y1 + bestY else Y1 + Math.round(bestY / Coords.sy).toInt()
+        val cy = Coords.invY(y1 + bestY)
         return intArrayOf((X1 + X2) / 2, cy)
     }
 }
