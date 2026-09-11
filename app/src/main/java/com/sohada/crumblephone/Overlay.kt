@@ -98,11 +98,12 @@ object Overlay {
             text = label
             setTextColor(Color.parseColor(color))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            isSingleLine = true          // 좁아도 꺾이지 않게
             gravity = Gravity.CENTER
             setPadding(dp(ctx, 4), dp(ctx, 7), dp(ctx, 4), dp(ctx, 7))
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#26FFFFFF"))
-                cornerRadius = dp(ctx, 12).toFloat()
+                cornerRadius = dp(ctx, 2).toFloat()
             }
             isClickable = true
             setOnClickListener { onTap() }
@@ -126,7 +127,8 @@ object Overlay {
         // 게임 UI 는 테두리가 **얇은 색선이 아니라 두꺼운 검정**이라 만화처럼 보인다.
         val bg = GradientDrawable().apply {
             setColor(Color.parseColor("#F02E272C"))
-            cornerRadius = dp(ctx, 18).toFloat()
+            // 사각형(사장님 요청 2026-09-11). 0 으로 두면 2dp 테두리 모서리가 거칠어 2dp 만 남긴다.
+            cornerRadius = dp(ctx, 2).toFloat()
             setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
         }
         val pill = LinearLayout(ctx).apply {
@@ -143,7 +145,7 @@ object Overlay {
                     Color.parseColor("#FFD92C"), Color.parseColor("#F9C114"),
                     Color.parseColor("#FEAD04"), Color.parseColor("#8A5605"))
                 orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                cornerRadius = dp(ctx, 5).toFloat()
+                cornerRadius = dp(ctx, 1).toFloat()
             }
             pivotX = 0f
             scaleX = 0f
@@ -153,7 +155,7 @@ object Overlay {
         val track = FrameLayout(ctx).apply {
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#15100F"))
-                cornerRadius = dp(ctx, 6).toFloat()
+                cornerRadius = dp(ctx, 2).toFloat()
                 setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
             }
             addView(fillView)
@@ -211,7 +213,7 @@ object Overlay {
             background = GradientDrawable().apply {
                 colors = intArrayOf(Color.parseColor("#F06A58"), Color.parseColor("#E8503C"))
                 orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                cornerRadius = dp(ctx, 100).toFloat()
+                cornerRadius = dp(ctx, 2).toFloat()
                 setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
             }
             setPadding(dp(ctx, 11), dp(ctx, 4), dp(ctx, 11), dp(ctx, 4))
@@ -234,8 +236,10 @@ object Overlay {
             setTextColor(Color.parseColor("#F8E861"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setPadding(dp(ctx, 8), dp(ctx, 2), dp(ctx, 4), dp(ctx, 2))
-            isClickable = true
-            setOnClickListener { togglePanel() }
+            // ⚠️ 예전엔 이 화살표만 눌러서 열었는데 **손가락보다 작아 잘 안 눌렸다**(사장님 지적).
+            //    이제 열고 닫는 건 알약 전체가 받는다 → 여기는 '지금 열렸나' 를 알리는 표시일 뿐이다.
+            //    clickable 로 두면 자기 자리 탭을 가로채 알약 전체 판정과 어긋난다.
+            isClickable = false
         }
         row.addView(dot); row.addView(host); row.addView(stop); row.addView(arw)
         pill.addView(track); pill.addView(row)
@@ -246,7 +250,7 @@ object Overlay {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#F02E272C"))
-                cornerRadius = dp(ctx, 16).toFloat()
+                cornerRadius = dp(ctx, 2).toFloat()
                 setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
             }
             elevation = dp(ctx, 6).toFloat()
@@ -276,11 +280,14 @@ object Overlay {
                 background = GradientDrawable().apply {
                     colors = intArrayOf(Color.parseColor("#4A4048"), Color.parseColor("#332C32"))
                     orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                    cornerRadius = dp(ctx, 14).toFloat()
+                    cornerRadius = dp(ctx, 2).toFloat()
                     setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
                 }
                 setPadding(dp(ctx, 12), dp(ctx, 7), dp(ctx, 12), dp(ctx, 7))
-                minWidth = dp(ctx, 112)
+                // 아래 [설정][숨기기][끄기] 세 버튼이 이 폭을 나눠 쓴다.
+                // 112dp 였을 때 한 칸이 37dp 라 '⚙ 설정' 이 두 줄로 꺾였다(사장님 지적).
+                minWidth = dp(ctx, 168)
+                isSingleLine = true
                 isClickable = true
                 setOnClickListener {
                     val c = appCtx ?: return@setOnClickListener
@@ -316,7 +323,7 @@ object Overlay {
             ).apply { topMargin = dp(ctx, 8) }
 
             // 설정 — 오븐 개수·아레나 판수처럼 게임을 보다가 고치고 싶어지는 값들이 있다.
-            addView(smallBtn(ctx, "⚙ 설정", "#C8B79F") {
+            addView(smallBtn(ctx, "설정", "#C8B79F") {
                 val c = appCtx ?: return@smallBtn
                 closePanel()
                 c.startActivity(android.content.Intent(c, SettingsActivity::class.java)
@@ -369,9 +376,11 @@ object Overlay {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    // 본문을 탭하면 '잠깐 깨우기'. 어둡게 해 뒀어도 이걸로 원래 밝기가 돌아온다.
+                    // 알약 **어디를 탭해도** 펼침 패널이 여닫힌다(작은 ▾ 를 겨냥하지 않아도 된다).
+                    // 겸사겸사 '잠깐 깨우기' 도 같이 한다 — 만졌다는 건 볼 생각이라는 뜻이다.
                     // (오른쪽 [멈추기] 는 자기가 먼저 탭을 가져가므로 여기까지 안 온다.)
                     if (!moved) {
+                        togglePanel()
                         wakeUntil = System.currentTimeMillis() + WAKE_MS
                         // 진행률 막대 — 분모가 있는 작업일 때만 보여 준다(없으면 -1).
         val pct = Runner.progress
