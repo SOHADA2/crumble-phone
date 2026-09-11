@@ -430,6 +430,9 @@ object Chores {
      */
     private fun gacha10(): Boolean {
         Runner.set("쿠키 뽑기 10회 하는 중")
+        // 재화가 무엇이든 그냥 뽑는다(어차피 퀘스트 때문에 뽑아야 한다). 무엇으로 뽑았는지만 남긴다 —
+        // 나중에 "다이아가 왜 줄었지" 를 되짚을 수 있어야 한다.
+        Runner.shot()?.let { Bot.log("    [진단] 뽑기 재화 아이콘 = " + Screen.gachaCurrency(it)) }
         Runner.tap(Screen.GACHA_10, 3000)
 
         // ── 뽑기가 '실제로 시작됐는지'부터 확인한다 ──
@@ -441,6 +444,16 @@ object Chores {
             if (!Runner.running) return false
             val b = Runner.shot() ?: return false
             if (!Screen.isGachaScreen(b)) { started = true; break }
+            // 값나가는 재화를 쓸 때 게임이 한 번 물어본다. 확인 창은 **가운데**에 뜨는데
+            // 뽑기 버튼 셋은 **아래쪽**이라 가려지지 않아서, 여기까지 그냥 '안 바뀜' 으로 보였다
+            // — PC 에서 `10회를 눌렀는데 화면이 그대로` 로 찍히던 것의 정체로 보인다.
+            if (Screen.isConfirmDialog(b)) {
+                // ⚠️ 오른쪽 주황을 누르는 유일한 자리다. 근거는 이 검사가 `isGachaScreen` 이 참일 때만
+                //    돈다는 것 — 뽑기 화면 위에 뜬 창이라 '게임 종료?' 같은 창일 수 없다.
+                Bot.log("    확인 창 - [확인] 을 눌러 진행합니다")
+                Runner.tap(Screen.DLG_OK, 3000)
+                continue
+            }
             Runner.sleep(2000)
         }
         if (!started) { Bot.log("    10회를 눌렀는데 화면이 그대로 - 뽑기가 시작되지 않았어요"); return false }

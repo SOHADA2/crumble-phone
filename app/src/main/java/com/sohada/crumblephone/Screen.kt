@@ -12,6 +12,14 @@ object Screen {
     // ── 좌표(1440x3120 실좌표) ──
     val WAKE = intArrayOf(721, 1864, 725, 2520)      // 절전 해제: 왕관 씌우기 드래그
     val DLG_SAFE = intArrayOf(441, 2797)             // 확인창 왼쪽 버튼(계속하기/취소) — 오른쪽 주황은 절대 금지
+    /**
+     * 확인창 **오른쪽 주황** 버튼.
+     *
+     * ⚠️ 기본 규칙은 '이걸 절대 누르지 않는다' 다 — 전투 강제 종료 · 게임 종료 · 크리스탈 소모가
+     *    전부 이 자리다. **뽑기 확인 창에서만** 예외로 쓴다(`Chores.gacha10`).
+     *    거기서는 `isGachaScreen` 이 참일 때만 누르므로 엉뚱한 창일 수 없다.
+     */
+    val DLG_OK = intArrayOf(995, 2812)
     val TOBOL_ENTRY = intArrayOf(1340, 1500)         // 메인 우측 토벌전 바로가기(폴백 경로)
     val NAV_GUILD   = intArrayOf(905, 3000)          // 하단 네비 '길드' 탭 — 토벌전으로 가는 안전한 길
     val GUILD_TOBOL = intArrayOf(280, 1880)          // 길드 화면의 '길드 토벌전' 타일(피냐타 그림 한가운데)
@@ -340,6 +348,28 @@ object Screen {
     }
 
     fun isGachaScreen(b: Bitmap): Boolean = gachaHits(b) == 3
+
+    /**
+     * 지금 뽑기 화면이 **무슨 재화로** 뽑으려 하는지.
+     *
+     * 쿠키틀이 떨어지면 같은 버튼이 다이아 값으로 바뀐다(1회 200 · 10회 2,000 · 30회 6,000).
+     * 버튼 판은 무슨 재화든 주황이라 [gachaHits] 로는 못 가른다 — 가르는 자리는 버튼 왼쪽 아이콘 하나다.
+     *
+     * 실측(PC, 2026-09-11): 쿠키틀 `148,156,169` 회청 · 펫 뽑기권 `114,55,17` 갈색.
+     * 다이아는 아직 표본이 없다. **막는 데 쓰지 않고 기록만 한다** — 어차피 퀘스트라 그냥 뽑는다.
+     */
+    private val GACHA_ICON = intArrayOf(566, 2627)
+    fun gachaCurrency(b: Bitmap): String {
+        val c = px(b, GACHA_ICON[0], GACHA_ICON[1])
+        val r = Color.red(c); val g = Color.green(c); val bl = Color.blue(c)
+        val kind = when {
+            bl > r + 60 && bl > 120 -> "다이아"
+            r > bl + 40 -> "펫"
+            Math.abs(r - 148) <= 35 && Math.abs(bl - 169) <= 35 -> "쿠키틀"
+            else -> "모름"
+        }
+        return "R" + r + " G" + g + " B" + bl + " -> " + kind
+    }
 
     /**
      * 가방·뽑기 같은 청록 패널이 하단을 덮고 있나?
