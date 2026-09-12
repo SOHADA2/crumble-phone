@@ -63,6 +63,16 @@ object Chores {
     private var ovenTried = false
 
     /**
+     * 오븐을 돌렸는데 퀘스트가 안 끝났다 = **오븐 퀘스트가 아니었다.** 그럼 잠깐 쉰다.
+     *
+     * ⚠️ '퀘스트당 한 번'([ovenTried])만으로는 모자라다 — 퀘스트가 초 단위로 끝나는 계정에서는
+     *    수령할 때마다 그 상한이 새로 풀려서 **'퀘스트 사이에 오븐만 여는'** 모양이 된다(사장님 지적).
+     *    그래서 **시간으로도** 막는다. 진짜 오븐 퀘스트라면 이 시간 뒤에 다시 해서 끝난다.
+     */
+    private const val OVEN_COLD_MS = 2 * 60_000L
+    private var ovenColdUntil = 0L
+
+    /**
      * 이 퀘스트에서 **반대 탭으로 옮겨 한 번 더 뽑아 봤나.**
      * 퀘스트가 `펫 뽑기 10회` 인데 쿠키 탭이 열려 있으면 아무리 뽑아도 안 끝난다 —
      * 그래서 뽑은 뒤 띠가 그대로면 반대 탭으로 한 번 더 해 본다. 한 퀘스트에 한 번만이다
@@ -469,9 +479,25 @@ object Chores {
             }
             if (Prefs.testMode) { Bot.log("  화면이 안 바뀜 - 시험 모드라 오븐은 건너뜁니다"); return PROBE_NONE }
             if (ovenTried) { Bot.log("  화면이 안 바뀜 - 오븐은 이미 해 봤어요(오븐 퀘스트가 아닙니다)"); return PROBE_NONE }
+            if (System.currentTimeMillis() < ovenColdUntil) {
+                val left = (ovenColdUntil - System.currentTimeMillis()) / 1000
+                Bot.log("  화면이 안 바뀜 - 직전 오븐이 퀘스트를 못 끝냈어요. " + left + "초 뒤에 다시 봅니다")
+                return PROBE_NONE
+            }
             ovenTried = true
             Bot.log("  화면이 안 바뀜 -> 오븐 처리 (띠 " + fmt(before) + " -> " + fmt(now) + ")")
-            return if (Oven.run()) PROBE_DID else PROBE_NONE
+            if (!Oven.run()) return PROBE_NONE
+            // 돌리고 나서 **정말 오븐 퀘스트였는지 결과로 확인**한다.
+            // 띠가 그대로면 헛돌린 것이므로 잠깐 쉬고, 끝냈으면 쉬는 시간을 푼다.
+            // (띠가 가려졌으면 -0.6 밑이라 판단하지 않는다 — 바깥 고리가 그 가림막을 떠안는다)
+            val after = Runner.shot()?.let { Screen.questBarRatio(it) }
+            if (after != null && after > -0.6 && Math.abs(after - before) < BAR_CHANGED && after < doneRatio) {
+                Bot.log("  오븐을 돌렸는데 퀘스트 띠가 그대로예요 (" + fmt(after) + ") - 오븐 퀘스트가 아니었나 봅니다 (2분 쉼)")
+                ovenColdUntil = System.currentTimeMillis() + OVEN_COLD_MS
+            } else {
+                ovenColdUntil = 0L
+            }
+            return PROBE_DID
         }
 
         Bot.log("  모르는 화면 - 되돌아 나감")
