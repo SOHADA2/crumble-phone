@@ -33,6 +33,11 @@ object Screen {
     val OUTSIDE     = intArrayOf(720, 1100)          // 팝업 바깥(전장 빈 곳) — 닫기 버튼이 없는 팝업용
     val GACHA_10    = intArrayOf(712, 2640)          // 뽑기 '10회'
     val GACHA_CLOSE = intArrayOf(712, 2976)          // 뽑기 결과창 X
+    // 뽑기 화면 위쪽 탭 두 개. PC 실측(2026-09-11) 값을 그대로 쓴다 — 뽑기 화면 좌표는
+    // 버튼(266/712/1158, 2640)·결과창 X 까지 PC 값이 폰에서 그대로 맞았다.
+    // ⚠️ 그래도 **보고 나서** 누른다 — [gachaTab] 이 확실할 때만 탭한다(아래 Chores.switchGachaTab).
+    val GACHA_TAB_COOKIE = intArrayOf(374, 2858)     // '쿠키 뽑기' 탭
+    val GACHA_TAB_PET    = intArrayOf(1053, 2858)    // '펫 뽑기' 탭
 
     // 가방 상자 사용(box.ps1) — 퀘스트가 상자를 맨 앞 칸에 올려 준다는 전제
     val BAG_SLOT1   = intArrayOf(228, 2116)          // 가방 첫 번째 칸
@@ -369,6 +374,55 @@ object Screen {
             else -> "모름"
         }
         return "R" + r + " G" + g + " B" + bl + " -> " + kind
+    }
+
+    /**
+     * 뽑기 화면에서 **지금 어느 탭이 열려 있나** — "쿠키" / "펫" / "모름".
+     *
+     * 퀘스트가 `펫 뽑기 10회 하기` 인데 쿠키 탭이 열려 있으면, 아무리 뽑아도 퀘스트는 안 끝난다.
+     * 그동안 봇은 '열려 있는 탭에서 그냥 뽑기' 만 했고 그게 **퀘스트가 안 끝나는 원인**이었다
+     * (PC 인수인계 '아직 안 된 것 — 펫 뽑기 퀘스트'). 그래서 먼저 '어느 탭인가' 부터 본다.
+     *
+     * 실측(PC, 2026-09-11): 선택된 탭은 청록(쿠키 `0,219,219` · 펫 `4,181,191`),
+     * 안 선택은 쿠키 `6,85,103`(짙은 청록) · 펫 `217,226,228`(밝은 회색).
+     * 선택 판정 `R<60 && G>150 && B>150` — 둘 중 **정확히 하나**만 걸릴 때만 답한다.
+     * 둘 다이거나 둘 다 아니면 `"모름"` 이고, 그때는 **탭을 건드리지 않는다**(잘못 누르면 더 나빠진다).
+     */
+    fun gachaTab(b: Bitmap): String {
+        val ck = isTealTab(b, GACHA_TAB_COOKIE)
+        val pt = isTealTab(b, GACHA_TAB_PET)
+        return when {
+            ck && !pt -> "쿠키"
+            pt && !ck -> "펫"
+            else -> "모름"
+        }
+    }
+
+    private fun isTealTab(b: Bitmap, p: IntArray): Boolean {
+        val c = px(b, p[0], p[1])
+        return Color.red(c) < 60 && Color.green(c) > 150 && Color.blue(c) > 150
+    }
+
+    /**
+     * 진단용 — 뽑기 화면에서 봇이 보는 자리의 **실제 픽셀**을 한 줄로 남긴다.
+     * 친구 폰에서 뽑기가 안 될 때, 버튼·탭이 봇이 기대한 자리에 있는지를 스크린샷 없이 확인하려는 것.
+     * (PC 봇 `Get-GachaPixels` 와 같은 역할)
+     */
+    fun gachaPixels(b: Bitmap): String {
+        val sb = StringBuilder()
+        val names = arrayOf("1회", "10회", "30회")
+        for (i in GACHA_BTNS.indices) {
+            val p = GACHA_BTNS[i]; val c = px(b, p[0], p[1])
+            sb.append(names[i]).append("(").append(p[0]).append(",").append(p[1]).append(")=")
+                .append(Color.red(c)).append(",").append(Color.green(c)).append(",").append(Color.blue(c)).append(" ")
+        }
+        val ck = px(b, GACHA_TAB_COOKIE[0], GACHA_TAB_COOKIE[1])
+        val pt = px(b, GACHA_TAB_PET[0], GACHA_TAB_PET[1])
+        sb.append("· 탭 쿠키=").append(Color.red(ck)).append(",").append(Color.green(ck)).append(",").append(Color.blue(ck))
+        sb.append(" 펫=").append(Color.red(pt)).append(",").append(Color.green(pt)).append(",").append(Color.blue(pt))
+        sb.append(" -> ").append(gachaTab(b))
+        sb.append(" · 재화 ").append(gachaCurrency(b))
+        return sb.toString()
     }
 
     /**

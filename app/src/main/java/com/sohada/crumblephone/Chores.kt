@@ -56,10 +56,22 @@ object Chores {
      */
     private var ovenTried = false
 
+    /**
+     * 이 퀘스트에서 **반대 탭으로 옮겨 한 번 더 뽑아 봤나.**
+     * 퀘스트가 `펫 뽑기 10회` 인데 쿠키 탭이 열려 있으면 아무리 뽑아도 안 끝난다 —
+     * 그래서 뽑은 뒤 띠가 그대로면 반대 탭으로 한 번 더 해 본다. 한 퀘스트에 한 번만이다
+     * (`30회 하기` 처럼 열 번으로 안 끝나는 퀘스트도 띠가 그대로라, 안 막으면 양쪽을 계속 뽑는다).
+     */
+    private var gachaSwitchTried = false
+
+    /** 방금 어느 탭에서 뽑았나(진단·기억용). */
+    private var lastPulledTab = "모름"
+
     fun start(ctx: Context, maxQuests: Int = 0) {
         if (!Runner.guard()) return
         Runner.running = true; Runner.task = "퀘스트"
         ovenTried = false
+        gachaSwitchTried = false
         thread(name = "chores") {
             try {
                 if (!Runner.bringGameToFront(ctx)) { Runner.set("시작 못 함", "게임을 찾지 못했어요"); return@thread }
@@ -106,6 +118,7 @@ object Chores {
         var bulkTries = 0         // '한번에 클리어'를 몇 번 눌러 봤는지(안 먹으면 그만 두려고)
         var loggedFirst = false   // 시작 화면 판정값을 한 번만 남기려고
         tapsProven = false        // 증거는 실행마다 새로 모은다
+        gachaSwitchTried = false
 
         while (Runner.running) {
             if (maxQuests > 0 && quests >= maxQuests) { Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요"); break }
@@ -235,6 +248,7 @@ object Chores {
                 // 백오프도 같이 푼다 — 안 그러면 앞 퀘스트 때문에 걸린 15분이
                 // 이미 교체된 새 퀘스트의 탐색까지 막아 버린다.
                 ovenTried = false
+                gachaSwitchTried = false
                 probeAllowedAt = 0L
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 continue
@@ -307,6 +321,7 @@ object Chores {
                 quests++
                 Runner.set("퀘스트 보상 받는 중", "지금까지 " + quests + "개")
                 ovenTried = false
+                gachaSwitchTried = false
                 probeAllowedAt = 0L
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 Runner.sleep(3000); continue
@@ -350,7 +365,9 @@ object Chores {
      */
     private fun probe(preHits: Int, before: Double): Int {
         Runner.set("다음 할 일 찾는 중")
-        Runner.tap(Screen.QUEST_BAR, 1200)
+        // ⚠️ 1.2초는 짧았다 — 뽑기 화면이 아직 올라오는 중이면 버튼이 3/3 이 안 되고,
+        //    그 어중간한 장이 '가방' 으로 읽혀 엉뚱한 자리를 누를 수 있다. PC 와 같은 2초로 맞춘다.
+        Runner.tap(Screen.QUEST_BAR, 2000)
         val b = Runner.shot() ?: return PROBE_NONE
         Bot.log("  누른 뒤 화면: " + Screen.debugLine(b))
 
@@ -365,7 +382,7 @@ object Chores {
             } else {
                 Bot.log("  뽑기 화면 -> 10회 수행")
                 tapsProven = true
-                return if (gacha10()) PROBE_DID else PROBE_NONE
+                return gachaQuest(before)
             }
         }
 
@@ -375,6 +392,9 @@ object Chores {
             // 뽑기 화면이 거의 확실하니(하나가 가려졌거나 UI 가 바뀐 것) 손대지 않는다.
             if (hits >= 2) {
                 Bot.log("  하단 패널인데 뽑기 버튼이 " + hits + "/3 만 주황 - 건드리지 않음")
+                // 친구 폰에서 '뽑기가 안 된다' 는 대부분 여기 아니면 아래 '모르는 화면' 으로 떨어진다.
+                // 스크린샷 없이도 무엇이 어긋났는지 보이게 실제 픽셀을 남긴다(PC Get-GachaPixels 와 같은 역할).
+                Bot.log("  [진단] " + Screen.gachaPixels(b))
                 Runner.tap(Screen.NAV_CLOSE, 2000)
                 return PROBE_NONE
             }
@@ -414,6 +434,8 @@ object Chores {
         }
 
         Bot.log("  모르는 화면 - 되돌아 나감")
+        // 뽑기 화면인데 버튼 자리가 통째로 다르면 여기로 떨어진다. 그때 알아볼 수 있게 픽셀을 남긴다.
+        Bot.log("  [진단] " + Screen.gachaPixels(b))
         Runner.tap(Screen.NAV_CLOSE, 2000)
         val after = Runner.shot()
         if (after != null && !Screen.atMain(after)) { TapService.back(); Runner.sleep(3000) }
@@ -425,14 +447,100 @@ object Chores {
     // ══════════════════════════════════════════════════════════
 
     /**
-     * 쿠키 뽑기 10회. 좋은 게 나오면 컷신이 끼어들어 연출이 길어지므로
+     * 뽑기 퀘스트 한 건. **탭(쿠키/펫)이 맞아야 퀘스트가 끝난다.**
+     *
+     * 그동안 봇은 '열려 있는 탭에서 그냥 10회' 만 했다. 퀘스트가 `펫 뽑기 10회 하기` 인데
+     * 쿠키 탭이 열려 있으면 아무리 뽑아도 띠가 안 바뀌고, 다음 바퀴에 또 쿠키를 뽑는다 —
+     * 사용자 눈에는 **"쿠키 뽑기가 안 된다"** 로 보인다(관제 표시도 전부 '쿠키 뽑기' 였다).
+     *
+     * 그래서 **뽑고 나서 퀘스트 띠를 본다.** 안 바뀌었으면 탭이 틀린 것이므로 반대 탭에서 한 번 더 한다.
+     * 옮긴 탭은 게임이 기억하므로, 같은 종류가 이어지면 두 번째부터는 헛뽑기가 없다.
+     *
+     * @param before 뽑기 전에 재 둔 퀘스트 띠 비율
+     */
+    private fun gachaQuest(before: Double): Int {
+        // 탭을 미리 고르지 않는다 — 게임이 **마지막에 쓴 탭을 그대로 기억**하므로,
+        // 반대 탭으로 옮겨 성공하면 다음 번에도 그 탭이 열린 채로 시작된다.
+        // 여기서 따로 기억해 두면, 게임이 알아서 맞는 탭을 열어 주는 경우에 멀쩡한 탭을 틀린 쪽으로 옮긴다.
+        if (!gacha10()) return PROBE_NONE
+        val pulled = lastPulledTab
+
+        // 퀘스트가 정말 끝났나. 띠가 바뀌었으면(완료 색이 됐거나 다음 퀘스트로 갈렸으면) 맞은 탭이다.
+        val after = Runner.shot() ?: return PROBE_DID
+        val now = Screen.questBarRatio(after)
+        // 띠가 가려져 있으면(팝업이 덮음, -0.6 아래) 판단할 근거가 없다 — 바깥 고리가 가림막을 떠안는다.
+        if (now <= -0.6) { Bot.log("    뽑고 나왔는데 퀘스트 띠가 가려져 있어요 - 다음 바퀴에 다시 봅니다"); return PROBE_DID }
+        if (Math.abs(now - before) >= BAR_CHANGED) {
+            if (pulled != "모름") Bot.log("    '" + pulled + " 뽑기' 로 퀘스트가 끝났어요")
+            return PROBE_DID
+        }
+
+        // ── 띠가 그대로다 = 이 탭이 아니다(또는 10회로는 모자란 퀘스트다) ──
+        if (gachaSwitchTried) {
+            Bot.log("    뽑았는데 퀘스트 띠가 그대로 - 반대 탭도 이미 해 봤어요(10회로 안 끝나는 퀘스트일 수 있어요)")
+            return PROBE_DID
+        }
+        if (pulled == "모름") {
+            Bot.log("    뽑았는데 퀘스트 띠가 그대로 - 어느 탭인지 못 읽어 반대 탭을 못 고릅니다")
+            return PROBE_DID
+        }
+        gachaSwitchTried = true
+        val other = if (pulled == "쿠키") "펫" else "쿠키"
+        Bot.log("    뽑았는데 퀘스트 띠가 그대로 - '" + other + " 뽑기' 퀘스트로 보고 탭을 옮겨 한 번 더 합니다")
+
+        // 뽑기 화면은 닫힌 상태다(gacha10 이 메인까지 나온다). 퀘스트 띠를 다시 눌러 들어간다.
+        Runner.tap(Screen.QUEST_BAR, 2000)
+        val g = Runner.shot() ?: return PROBE_DID
+        if (Screen.gachaHits(g) != 3) {
+            Bot.log("    다시 들어갔는데 뽑기 화면이 아니에요: " + Screen.gachaPixels(g))
+            Runner.tap(Screen.NAV_CLOSE, 2000)
+            return PROBE_DID
+        }
+        if (!switchGachaTab(other)) { Runner.tap(Screen.NAV_CLOSE, 2000); return PROBE_DID }
+        if (!gacha10()) return PROBE_DID
+        // 게임이 탭을 기억하므로, 다음 뽑기 퀘스트는 이 탭이 열린 채로 시작된다.
+        return PROBE_DID
+    }
+
+    /**
+     * 뽑기 화면에서 원하는 탭으로 옮긴다. **보고 나서 누른다** —
+     * 탭 색을 못 알아보면(다른 기기·다른 UI) 아무것도 누르지 않고 픽셀만 남긴다.
+     * 블라인드 탭은 이 프로젝트에서 이미 한 번 사고를 냈다(편성 화면에서 전투가 시작됐다).
+     */
+    private fun switchGachaTab(want: String): Boolean {
+        val b = Runner.shot() ?: return false
+        when (Screen.gachaTab(b)) {
+            want -> return true
+            "모름" -> { Bot.log("    탭을 알아볼 수 없어 옮기지 않습니다: " + Screen.gachaPixels(b)); return false }
+        }
+        val p = if (want == "펫") Screen.GACHA_TAB_PET else Screen.GACHA_TAB_COOKIE
+        Runner.set("'" + want + " 뽑기' 탭으로 옮기는 중")
+        Runner.tap(p, 2500)
+        val c = Runner.shot() ?: return false
+        if (Screen.gachaTab(c) != want || Screen.gachaHits(c) != 3) {
+            Bot.log("    '" + want + " 뽑기' 탭으로 못 옮겼어요: " + Screen.gachaPixels(c))
+            return false
+        }
+        Bot.log("    '" + want + " 뽑기' 탭으로 옮겼어요")
+        return true
+    }
+
+    /**
+     * 지금 열려 있는 탭에서 10회 뽑는다. 좋은 게 나오면 컷신이 끼어들어 연출이 길어지므로
      * 고정 대기로 좌표를 찍지 않고 목표 화면에 닿을 때까지 확인하면서 나아간다.
+     * 어느 탭에서 뽑았는지는 [lastPulledTab] 에 남긴다.
      */
     private fun gacha10(): Boolean {
-        Runner.set("쿠키 뽑기 10회 하는 중")
         // 재화가 무엇이든 그냥 뽑는다(어차피 퀘스트 때문에 뽑아야 한다). 무엇으로 뽑았는지만 남긴다 —
         // 나중에 "다이아가 왜 줄었지" 를 되짚을 수 있어야 한다.
-        Runner.shot()?.let { Bot.log("    [진단] 뽑기 재화 아이콘 = " + Screen.gachaCurrency(it)) }
+        lastPulledTab = "모름"
+        Runner.shot()?.let {
+            lastPulledTab = Screen.gachaTab(it)
+            Bot.log("    [진단] " + Screen.gachaPixels(it))
+        }
+        // ⚠️ '쿠키 뽑기' 라고 못 박지 않는다 — 펫 탭에서 뽑고도 '쿠키 뽑기' 로 보여서
+        //    펫 퀘스트가 막힌 걸 사용자가 '쿠키 뽑기 고장' 으로 신고했다.
+        Runner.set(if (lastPulledTab == "모름") "뽑기 10회 하는 중" else lastPulledTab + " 뽑기 10회 하는 중")
         Runner.tap(Screen.GACHA_10, 3000)
 
         // ── 뽑기가 '실제로 시작됐는지'부터 확인한다 ──
