@@ -46,6 +46,7 @@ class MainActivity : ListActivity() {
     private lateinit var btnPrimary: TextView
     private lateinit var runRows: LinearLayout
     private lateinit var setupSection: LinearLayout
+    private lateinit var rowBoss: LinearLayout
     private lateinit var rowAcc: LinearLayout
     private lateinit var rowCap: LinearLayout
     private lateinit var rowOverlay: LinearLayout
@@ -207,9 +208,13 @@ class MainActivity : ListActivity() {
         val rQuest = row("퀘스트", subtitle = "보상 받고 · 뽑기 · 상자 · 오븐 · 보스 밀기") {
             withCapture { Chores.start(applicationContext) }
         }
-        val rBoss = row("보스전", subtitle = "막힌 보스만 한 번 · 조합 1~5") {
+        // 값 칸에 조합 순서를 그대로 보여 준다 — ⚙ 에서 2·3·4 만 골라 뒀는데
+        // 여기는 '1~5' 라고 적혀 있으면, 안 도는 게 고장으로 보인다.
+        // (설정에서 바꾸고 돌아올 수 있으니 onResume 에서 다시 그린다)
+        rowBoss = row("보스전", value = Boss.orderShort(), subtitle = "막힌 보스만 한 번 · 쿠키 조합") {
             withCapture { Boss.start(applicationContext) }
         }
+        val rBoss = rowBoss
         val rTobol = row("토벌전", subtitle = "멈출 때까지 계속 도전 · 최고 점수 기록") {
             withCapture { Runner.startTobol(applicationContext) }
         }
@@ -283,6 +288,8 @@ class MainActivity : ListActivity() {
     override fun onResume() {
         super.onResume()
         Overlay.onAppForeground(true)
+        // ⚙ 에서 조합 순서를 바꾸고 돌아올 수 있다. 화면은 여기서만 다시 그려진다.
+        rowBoss.setValue(Boss.orderShort(), t.label2)
         // 켤 것이 남아 있으면 안내부터 보여 준다. 목록만 던져 두면 무엇부터 눌러야 할지 알 수 없다.
         //
         // ⚠️ 여기에 '화면 읽기' 를 넣으면 안 된다. 그건 **1회용 허락**이라 앱을 켤 때마다 없는 상태다

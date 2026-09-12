@@ -11,7 +11,7 @@ import kotlin.concurrent.thread
  *   ① 보상 자동 받기 — 미션 '모두 받기' + 출석 '받기' (20분마다)
  *   ② 완료된 퀘스트 수령 — 퀘스트 띠가 완료 색이면 눌러서 받는다
  *   ③ 다음 퀘스트가 행동형이면 대신 해 준다 — 쿠키 뽑기 10회 / 가방 상자 / 오븐 장비 뽑기
- *   ④ 스테이지가 막히면 보스를 깬다 — 쿠키 조합 1~5 를 바꿔 가며 최대 5번
+ *   ④ 스테이지가 막히면 보스를 깬다 — ⚙ 에서 고른 쿠키 조합을 골라 둔 차례대로(기본 1~5)
  *
  * ★ 이 고리를 모르면 초반에 영영 못 나간다(PC 봇에서 몇 시간을 헛돌았다):
  *     방치 전투로 몹 처치 → 퀘스트 완료 → **보상 수령** → 레벨업 재료·골드
@@ -163,7 +163,7 @@ object Chores {
             if (System.currentTimeMillis() < bossWaitUntil) {
                 val left = (bossWaitUntil - System.currentTimeMillis()) / 1000
                 Runner.status = "보스전 진행 중"
-                Runner.detail = "쿠키 조합 " + bossTries + "/" + Boss.PRESETS + " · " + left + "초 남음"
+                Runner.detail = "쿠키 조합 " + bossPresetLabel(bossTries) + " · " + left + "초 남음"
                 Runner.setProgress((BOSS_WAIT_SEC - left).toInt(), BOSS_WAIT_SEC.toInt())
                 Runner.sleep(4000); continue
             }
@@ -267,14 +267,16 @@ object Chores {
             //    오탐 방어는 `Boss.challengeOnce` 맨 앞으로 옮겼다 — 거기서 걸리면 조합도 안 바꾸고
             //    돌아오니 **오탐 비용이 0** 이라, 여기서 굳이 기다릴 이유가 없다.
             if (Screen.hasBossBanner(b)) {
-                if (bossTries < Boss.PRESETS) {
-                    val try_ = bossTries + 1
-                    Bot.log("보스 소환 배너 확인 - 쿠키 조합 " + try_ + " 번으로 도전 (" + try_ + "/" + Boss.PRESETS + ")")
-                    Runner.set("보스전 준비 중", "쿠키 조합 " + try_ + "/" + Boss.PRESETS)
+                val order = Boss.order()
+                if (bossTries < order.size) {
+                    val n = order[bossTries]          // 이번에 쓸 조합 번호(사용자가 정한 순서)
+                    val step = (bossTries + 1).toString() + "/" + order.size
+                    Bot.log("보스 소환 배너 확인 - 쿠키 조합 " + n + " 번으로 도전 (" + step + ")")
+                    Runner.set("보스전 준비 중", "쿠키 조합 " + n + "번 (" + step + ")")
                     // 실제로 소환을 눌렀을 때만 한 칸을 쓴다. 배너를 못 찾아 그냥 돌아왔으면
-                    // 싸우지도 않고 '1~5 모두 실패' 로 가 버린다(예전 사고와 같은 모양).
-                    if (Boss.challengeOnce(try_)) {
-                        bossTries = try_
+                    // 싸우지도 않고 '전부 실패' 로 가 버린다(예전 사고와 같은 모양).
+                    if (Boss.challengeOnce(n)) {
+                        bossTries++
                         bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
                     } else Runner.sleep(3000)
                     continue
@@ -283,7 +285,7 @@ object Chores {
                     // 조합을 한 바퀴 다 돌렸는데 배너가 그대로다 = 손으로 밀어야 하는 보스.
                     // 계속 두드리지 않고 사람에게 넘긴다. 쉬는 동안에도 완료 퀘스트는 계속 받는다.
                     bossNoticed = true
-                    Bot.log("쿠키 조합 " + Boss.PRESETS + "번 도전했지만 못 깼어요 - 손으로 한 번 밀어 주세요 (" + BACKOFF_MINUTES + "분 뒤 재시도)")
+                    Bot.log("쿠키 조합 " + Boss.orderLabel() + " 을 다 도전했지만 못 깼어요 - 손으로 한 번 밀어 주세요 (" + BACKOFF_MINUTES + "분 뒤 재시도)")
                     Runner.set("보스에 막혔어요", "손으로 한 번 밀어 주세요 · " + BACKOFF_MINUTES + "분 뒤 다시 해 볼게요")
                     probeAllowedAt = System.currentTimeMillis() + BACKOFF_MINUTES * 60_000
                     Runner.sleep(8000); continue
@@ -295,7 +297,7 @@ object Chores {
                 //   ⚠️ 예전엔 퀘스트를 받을 때마다 되돌렸는데, 스테이지가 높은 계정은 퀘스트가
                 //      초 단위로 완료된다 — 그래서 조합 1·2 만 반복하고 **3·4·5 로 넘어가지
                 //      못했다**(사용자 신고). 퀘스트가 바뀌는 것과 보스가 바뀌는 것은 별개다.
-                Bot.log("보스 배너가 사라졌어요 - 쿠키 조합을 1번부터 다시 셉니다")
+                Bot.log("보스 배너가 사라졌어요 - 쿠키 조합을 처음(" + Boss.order()[0] + "번)부터 다시 셉니다")
                 bossTries = 0; bossNoticed = false
             }
 
@@ -329,14 +331,16 @@ object Chores {
 
             // 탐색으로도 안 풀렸다 = 스테이지 클리어형이다. 보스를 깨야 넘어간다.
             // 위의 배너 판정이 놓쳤을 때를 위한 **폴백 경로**다(PC 봇도 둘 다 갖고 있다).
-            if (bossTries < Boss.PRESETS) {
-                val try_ = bossTries + 1
-                Bot.log("탐색 실패 - 쿠키 조합 " + try_ + " 번으로 보스 도전 (" + try_ + "/" + Boss.PRESETS + ")")
-                Runner.set("보스전 준비 중", "쿠키 조합 " + try_ + "/" + Boss.PRESETS)
+            val order = Boss.order()
+            if (bossTries < order.size) {
+                val n = order[bossTries]
+                val step = (bossTries + 1).toString() + "/" + order.size
+                Bot.log("탐색 실패 - 쿠키 조합 " + n + " 번으로 보스 도전 (" + step + ")")
+                Runner.set("보스전 준비 중", "쿠키 조합 " + n + "번 (" + step + ")")
                 // 여기까지 왔으면 '스테이지 클리어형'이 거의 확실하다 = 배너는 있는데 이펙트에 가렸을 수 있다.
                 // 그래서 이 경로에서만 배너 기준을 느슨하게 본다(그래도 **찾은 자리**만 누른다).
-                if (Boss.challengeOnce(try_, loose = true)) {
-                    bossTries = try_
+                if (Boss.challengeOnce(n, loose = true)) {
+                    bossTries++
                     bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
                     continue
                 }
@@ -345,7 +349,7 @@ object Chores {
             }
             if (!bossNoticed) {
                 bossNoticed = true
-                Bot.log("쿠키 조합 " + Boss.PRESETS + "번 도전했지만 못 깼어요 - 손으로 한 번 밀어 주세요 (" + BACKOFF_MINUTES + "분 뒤 재시도)")
+                Bot.log("쿠키 조합 " + Boss.orderLabel() + " 을 다 도전했지만 못 깼어요 - 손으로 한 번 밀어 주세요 (" + BACKOFF_MINUTES + "분 뒤 재시도)")
             }
             Runner.set("보스에 막혔어요", "손으로 한 번 밀어 주세요 · " + BACKOFF_MINUTES + "분 뒤 다시 해 볼게요")
             probeAllowedAt = System.currentTimeMillis() + BACKOFF_MINUTES * 60_000
@@ -354,6 +358,17 @@ object Chores {
         if (Runner.running) Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요")
         else Runner.set("멈췄어요", "퀘스트 " + quests + "개까지 받았어요")
         Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
+    }
+
+    /**
+     * 진행 중 표시용 — `done` 번째까지 했을 때 **지금 싸우고 있는 조합**이 몇 번인지.
+     * (`bossTries` 는 '몇 개 써 봤나' 이고, 조합 번호는 사용자가 정한 순서표에서 꺼낸다)
+     */
+    private fun bossPresetLabel(done: Int): String {
+        val order = Boss.order()
+        val i = done - 1
+        if (i < 0 || i >= order.size) return done.toString() + "/" + order.size
+        return order[i].toString() + "번 (" + done + "/" + order.size + ")"
     }
 
     /**

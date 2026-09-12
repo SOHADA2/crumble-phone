@@ -161,4 +161,15 @@ object Prefs {
     var bossChargeMs: Int
         get() = sp?.getInt("bossChargeMs", 2000) ?: 2000
         set(v) { sp?.edit()?.putInt("bossChargeMs", v)?.apply() }
+
+    /**
+     * 보스에 막혔을 때 **시도할 쿠키 조합과 그 순서**. `"2,3,4"` 처럼 적힌다.
+     *
+     * 여기 없는 번호는 **아예 도전하지 않는다** — 예전엔 무조건 1→2→3→4→5 를 다 돌아서,
+     * 안 짜 둔 조합(빈 덱)까지 한 번씩 써 가며 시간을 버렸다.
+     * 읽는 쪽은 [Boss.order] 하나뿐이고, 거기서 이상한 값(빈 칸·중복·범위 밖)을 걸러 준다.
+     */
+    var bossOrder: String
+        get() = sp?.getString("bossOrder", "1,2,3,4,5") ?: "1,2,3,4,5"
+        set(v) { sp?.edit()?.putString("bossOrder", v)?.apply() }
 }

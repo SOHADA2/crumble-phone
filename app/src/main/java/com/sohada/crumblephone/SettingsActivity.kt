@@ -35,6 +35,7 @@ class SettingsActivity : ListActivity() {
     private lateinit var rowDCharge: LinearLayout
     private lateinit var rowDDelay: LinearLayout
     private lateinit var rowDelay: LinearLayout
+    private lateinit var rowBossOrder: LinearLayout
     private lateinit var rowGame: LinearLayout
     private lateinit var rowUpdate: LinearLayout
     private val ui = Handler(Looper.getMainLooper())
@@ -94,6 +95,10 @@ class SettingsActivity : ListActivity() {
         // 봇이 '한 싸이클'이 얼마나 큰지 알고 상한을 제대로 잡는다.
         rowOven = row("오븐 1회 개수", value = Prefs.ovenPerRun.toString() + "개",
             subtitle = "게임의 '자동 열기 → 1회에 여는 개수'와 같게") { cycle(Prefs.OVEN_CHOICES, false) }
+        // 보스는 조합을 바꿔 가며 도전하는데, 다섯 칸을 다 짜 두는 사람은 드물다.
+        // 안 짜 둔 칸으로도 한 번씩 싸우면 한 바퀴에 35초씩 그냥 버린다 → 쓸 것만 고르게 한다.
+        rowBossOrder = row("보스 조합 순서", value = Boss.orderShort(),
+            subtitle = "고른 조합만, 고른 차례대로 도전해요") { pickBossOrder() }
         rowDelay = row("돌진 시작 지연", value = delayLabel(),
             subtitle = "보스 소환 직후엔 아직 조이스틱이 안 먹어요") { cycleDelay() }
         rowCharge = row("보스전 돌진 시간", value = chargeLabel(),
@@ -107,6 +112,7 @@ class SettingsActivity : ListActivity() {
         gRun.addView(rAd); gRun.addView(separator())
         gRun.addView(rowArena); gRun.addView(separator())
         gRun.addView(rowOven); gRun.addView(separator())
+        gRun.addView(rowBossOrder); gRun.addView(separator())
         gRun.addView(rowDelay); gRun.addView(separator())
         gRun.addView(rowCharge); gRun.addView(separator())
         gRun.addView(rowDDelay); gRun.addView(separator())
@@ -192,7 +198,8 @@ class SettingsActivity : ListActivity() {
         }
         g.addView(rTest); g.addView(separator())
 
-        // 보스전이 조합 1~5 를 하나씩 바꿔 가며 도전하므로 다섯 덱이 서로 달라야 의미가 있다.
+        // 보스전이 조합을 하나씩 바꿔 가며 도전하므로 쓸 덱끼리 서로 달라야 의미가 있다
+        // (어느 번호를 쓸지는 위 '보스 조합 순서' 에서 고른다).
         g.addView(row("덱 구성",
             value = (1..5).count { Prefs.deckCount(it) > 0 }.let { if (it > 0) it.toString() + "개" else "" },
             subtitle = "덱 1~5에 넣을 쿠키를 이름으로 적어 둬요") {
@@ -582,5 +589,97 @@ class SettingsActivity : ListActivity() {
         val i = c.indexOf(Prefs.bossDelayMs)
         Prefs.bossDelayMs = c[(if (i < 0) 0 else i + 1) % c.size]
         rowDelay.setValue(delayLabel(), t.label2)
+    }
+
+    /**
+     * 보스에 쓸 **쿠키 조합과 그 순서**를 고른다.
+     *
+     * 순서가 중요하므로 목록에서 체크만 하는 방식으로는 안 된다 —
+     * **누른 차례가 곧 도전 차례**다(1 → 2 → 3 처럼 번호 아래에 몇 번째인지 적힌다).
+     * 이미 고른 것을 다시 누르면 빠지고 뒤 번호가 당겨진다.
+     */
+    private fun pickBossOrder() {
+        val picked = Boss.order().toMutableList()
+        val btns = ArrayList<TextView>()
+
+        val line = text("", 20f, t.gold, medium).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(14), 0, dp(2))
+        }
+        val note = text("", 13f, t.label2).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(8), 0, dp(8), dp(4))
+        }
+
+        fun refresh() {
+            for (i in 1..Boss.PRESETS) {
+                val v = btns[i - 1]
+                val at = picked.indexOf(i)
+                val on = at >= 0
+                v.text = if (on) i.toString() + "\n" + (at + 1) + "번째" else i.toString()
+                v.setTextColor(if (on) t.border else t.label3)
+                v.background = t.chunky(if (on) t.gold else t.cell, dpf(14f), dp(2), dp(3))
+            }
+            line.text = if (picked.isEmpty()) "고른 조합이 없어요" else picked.joinToString(" → ")
+            val off = (1..Boss.PRESETS).filter { it !in picked }.joinToString("·")
+            note.text = when {
+                picked.isEmpty() -> "하나 이상 골라야 저장돼요"
+                off.isEmpty()    -> "다섯 조합을 모두 씁니다"
+                else             -> "안 고른 조합(" + off + ")은 아예 도전하지 않아요"
+            }
+        }
+
+        val rowBtns = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+        }
+        for (i in 1..Boss.PRESETS) {
+            val v = text("", 15f, t.label, medium).apply {
+                gravity = Gravity.CENTER
+                minimumHeight = dp(56)
+                isClickable = true
+                layoutParams = LinearLayout.LayoutParams(dp(60), WRAP_CONTENT).apply {
+                    leftMargin = dp(4); rightMargin = dp(4)
+                }
+                setOnClickListener {
+                    if (!picked.remove(i)) picked.add(i)   // 이미 있으면 빼고, 없으면 뒤에 붙인다
+                    refresh()
+                }
+            }
+            btns.add(v); rowBtns.addView(v)
+        }
+
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(4), dp(12), dp(4))
+            addView(rowBtns); addView(line); addView(note)
+        }
+        refresh()
+
+        val d = android.app.AlertDialog.Builder(this)
+            .setTitle("보스 조합 순서")
+            .setView(box)
+            .setPositiveButton("저장", null)
+            .setNegativeButton("취소", null)
+            .setNeutralButton("1~5 전부", null)
+            .create()
+        d.setOnShowListener {
+            // 기본 동작(누르면 무조건 닫힘)을 덮어쓴다 — 하나도 안 골랐을 땐 닫지 않고 알려 준다.
+            d.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+                if (picked.isEmpty()) {
+                    Toast.makeText(this, "조합을 하나 이상 골라 주세요", Toast.LENGTH_SHORT).show()
+                } else {
+                    Prefs.bossOrder = picked.joinToString(",")
+                    rowBossOrder.setValue(Boss.orderShort(), t.label2)
+                    Bot.log("보스 조합 순서를 " + Boss.orderLabel() + " 로 바꿨어요")
+                    d.dismiss()
+                }
+            }
+            d.getButton(android.content.DialogInterface.BUTTON_NEUTRAL).setOnClickListener {
+                picked.clear(); for (i in 1..Boss.PRESETS) picked.add(i); refresh()
+            }
+        }
+        d.show()
     }
 }
