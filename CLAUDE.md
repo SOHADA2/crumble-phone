@@ -6,7 +6,7 @@ PC용 봇([SOHADA2/crumble-bot](https://github.com/SOHADA2/crumble-bot))의 판�
 
 ---
 
-## 지금 상태 (2026-09-08 · v1.106)
+## 지금 상태 (2026-09-11 · v1.126)
 
 ### 이 문서를 읽는 법 — **뒤가 이긴다**
 아래 본문은 **날짜순으로 덧붙여 왔다.** 같은 주제가 여러 번 나오고, **나중 것이 앞 것을 뒤집은 경우가 많다**
@@ -50,8 +50,11 @@ PC용 봇([SOHADA2/crumble-bot](https://github.com/SOHADA2/crumble-bot))의 판�
   실패마다 이유가 로그에 남게 해 뒀으니, 추측하지 말고 그 값을 볼 것.
 
 ### 배포가 깨지지 않게 지킬 것
-- `debug.keystore` 를 **지우거나 바꾸지 않는다.** 바뀌면 기존 설치본 위에 업데이트가 안 된다
-  ("앱이 설치되지 않았습니다"). CI 러너는 매번 새 기계라 키를 저장소에 고정해 둔 것이다.
+- **배포 서명 키는 GitHub Secrets 안에 있다**(2026-09-09 전환, `SIGNING_KEYSTORE_B64` 외 3개).
+  이 키가 바뀌거나 없어지면 기존 설치본 위에 업데이트가 안 된다("앱이 설치되지 않았습니다").
+  사본은 저장소 밖에 보관한다 — 바탕화면 '크럼블_폰봇_서명키' 폴더.
+  저장소의 `debug.keystore` 는 이제 **로컬 `dev.ps1 install` 전용**이라 배포와 무관하다(지우지는 말 것).
+- 배포 파일명은 **`crumble-phone.apk`** 로 고정이다(`Updater.kt`·받기 페이지가 이 이름을 박아 쓴다).
 - 버전은 `app/build.gradle.kts` 가 CI 실행 번호로 자동으로 매긴다. **손대지 않는다.**
 - CI 는 `app/**`·`*.gradle.kts`·`gradle/**`·워크플로 변경에만 돈다. 문서만 고치면 APK 는 안 나온다(정상).
 
@@ -89,10 +92,10 @@ D 드라이브가 없는 컴퓨터에서는 클론해도 못 돌렸고, `gradlew
 
 ### 컴퓨터가 아예 없어도 된다
 `main` 에 push 하면 **GitHub Actions 가 APK 를 빌드**해 `latest` 릴리스에 올린다
-(`app-debug.apk` + `latest.json`). 저장소가 public 이라 앱이 인증 없이 받아 간다(앱 안 [업데이트]).
+(`crumble-phone.apk` + `latest.json`). 저장소가 public 이라 앱이 인증 없이 받아 간다(앱 안 [업데이트]).
 → **클라우드/다른 PC 에서도 코드·커밋·릴리스까지 전부 가능하고, 폰 실기 검증만 못 한다.**
 
-- 서명 키(`debug.keystore`)는 **저장소에 넣어 뒀다.** 지우거나 바꾸면 기존 설치본 위에 업데이트가 안 된다.
+- 배포 서명 키는 **저장소에 없다** — CI 가 GitHub Secrets 에서 받아 쓴다(2026-09-09 전환). 아래 '배포가 깨지지 않게 지킬 것'.
 - CI 는 `app/**`·`*.gradle.kts`·`gradle/**`·워크플로 변경에만 돈다. 스크립트·문서만 고치면 APK 는 안 나온다.
 
 ---
@@ -258,7 +261,7 @@ Android Studio 는 필요 없다.
 ## 3. 배포와 앱 안 자동 업데이트
 
 `main` 에 push 하면 **GitHub Actions 가 APK 를 대신 빌드**해 `latest` 릴리스에 붙인다
-(`app-debug.apk` 와 `latest.json`). 개발 PC 가 없어도(클라우드에서 작업해도) 폰에 넣을 APK 가 나온다.
+(`crumble-phone.apk` 와 `latest.json`). 개발 PC 가 없어도(클라우드에서 작업해도) 폰에 넣을 APK 가 나온다.
 **폰에 붙어서 하는 실기 검증만** adb 가 연결된 PC 가 필요하다.
 
 ### ✅ 앱 안 [업데이트] 는 동작한다 (저장소를 공개로 바꿔 해결)
@@ -328,7 +331,7 @@ CI 러너는 매번 새 기계라 매 빌드 서명이 달라진다.** 서명이
 앱이 새 판인지 숫자만 비교하면 된다.
 
 ### 처음 설치할 때 (폰에 앱이 아직 없을 때)
-폰 브라우저로 아래를 열어 `app-debug.apk` 를 받는다. 그다음부터는 앱 안 [업데이트] 로 끝난다.
+폰 브라우저로 아래를 열어 `crumble-phone.apk` 를 받는다. 그다음부터는 앱 안 [업데이트] 로 끝난다.
 
     https://github.com/SOHADA2/crumble-phone/releases/tag/latest
 
@@ -2111,7 +2114,7 @@ PC 는 실기 검증 완료(흐트러뜨린 목록에서 경험치로 정확히 
 ## 폰 봇 배포 — 지금 방식과, 남에게 줄 때 바꿔야 할 것 (2026-09-09)
 
 ### 지금 방식 (사장님 본인용으로는 이대로가 최선)
-`main` push → GitHub Actions 가 `assembleDebug` → **`latest` 릴리스**에 `app-debug.apk` + `latest.json`
+`main` push → GitHub Actions 가 `assembleRelease` → **`latest` 릴리스**에 `crumble-phone.apk` + `latest.json`
 → 앱 안 **[업데이트]** 가 `latest.json` 의 `versionCode` 를 보고 새 판이면 받아 깐다.
 `versionCode` 는 Actions 실행 번호라 계속 커진다(손빌드는 1이라 배포판을 못 덮는다).
 **처음 설치할 때만** 릴리스에서 APK 를 직접 받는다.
