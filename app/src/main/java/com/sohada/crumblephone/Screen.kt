@@ -279,6 +279,51 @@ object Screen {
      *   실측: 완료 1.11~1.28 / 미완료 0.16~0.58 (띠가 반투명이라 뒤 배경에 따라 흔들린다)
      * -0.6 아래로 크게 벗어나면 무언가가 띠를 덮고 있다는 뜻이다.
      */
+    /**
+     * 퀘스트 띠를 덮은 게 **'연출'인가 '팝업'인가** — PC 봇 `Get-CoverSig`/`Test-CoverMoving` 과 같은 것.
+     *
+     * 스테이지를 밀다 보면 두 가지가 지나간다: **자동으로 직면한 보스**를 잡는 중,
+     * 그리고 다 깨고 나오는 **'스테이지 클리어'** 연출. 둘 다 **눌러도 아무 일이 없는 화면**인데
+     * 예전엔 이것도 가림막으로 보고 바깥 → 하단 X → 결과창 X → **뒤로가기**까지 올라갔다.
+     * 전부 헛손질이고 뒤로가기는 '게임 종료?' 창까지 띄운다.
+     *
+     * 가르는 법은 **덮은 것이 스스로 움직이는가** 다. 연출은 애니메이션이라 프레임마다 달라지고
+     * 몇 초 뒤 저절로 사라진다. 오븐 비교 팝업·결과창은 정지 화면이라 값이 그대로다.
+     *
+     * ⚠️ **화면 전체를 재면 안 된다.** 뒤에서 자동 전투가 늘 돌아 배경만으로도 항상 '움직임'이 된다.
+     *    그래서 **덮은 것이 있는 자리 = 띠 영역([BAR]) 안**의 12점만 본다.
+     */
+    private val COVER_PTS = run {
+        val out = ArrayList<IntArray>()
+        for (x in intArrayOf(980, 1100, 1220, 1340))
+            for (y in intArrayOf(1940, 1990, 2040)) out.add(intArrayOf(x, y))
+        out.toTypedArray()
+    }
+    private const val COVER_MOVE_DIFF = 40   // 한 점이 이만큼(R+G+B 합) 달라지면 그 점은 움직인 것
+    private const val COVER_MOVE_PTS = 2     // 점이 이만큼 움직이면 '화면이 움직인다'
+
+    fun coverSig(b: Bitmap): IntArray {
+        val out = IntArray(COVER_PTS.size * 3)
+        for (i in COVER_PTS.indices) {
+            val c = px(b, COVER_PTS[i][0], COVER_PTS[i][1])
+            out[i * 3] = Color.red(c); out[i * 3 + 1] = Color.green(c); out[i * 3 + 2] = Color.blue(c)
+        }
+        return out
+    }
+
+    /** 두 지문이 '움직이는 화면'인가. 비교할 이전 지문이 없으면(첫 바퀴) false — 예전처럼 진행한다. */
+    fun coverMoving(a: IntArray?, b: IntArray?): Boolean {
+        if (a == null || b == null || a.size != b.size) return false
+        var moved = 0
+        var i = 0
+        while (i < a.size) {
+            val d = Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])
+            if (d > COVER_MOVE_DIFF) moved++
+            i += 3
+        }
+        return moved >= COVER_MOVE_PTS
+    }
+
     fun questBarRatio(b: Bitmap): Double {
         var rs = 0L; var gs = 0L; var bs = 0L; var n = 0
         var x = BAR[0]

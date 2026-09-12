@@ -50,6 +50,12 @@ object Chores {
     private const val REWARD_STEPS = 6            // 보상 받기 걸음 수(미션 3탭 + 출석 3단계) — 진행률용
 
     /**
+     * 덮은 화면이 '연출'일 때 **누르지 않고 지켜볼** 최대 바퀴(한 바퀴 0.8초 ≈ 28초).
+     * 넘어가면 그때는 예전 치우기 사다리로 간다 — 정말 안 없어지는 가림막일 수도 있으니.
+     */
+    private const val COVER_WATCH_MAX = 35
+
+    /**
      * 이 퀘스트에서 오븐을 이미 돌려 봤나.
      * 스테이지 클리어형 퀘스트도 화면이 안 바뀌어서 오븐과 구분이 안 된다. 한 번 돌려 보고
      * 완료가 안 되면 오븐 퀘스트가 아닌 것으로 보고 넘긴다 — 안 그러면 계속 오븐만 돌린다.
@@ -110,6 +116,8 @@ object Chores {
         var handled = 0           // 뽑기·상자처럼 직접 해 준 횟수
         var offMain = 0           // 메인이 아닌 상태가 연속 몇 번인지
         var covered = 0           // 퀘스트 띠 가림이 연속 몇 번째인지
+        var coverSig: IntArray? = null   // 직전에 잰 '덮은 것'의 지문(움직이는지 보려고)
+        var coverWatch = 0               // 연출이 지나가길 몇 바퀴 지켜봤나
         var powersave = 0         // 절전 해제를 몇 번 시도했는지
         var probeAllowedAt = 0L   // 보스가 필요한 퀘스트라 쉬는 중이면 이 시각까지 탐색을 미룬다
         var bossNoticed = false   // '보스에 막혔다'는 안내를 한 번만 남기려고
@@ -200,6 +208,22 @@ object Chores {
             // 정상 범위는 대략 -0.5~1.3. -0.6 미만이면 오븐 비교 팝업 같은 게 띠를 덮고 있다.
             // 바깥 탭이 안 먹는 화면도 있어서(2분간 헛탭한 사고) 수단을 단계적으로 바꾼다.
             if (ratio < -0.6) {
+                // ★ 누르기 전에 '연출인가'부터 본다 — 스테이지 클리어·자동 보스전은 눌러도 안 먹고
+                //   저절로 지나간다. 여기서 누르면 전부 헛손질이고 뒤로가기까지 가면 위험하다.
+                //   ⚠️ 첫 바퀴는 비교할 이전 지문이 없어 그냥 넘어간다. 그때 하는 건 '바깥 누르기'뿐이라
+                //      어느 쪽이든 무해하고, 대신 **진짜 팝업 치우기가 늦어지지 않는다.**
+                val sig = Screen.coverSig(b)
+                if (Screen.coverMoving(coverSig, sig)) {
+                    coverSig = sig
+                    coverWatch++
+                    if (coverWatch <= COVER_WATCH_MAX) {
+                        if (coverWatch == 1) Bot.log("덮은 화면이 계속 바뀌어요 (스테이지 클리어·자동 보스전 연출로 보임) - 누르지 않고 기다립니다")
+                        Runner.set("연출이 지나가는 중", "누르지 않고 기다려요")
+                        Runner.sleep(800); continue
+                    }
+                    Bot.log("  연출이 오래 안 끝나요 - 치우기로 넘어갑니다")
+                }
+                coverSig = sig
                 covered++
                 if (covered == 1) Runner.set("가림막 치우는 중", "퀘스트 띠가 덮여 있어요 (" + fmt(ratio) + ")")
                 when {
@@ -212,6 +236,8 @@ object Chores {
                 Runner.sleep(3000); continue
             }
             covered = 0
+            coverSig = null
+            coverWatch = 0
 
             // ── '퀘스트 NNNN 까지 한번에 클리어 하기' ──
             // 밀린 퀘스트를 한 번에 받는 새 버튼. 띠가 파랗게 바뀌어 기존 판정이 전부 놓쳤다
