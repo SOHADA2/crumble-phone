@@ -13,8 +13,22 @@ object Runner {
 
     @Volatile var running = false          // 지금 무언가 돌고 있나
     @Volatile var task = ""                // 무슨 콘텐츠인지 (예: 토벌전)
-    @Volatile var status = "쉬는 중"        // 큰 글씨로 보일 한 줄
-    @Volatile var detail = ""              // 작은 글씨 상세
+    /**
+     * 표시가 **마지막으로 바뀐** 시각. 알약이 '몇 초째' 를 보여 주는 데 쓴다 —
+     * 아무것도 안 바뀐 채 오래 있으면 그게 곧 '이 일을 아직 하고 있다(또는 막혔다)' 는 신호다.
+     */
+    @Volatile var statusAt = 0L
+
+    /**
+     * 큰 글씨로 보일 한 줄. **값이 실제로 바뀔 때만** [statusAt] 을 다시 찍는다.
+     * (같은 문구를 매 바퀴 다시 넣는 자리가 있어서, 무조건 찍으면 '몇 초째' 가 늘 0 이 된다)
+     */
+    @Volatile var status = "쉬는 중"
+        set(v) { if (field != v) { field = v; statusAt = System.currentTimeMillis() } }
+
+    /** 작은 글씨 상세. 이것도 바뀌면 '표시가 살아 있다'는 뜻이라 시계를 다시 준다. */
+    @Volatile var detail = ""
+        set(v) { if (field != v) { field = v; statusAt = System.currentTimeMillis() } }
     @Volatile var lastResult = ""          // 끝난 뒤에도 남길 결과
     /**
      * 진행률 0~100. **-1 이면 막대를 숨긴다.**

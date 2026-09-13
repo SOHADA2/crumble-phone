@@ -498,7 +498,13 @@ object Overlay {
      */
     fun ensure(ctx: Context) { if (!dismissed && !appForeground) create(ctx) }
 
-    /** 1초마다 글자만 갈아 끼운다. 돌고 있지 않으면 알약을 접어 둔다. */
+    /**
+     * **0.4초마다** 글자만 갈아 끼운다. 돌고 있지 않으면 알약을 접어 둔다.
+     *
+     * 예전엔 1초였다. 읽는 값이 전부 메모리에 있어(캡처도 adb 도 안 부른다) 비용이 사실상 없는데,
+     * 사장님이 *"현황이 실제 하는 것보다 딜레이가 있어 신뢰도가 떨어진다"* 고 하셨다 —
+     * 눈에 보이는 지연 1초는 그냥 깎는 게 맞다.
+     */
     private fun tick() {
         if (label == null) return
         // 무엇이 도는지(퀘스트·토벌전…)를 맨 앞에 둔다. 게임을 보는 중에는 이게 제일 궁금하다.
@@ -510,7 +516,12 @@ object Overlay {
                 (if (pct >= 0) " " + pct + "%" else "") +
                 (if (Runner.detail.isNotEmpty()) " · " + Runner.detail else "")
         } else "쉬는 중"
-        flow(s)
+        // **몇 초째인지 붙인다.** 대부분의 상태는 1~2초면 바뀌므로, 8초를 넘겼다는 건
+        // '늦은 것' 이 아니라 **아직 그 일을 하고 있다**는 뜻이다(오븐·보스전처럼).
+        // 멈춘 건지 오래 걸리는 건지가 이 숫자 하나로 갈린다.
+        val age = if (Runner.running && Runner.statusAt > 0)
+            (System.currentTimeMillis() - Runner.statusAt) / 1000 else 0
+        flow(if (age >= 8) "$s · ${age}초째" else s)
         (dotView?.background as? GradientDrawable)?.setColor(
             if (Runner.running) Color.parseColor("#7CC24A") else Color.parseColor("#8A7565"))
         applyBrightness()
@@ -527,6 +538,6 @@ object Overlay {
             b.alpha = if (Runner.running) 0.45f else 1f
         }
         // 쉬는 중에도 사라지지 않는다 — 이 알약이 콘텐츠를 시작하는 조작 패널이기 때문이다.
-        ui.postDelayed({ tick() }, 1000)
+        ui.postDelayed({ tick() }, 400)
     }
 }
