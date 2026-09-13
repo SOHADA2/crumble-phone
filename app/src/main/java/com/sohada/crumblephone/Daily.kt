@@ -69,6 +69,7 @@ object Daily {
 
         for (d in 1..maxDungeons) {
             if (!Runner.running) break
+            if (!Runner.awaitGame()) break
 
             // ⚠️ 화면 읽기가 한 번 실패했다고 **한 바퀴 전체를 끝내면 안 된다**(예전엔 `?: break` 였다).
             //    캡처는 가끔 null 을 준다 — 몇 번 다시 찍어 보고 그래도 안 되면 그때 끝낸다.
@@ -138,6 +139,7 @@ object Daily {
             var fought = 0
             var adUsed = 0
             while (Runner.running) {
+                if (!Runner.awaitGame()) break
                 fought += runKeys(idx, name)
                 if (!Runner.running) break
                 if (!Prefs.adFree || adUsed >= AD_MAX) break

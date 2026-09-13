@@ -139,6 +139,8 @@ object Chores {
         gachaSwitchTried = false
 
         while (Runner.running) {
+            // 사장님이 딴 앱을 쓰는 동안에는 아무것도 누르지 않고 기다린다(돌아오면 이어서).
+            if (!Runner.awaitGame()) break
             if (maxQuests > 0 && quests >= maxQuests) { Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요"); break }
 
             val b = Runner.shot()

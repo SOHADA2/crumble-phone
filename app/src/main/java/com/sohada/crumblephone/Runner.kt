@@ -75,10 +75,44 @@ object Runner {
         progress = if (total <= 0) -1 else (100L * done / total).toInt().coerceIn(0, 100)
     }
 
-    fun tap(p: IntArray, waitMs: Long = 1800) { TapService.tap(p[0], p[1]); sleep(waitMs) }
+    fun tap(p: IntArray, waitMs: Long = 1800) {
+        if (!awaitGame()) return
+        TapService.tap(p[0], p[1]); sleep(waitMs)
+    }
+
+    // ══════════════════════════════════════════════════════════
+    //  게임이 앞에 없으면 기다린다 (PC 봇의 `게임이 화면에 없음 - 대기` 와 같은 자리)
+    // ══════════════════════════════════════════════════════════
+    /**
+     * 게임이 맨 앞으로 돌아올 때까지 **아무것도 누르지 않고** 기다린다.
+     * 돌아오면 true, 그 사이 [멈추기] 를 누르면 false.
+     *
+     * 폰에서는 봇을 숨겨 놓고 돌릴 수 없다 — 캡처도 제스처도 **보이는 화면**에만 작동하고,
+     * 게임을 뒤로 보내면 게임이 그리기를 멈춘다. 그래서 할 수 있는 건 **딴 앱을 안 누르는 것**이다.
+     * 잠깐 다른 앱을 쓰고 돌아오면 하던 자리에서 이어 간다.
+     *
+     * ⚠️ 여기서는 [set] 을 쓰지 않는다 — 그건 부를 때마다 기록을 한 줄 남겨서
+     *    1초마다 부르면 로그가 도배된다. 표시만 바꾸고, 기록은 들고 날 때 한 줄씩만 남긴다.
+     *    (표시가 안 바뀌니 알약의 '몇 초째' 가 **자리를 비운 시간**을 그대로 보여 준다.)
+     */
+    internal fun awaitGame(): Boolean {
+        if (TapService.gameIsFront) return true
+        val began = System.currentTimeMillis()
+        Bot.log("게임이 화면에 없어요 (지금 앞: " + TapService.topPkg + ") - 돌아올 때까지 기다립니다")
+        while (running && !TapService.gameIsFront) {
+            status = "다른 앱을 쓰는 중"
+            detail = "게임으로 돌아오면 이어서 해요"
+            progress = -1
+            sleep(1000)
+        }
+        if (!running) { Bot.log("기다리는 중에 멈췄어요"); return false }
+        Bot.log("게임으로 돌아왔어요 - 이어서 합니다 (" + ((System.currentTimeMillis() - began) / 1000) + "초 쉼)")
+        return true
+    }
 
     /** 절전이면 왕관을 씌워 깨운다(절전이 아니면 빈 바닥 드래그라 무해). */
     internal fun wake() {
+        if (!awaitGame()) return
         val w = Screen.WAKE
         TapService.swipe(w[0], w[1], w[2], w[3], 900)
         sleep(1800)
@@ -93,6 +127,7 @@ object Runner {
         var dlg = 0
         for (i in 0..maxBack) {
             if (!running) return false to "stop"
+            if (!awaitGame()) return false to "stop"
             val b = shot() ?: return false to "capture"
             if (Screen.atMain(b)) return true to ""
             if (Screen.isConfirmDialog(b)) {
@@ -134,6 +169,7 @@ object Runner {
         set("가림막 치우는 중")
         for (i in 1..6) {
             if (!running) return
+            if (!awaitGame()) return
             val b = shot() ?: return
             // '자동 사냥 보상'은 닫지 말고 받는다. 무료이고, 안 받으면 다음에 또 막는다.
             if (Screen.isIdleReward(b)) {
@@ -181,6 +217,10 @@ object Runner {
         ctx.startActivity(i)
         sleep(6000)
         if (!waitGameReady()) return false
+
+        // 여기는 **게임이 화면에 실제로 보이는 것이 확인된** 자리다. 그러니 '맨 앞 앱' 소식이
+        // 맞는지 대조하기에 가장 좋다 — 안 맞는 기기면 앞뒤 판정을 꺼서 헛기다림을 막는다.
+        TapService.calibrateFront(ctx)
 
         // ── 이제서야 좌표를 확정한다 ──
         // 화면 크기만으로는 부족하다. 태블릿처럼 넓은 화면이면 게임이 검은 띠를 두르고
@@ -407,6 +447,7 @@ object Runner {
         var attempts = 0
         // maxAttempts < 0 이면 상한 없음 — [멈추기] 를 누를 때까지 돈다.
         while (running && (maxAttempts < 0 || attempts < maxAttempts)) {
+            if (!awaitGame()) break
             var atLobby = shot()?.let { Screen.atTobolLobby(it) } ?: false
             if (!atLobby) {
                 sleep(2000)

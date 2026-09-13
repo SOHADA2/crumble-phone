@@ -56,6 +56,7 @@ object Arena {
         var startPts: Long? = null
 
         while (fights < maxFights && Runner.running) {
+            if (!Runner.awaitGame()) break
             Runner.set("아레나", "상대 물색 중")
             var b = Runner.shot() ?: break
             if (Screen.isArenaRefreshDialog(b)) {

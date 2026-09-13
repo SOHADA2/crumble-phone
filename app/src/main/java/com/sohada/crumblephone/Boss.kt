@@ -77,6 +77,7 @@ object Boss {
         val order = order()
         Bot.log("도전할 쿠키 조합 순서: " + orderLabel())
         for ((i, n) in order.withIndex()) {
+            if (!Runner.awaitGame()) break
             val step = (i + 1).toString() + "/" + order.size
             if (!Runner.running) break
             Runner.set("보스전 준비 중", "쿠키 조합 " + n + "번 (" + step + ")")

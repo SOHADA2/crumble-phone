@@ -278,6 +278,7 @@ object Deck {
         var pages = 0
         var quiet = 0
         while (Runner.running && pages < 40) {
+            if (!Runner.awaitGame()) break
             val shot = settle()
             if (shot == null || !Screen.atDeckEdit(shot)) { fail("편집 모드를 벗어났어요"); return }
             val stars = Screen.findStarRows(shot).filter { Screen.starUsable(it) }
@@ -376,6 +377,7 @@ object Deck {
             val justDone = HashSet<Int>()
             var oddTaps = 0                    // 눌러도 안 바뀐 횟수
             while (Runner.running && pages < 40) {
+                if (!Runner.awaitGame()) break
                 var taps = 0
                 var again = true
                 var newHere = 0
