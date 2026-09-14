@@ -84,9 +84,9 @@ object NameTags {
      * ⚠️ **36 은 넘쳤다.** 게임 글꼴로 '연타덱' 3글자를 재 보니 119.9px 인데 탭 한 칸은 117px 이라,
      *    실제로 "연타" 까지만 나오고 끝 글자가 잘렸다(사장님 지적: "모두 3줄일 때 잘 들어가도록").
      *    실측 폭 — 26px:86.6 / 28px:93.2 / 30px:99.9 / 32px:106.6 / 34px:113.2 / 36px:119.9
-     *    28 로 잡으면 양옆에 12px 씩 남아, 다섯 칸이 다 3글자여도 서로 안 붙는다.
+     *    사장님이 26 을 고르셨다 — 양옆에 15px 씩 남아 다섯 칸이 다 3글자여도 넉넉하다.
      */
-    private const val SIZE = 28
+    private const val SIZE = 26
     private const val EDGE = 4              // 외곽선 굵기 — 글자를 줄인 만큼 같이 줄였다
     private const val DROP_X = 2            // 그림자 오른쪽으로
     private const val DROP_Y = 3            // 그림자 아래로
