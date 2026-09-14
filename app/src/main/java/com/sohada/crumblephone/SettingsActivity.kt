@@ -124,6 +124,8 @@ class SettingsActivity : ListActivity() {
         gRun.addView(rowDDelay); gRun.addView(separator())
         gRun.addView(rowDCharge)
         root.addView(gRun)
+        // 보스 조합 순서 바로 다음에 온다 — '어느 덱을 쓸까' 와 '그 덱에 누구를 넣을까' 는 한 이야기다.
+        root.addView(deckSection())
 
         // ── 화면 ──
         root.addView(sectionHeader("화면"))
@@ -194,38 +196,38 @@ class SettingsActivity : ListActivity() {
     }
 
     /**
-     * **실험실** — 아직 다 못 만든 것들만 모아 둔 묶음. 기본으로는 안 보인다.
+     * **쿠키 조합** — 덱 1~5 에 넣을 쿠키를 **이름으로 적어 두면 봇이 맞춰 준다.**
      *
-     * 지우면 이어 만들 때 다시 짜야 하고, 그냥 두면 받은 사람이 눌러 보고 고장인 줄 안다.
-     * 그래서 **코드는 그대로 두고 문만 닫았다** — 여는 법은 제목 '설정' 일곱 번 누르기([onTitleTap]).
-     * 여기 있는 건 다 실기로 끝까지 못 본 것들이다(시험 모드 · 덱 배치 · 쿠키 사전).
+     * 2026-09-07 에 실기로 끝까지 확인됐는데(쿠키 9마리를 이름으로 넣고 저장) 그동안 실험실에
+     * 갇혀 있었다 — 제목을 일곱 번 눌러야 나오니 사실상 없는 기능이었다. 이제 꺼내 놓는다.
+     *
+     * ⚠️ **쿠키 사전이 먼저다.** 배치는 이름이 아니라 **그림으로** 찾는다(게임에 이름 검색이 없다).
+     *    사전이 없으면 덱 구성은 아무것도 못 한다. 그래서 사전이 없을 때는 그 줄이 먼저 눈에
+     *    띄도록 문구를 바꾼다.
      */
-    private fun labSection(): LinearLayout {
+    private fun deckSection(): LinearLayout {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        box.addView(sectionHeader("실험실"))
-        box.addView(text("아직 만드는 중인 것들이에요. 뜻대로 안 되는 게 섞여 있어요.",
+        box.addView(sectionHeader("쿠키 조합"))
+        box.addView(text("넣을 쿠키를 이름으로 적어 두면 봇이 그대로 맞춰 줘요.",
             13f, t.label3).apply { setPadding(dp(22), 0, dp(22), dp(8)) })
         val g = group()
-
-        val (rTest, _) = switchRow("시험 모드", "재화·입장권을 안 쓰고 진입까지만", Prefs.testMode) {
-            Prefs.testMode = it
-        }
-        g.addView(rTest); g.addView(separator())
+        val hasDict = Prefs.deckDictSize > 0
 
         // 보스전이 조합을 하나씩 바꿔 가며 도전하므로 쓸 덱끼리 서로 달라야 의미가 있다
         // (어느 번호를 쓸지는 위 '보스 조합 순서' 에서 고른다).
         g.addView(row("덱 구성",
             value = (1..5).count { Prefs.deckCount(it) > 0 }.let { if (it > 0) it.toString() + "개" else "" },
-            subtitle = "덱 1~5에 넣을 쿠키를 이름으로 적어 둬요") {
+            subtitle = if (hasDict) "덱 1~5에 넣을 쿠키를 이름으로 적어 둬요"
+                       else "먼저 아래 [쿠키 사전 만들기] 를 한 번 해 주세요") {
             startActivity(Intent(this, DeckSetupActivity::class.java))
         })
         g.addView(separator())
         g.addView(row("쿠키 사전 만들기",
-            value = if (Prefs.deckDictSize > 0) "다시" else "아직",
+            value = if (hasDict) "다시" else "먼저 이것부터",
             subtitle = "이름과 그림을 한 번 읽어 둬요 · 2~3분") {
             Overlay.show(applicationContext); Deck.buildDict(applicationContext); finish()
         })
-        if (Prefs.deckDictSize > 0) {
+        if (hasDict) {
             g.addView(separator())
             // 배치는 그림으로 찾으므로, 못 알아보는 쿠키는 덱에 적어도 안 들어간다.
             // 어떤 쿠키가 그런지 미리 알 수 있어야 한다.
@@ -243,7 +245,32 @@ class SettingsActivity : ListActivity() {
                 startActivity(Intent(this, DeckDictActivity::class.java))
             })
         }
-        g.addView(separator())
+        box.addView(g)
+        return box
+    }
+
+    /**
+     * **실험실** — 아직 다 못 만든 것들만 모아 둔 묶음. 기본으로는 안 보인다.
+     *
+     * 지우면 이어 만들 때 다시 짜야 하고, 그냥 두면 받은 사람이 눌러 보고 고장인 줄 안다.
+     * 그래서 **코드는 그대로 두고 문만 닫았다** — 여는 법은 제목 '설정' 일곱 번 누르기([onTitleTap]).
+     *
+     * 덱 구성·쿠키 사전은 **여기서 나갔다**([deckSection]) — 실기로 끝까지 확인된 것은
+     * 실험실에 둘 이유가 없다. 남은 건 정말 덜 된 것들뿐이다.
+     */
+    private fun labSection(): LinearLayout {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(sectionHeader("실험실"))
+        box.addView(text("아직 만드는 중인 것들이에요. 뜻대로 안 되는 게 섞여 있어요.",
+            13f, t.label3).apply { setPadding(dp(22), 0, dp(22), dp(8)) })
+        // (덱 구성·쿠키 사전은 정식 메뉴로 나갔다 — [deckSection])
+        val g = group()
+
+        val (rTest, _) = switchRow("시험 모드", "재화·입장권을 안 쓰고 진입까지만", Prefs.testMode) {
+            Prefs.testMode = it
+        }
+        g.addView(rTest); g.addView(separator())
+
         g.addView(row("글자 읽기 점검", subtitle = "지금 게임 화면의 한글을 읽어 봐요") { textTest() })
         g.addView(separator())
         g.addView(row("실험실 닫기", subtitle = "다시 숨겨요 · 시험 모드도 같이 꺼진 셈이 돼요",
