@@ -1166,6 +1166,20 @@ object Screen {
 
     fun atDeckEdit(b: Bitmap): Boolean = tabsLookRight(b, PRESET_TABS_EDIT)
 
+    /**
+     * 지금 **골라져 있는** 프리셋 번호(1~5). 못 가리면 0.
+     * 고른 탭만 노랑 `(255,246,71)` 이고 나머지는 청록 `(80,187,193)` 이다 — 그 노랑을 찾는다.
+     */
+    fun selectedPreset(b: Bitmap, pts: Array<IntArray>): Int {
+        for ((i, p) in pts.withIndex()) {
+            for (dx in intArrayOf(-14, 0, 14)) for (dy in intArrayOf(-14, 0, 14)) {
+                val c = px(b, p[0] + dx, p[1] + dy)
+                if (Color.red(c) > 210 && Color.green(c) > 190 && Color.blue(c) < 140) return i + 1
+            }
+        }
+        return 0
+    }
+
     /** 프리셋 탭 다섯 자리가 청록(비선택) 또는 노랑(선택)이면 참. */
     private fun tabsLookRight(b: Bitmap, pts: Array<IntArray>): Boolean {
         var hit = 0

@@ -140,7 +140,15 @@ class SettingsActivity : ListActivity() {
                     .show()
             }
         }
-        gScr.addView(rDim)
+        gScr.addView(rDim); gScr.addView(separator())
+        // 게임에는 조합 이름이 없다. 편성 화면에 들어가면 우리가 붙인 이름을 탭 위에 덧그린다.
+        // 이름을 하나도 안 붙였으면 아무것도 안 뜨고 화면도 안 읽는다.
+        val (rTags, _) = switchRow("조합 이름표 보이기",
+            "편성 화면에서 1~5번 탭 위에 이름을 띄워요", Prefs.showNameTags) {
+            Prefs.showNameTags = it
+            Bot.log(if (it) "조합 이름표를 켰어요" else "조합 이름표를 껐어요")
+        }
+        gScr.addView(rTags)
         root.addView(gScr)
 
         // ── 점검 ──

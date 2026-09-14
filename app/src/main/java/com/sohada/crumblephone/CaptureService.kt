@@ -174,6 +174,8 @@ class CaptureService : Service() {
                 // 앱을 최근목록에서 밀어냈을 때 봇은 도는데 알약만 사라진다.
                 // 여기는 서비스라 앱이 닫혀도 살아 있고, 이 핸들러는 메인 스레드다.
                 Overlay.ensure(applicationContext)
+                // 편성 화면 이름표도 화면 읽기가 살아 있는 동안에만 돈다(제 스레드에서).
+                NameTags.start(applicationContext)
                 ui.postDelayed(this, 1000)
             }
         })
@@ -211,6 +213,7 @@ class CaptureService : Service() {
 
     private fun release() {
         ui.removeCallbacksAndMessages(null)
+        NameTags.stop()
         display?.release(); display = null
         reader?.close(); reader = null
         projection?.stop(); projection = null

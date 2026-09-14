@@ -94,6 +94,16 @@ object Prefs {
      * **화면 읽기는 백라이트가 아니라 프레임버퍼를 읽으므로 봇에는 아무 영향이 없다.**
      * (검은 판을 덮어씌우는 방식은 안 된다 — 그건 캡처에 같이 찍혀 게임을 못 읽는다.)
      */
+    /**
+     * 편성 화면의 1~5번 탭 위에 **조합 이름표**를 덧그릴까.
+     *
+     * 기본은 켜짐이다. 이름을 하나도 안 붙였으면 어차피 아무것도 안 뜨므로
+     * (그리고 그때는 화면을 읽지도 않으므로) 켜 둬도 손해가 없다.
+     */
+    var showNameTags: Boolean
+        get() = sp?.getBoolean("showNameTags", true) ?: true
+        set(v) { sp?.edit()?.putBoolean("showNameTags", v)?.apply() }
+
     var dimScreen: Boolean
         get() = sp?.getBoolean("dimScreen", false) ?: false
         set(v) { sp?.edit()?.putBoolean("dimScreen", v)?.apply() }
