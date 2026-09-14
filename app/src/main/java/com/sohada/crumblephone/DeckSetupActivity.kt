@@ -13,7 +13,15 @@ import android.widget.Toast
 import androidx.core.view.WindowCompat
 
 /**
- * **덱 1~5 구성** — 넣을 쿠키 이름을 적어 두면 봇이 편성 화면에서 찾아 넣는다.
+ * **덱 1~5 구성** — 덱에 **이름을 붙이고** 넣을 쿠키를 적어 두면 봇이 편성 화면에서 찾아 넣는다.
+ *
+ * ## 이름과 내용은 한자리에 있어야 한다
+ * 사장님: "1번 덱 이름을 '연타덱' 으로 해놓고 원하는 덱들을 넣는 게 자연스럽고 직관적이다."
+ * 예전에는 이름은 ⚙ 의 딴 창에, 내용은 여기에 있었다 — 같은 덱을 두 군데서 손봐야 했다.
+ * 지금은 한 묶음 안에 **이름칸이 먼저, 쿠키칸이 그 아래**다.
+ *
+ * 이름은 **표시에만** 쓴다(게임에는 조합 이름이 없다). 대신 붙여 두면
+ * 편성 화면의 탭 위([NameTags])·보스전 상태·기록이 전부 그 이름으로 읽힌다.
  *
  * 보스전은 ⚙ 에서 고른 조합을 하나씩 바꿔 가며 도전하므로, 쓸 덱끼리 **서로 달라야** 의미가 있다
  * (안 고른 번호는 아예 안 쓴다 — ⚙ → '보스 조합 순서').
@@ -30,6 +38,7 @@ import androidx.core.view.WindowCompat
 class DeckSetupActivity : ListActivity() {
 
     private val boxes = HashMap<Int, EditText>()
+    private val nameBoxes = HashMap<Int, EditText>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,13 +78,15 @@ class DeckSetupActivity : ListActivity() {
                 "어느 칸이 어느 쿠키인지 알아야 이름으로 넣을 수 있어요.",
                 14f, t.label2).apply { setPadding(dp(22), dp(10), dp(22), dp(10)) })
         } else {
-            root.addView(text("넣을 쿠키 이름을 한 줄에 하나씩(또는 쉼표로 나눠) 적어 주세요. 조금 틀려도 알아서 찾아요.\n" +
+            root.addView(text("덱에 이름을 붙이고, 넣을 쿠키를 한 줄에 하나씩(또는 쉼표로) 적어 주세요. 조금 틀려도 알아서 찾아요.\n" +
                 "[시험] 은 똑같이 해 보고 저장만 안 해요 — 먼저 이걸로 확인하세요.",
                 13f, t.label3).apply { setPadding(dp(22), dp(4), dp(22), dp(10)) })
 
             for (n in 1..5) {
                 root.addView(sectionHeader("덱 " + n + "번"))
                 val g = group()
+                g.addView(nameBox(n))
+                g.addView(separator())
                 g.addView(deckBox(n))
                 g.addView(separator())
                 g.addView(row("시험 (저장 안 함)", subtitle = "좌표가 맞는지 공짜로 봐요") {
@@ -100,6 +111,35 @@ class DeckSetupActivity : ListActivity() {
             layoutParams = android.view.ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
             addView(root, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         })
+    }
+
+    /**
+     * 덱 이름칸. 3글자까지 — 편성 화면 탭 한 칸(설계 117px)에 안 잘리고 들어가는 길이다
+     * ([Prefs.PRESET_NAME_MAX] · [NameTags]).
+     */
+    private fun nameBox(n: Int): LinearLayout {
+        val box = EditText(this).apply {
+            setText(Boss.name(n))
+            setTextColor(t.gold)
+            textSize = 17f
+            background = null
+            hint = "덱 이름 (예: 연타덱) · 3글자"
+            setHintTextColor(t.label3)
+            isSingleLine = true
+            filters = arrayOf(android.text.InputFilter.LengthFilter(Prefs.PRESET_NAME_MAX))
+            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+        }
+        nameBoxes[n] = box
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(t.cell)
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+            addView(text("이름", 13f, t.label3).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(44), WRAP_CONTENT)
+            })
+            addView(box)
+        }
     }
 
     private fun deckBox(n: Int): LinearLayout {
@@ -130,6 +170,10 @@ class DeckSetupActivity : ListActivity() {
         for ((n, box) in boxes) {
             val v = box.text.toString().split(Deck.SEP).map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
             if (v != Prefs.deckNames(n)) { Prefs.setDeckNames(n, v); changed = true }
+        }
+        for ((n, box) in nameBoxes) {
+            val v = box.text.toString().trim()
+            if (v != Boss.name(n)) { Prefs.setPresetName(n, v); changed = true }
         }
         if (changed) Toast.makeText(this, "덱 구성을 저장했어요", Toast.LENGTH_SHORT).show()
     }

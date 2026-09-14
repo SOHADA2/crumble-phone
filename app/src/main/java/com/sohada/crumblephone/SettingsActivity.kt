@@ -36,7 +36,6 @@ class SettingsActivity : ListActivity() {
     private lateinit var rowDDelay: LinearLayout
     private lateinit var rowDelay: LinearLayout
     private lateinit var rowBossOrder: LinearLayout
-    private lateinit var rowPresetNames: LinearLayout
     private lateinit var rowGame: LinearLayout
     private lateinit var rowUpdate: LinearLayout
     private val ui = Handler(Looper.getMainLooper())
@@ -100,10 +99,10 @@ class SettingsActivity : ListActivity() {
         // 안 짜 둔 칸으로도 한 번씩 싸우면 한 바퀴에 35초씩 그냥 버린다 → 쓸 것만 고르게 한다.
         rowBossOrder = row("보스 조합 순서", value = Boss.orderShort(),
             subtitle = "고른 조합만, 고른 차례대로 도전해요") { pickBossOrder() }
-        // 사람은 조합을 번호로 기억하지 않는다 — 보스에 맞춰 짜 놓고 "물가", "독" 처럼 부른다.
-        // 이름을 붙여 두면 봇이 하는 말도 "쿠키 조합 물가(2번)" 으로 바뀐다.
-        rowPresetNames = row("쿠키 조합 이름", value = presetNameSummary(),
-            subtitle = "번호 대신 이름으로 알아볼 수 있어요 · 알약에도 같이 떠요") { editPresetNames() }
+        // ⚠️ 여기 있던 '쿠키 조합 이름' 줄을 없앴다.
+        //    사장님: "1번 덱 이름을 '연타덱' 으로 해놓고 원하는 덱들을 넣는 게 자연스럽다."
+        //    이름과 내용이 딴 화면에 있으면 같은 덱을 두 군데서 손봐야 한다 →
+        //    이름칸은 [덱 구성] 화면의 각 덱 묶음 안으로 옮겼다([DeckSetupActivity]).
         rowDelay = row("돌진 시작 지연", value = delayLabel(),
             subtitle = "보스 소환 직후엔 아직 조이스틱이 안 먹어요") { cycleDelay() }
         rowCharge = row("보스전 돌진 시간", value = chargeLabel(),
@@ -118,7 +117,6 @@ class SettingsActivity : ListActivity() {
         gRun.addView(rowArena); gRun.addView(separator())
         gRun.addView(rowOven); gRun.addView(separator())
         gRun.addView(rowBossOrder); gRun.addView(separator())
-        gRun.addView(rowPresetNames); gRun.addView(separator())
         gRun.addView(rowDelay); gRun.addView(separator())
         gRun.addView(rowCharge); gRun.addView(separator())
         gRun.addView(rowDDelay); gRun.addView(separator())
@@ -217,7 +215,7 @@ class SettingsActivity : ListActivity() {
         // (어느 번호를 쓸지는 위 '보스 조합 순서' 에서 고른다).
         g.addView(row("덱 구성",
             value = (1..5).count { Prefs.deckCount(it) > 0 }.let { if (it > 0) it.toString() + "개" else "" },
-            subtitle = if (hasDict) "덱 1~5에 넣을 쿠키를 이름으로 적어 둬요"
+            subtitle = if (hasDict) "덱에 이름을 붙이고 넣을 쿠키를 적어 둬요"
                        else "먼저 아래 [쿠키 사전 만들기] 를 한 번 해 주세요") {
             startActivity(Intent(this, DeckSetupActivity::class.java))
         })
@@ -630,72 +628,6 @@ class SettingsActivity : ListActivity() {
         val i = c.indexOf(Prefs.bossDelayMs)
         Prefs.bossDelayMs = c[(if (i < 0) 0 else i + 1) % c.size]
         rowDelay.setValue(delayLabel(), t.label2)
-    }
-
-    /** 목록 오른쪽에 보일 요약 — 짧으면 이름을 그대로, 길면 개수만. */
-    private fun presetNameSummary(): String {
-        val named = (1..Boss.PRESETS).filter { Boss.name(it).isNotEmpty() }
-        if (named.isEmpty()) return "안 붙임"
-        val s = named.joinToString("·") { Boss.name(it) }
-        return if (s.length <= 14) s else named.size.toString() + "개 붙임"
-    }
-
-    /**
-     * 쿠키 조합 1~5 에 **짧은 이름**을 붙인다.
-     *
-     * 게임에는 조합 이름이 없고 번호뿐이라, 봇도 "쿠키 조합 2번" 이라고만 말했다.
-     * 그런데 사람은 보스에 맞춰 짜 놓고 "물가", "독" 처럼 부른다 — 매번 무엇이 2번이었는지
-     * 게임을 열어 봐야 했다. 여기서 붙인 이름은 알약·상태·기록에 그대로 따라 나온다.
-     *
-     * 비워 두면 예전처럼 번호만 나온다(지우는 방법이 따로 필요 없다).
-     */
-    private fun editPresetNames() {
-        val fields = ArrayList<android.widget.EditText>()
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(6), dp(20), dp(4))
-        }
-        for (i in 1..Boss.PRESETS) {
-            val num = text(i.toString() + "번", 16f, t.gold, medium).apply {
-                gravity = Gravity.CENTER
-                layoutParams = LinearLayout.LayoutParams(dp(46), WRAP_CONTENT)
-            }
-            val ed = android.widget.EditText(this).apply {
-                setText(Boss.name(i))
-                hint = "이름 없음"
-                isSingleLine = true
-                textSize = 16f
-                setTextColor(t.label)
-                setHintTextColor(t.label3)
-                // 짧게 쓰게 막아 둔다. 길면 알약 한 줄에 안 들어간다.
-                filters = arrayOf(android.text.InputFilter.LengthFilter(Prefs.PRESET_NAME_MAX))
-                layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
-            }
-            fields.add(ed)
-            box.addView(LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, dp(4), 0, dp(4))
-                addView(num); addView(ed)
-            })
-        }
-        box.addView(text("최대 " + Prefs.PRESET_NAME_MAX + "글자 · 비워 두면 번호만 나와요", 13f, t.label2).apply {
-            setPadding(0, dp(10), 0, 0)
-        })
-
-        val d = android.app.AlertDialog.Builder(this)
-            .setTitle("쿠키 조합 이름")
-            .setView(ScrollView(this).apply { addView(box) })
-            .setPositiveButton("저장") { _, _ ->
-                for (i in 1..Boss.PRESETS) Prefs.setPresetName(i, fields[i - 1].text.toString())
-                rowPresetNames.setValue(presetNameSummary(), t.label2)
-                rowBossOrder.setValue(Boss.orderShort(), t.label2)
-                Bot.log("쿠키 조합 이름: " + Boss.orderLabel())
-            }
-            .setNegativeButton("취소", null)
-            .create()
-        d.setOnShowListener { styleDialog(d) }
-        d.show()
     }
 
     /**
