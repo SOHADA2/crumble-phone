@@ -53,7 +53,7 @@ header{text-align:center;padding:64px 0 0}
   animation:halo 4.6s ease-in-out infinite}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 @keyframes halo{0%,100%{opacity:.55;transform:scale(.94)}50%{opacity:1;transform:scale(1.06)}}
-.badge svg{position:relative;width:112px;height:112px;border-radius:30px;display:block;
+.badge img{position:relative;width:112px;height:112px;border-radius:26px;display:block;
   box-shadow:0 18px 40px rgba(0,0,0,.55)}
 
 h1{font-size:36px;line-height:1.2;letter-spacing:-.6px;font-weight:800;
@@ -153,34 +153,11 @@ h1{font-size:36px;line-height:1.2;letter-spacing:-.6px;font-weight:800;
 
 <main>
   <header>
-    <!-- 앱 아이콘 그대로(ic_launcher_*.xml). 받은 뒤 홈 화면에서 같은 그림을 찾게 된다. -->
+    <!-- 앱 아이콘 **그 파일 그대로**(icon.png). 받은 뒤 홈 화면에서 같은 그림을 찾게 된다.
+         예전엔 같은 그림을 SVG 로 한 번 더 그려 뒀는데, 아이콘을 고칠 때마다 두 곳을 맞춰야 해서
+         한쪽만 바뀌기 쉬웠다. 이제는 아이콘 만들 때 같이 떨어지는 파일을 그냥 보여 준다. -->
     <div class="badge r">
-      <svg viewBox="0 0 108 108" role="img" aria-label="크럼블 폰봇">
-        <!-- 앱 아이콘과 **같은 그림**이다(ic_launcher_foreground.xml). 한쪽을 고치면 다른 쪽도.
-             BOT 글자는 선으로 그린 도형이다 — 안드로이드 벡터에 글꼴이 없어 양쪽을 같게 맞췄다. -->
-        <rect width="108" height="108" rx="30" fill="#B9682F"/>
-        <circle cx="54" cy="46.23" r="25" fill="#000" opacity=".22"/>
-        <circle cx="54" cy="43" r="25" fill="#8A5323"/>
-        <circle cx="54" cy="43" r="23.39" fill="#E0B075"/>
-        <circle cx="54" cy="40.98" r="21.77" fill="#FFE7C0"/>
-        <circle cx="45.7" cy="34.69" r="4.6" fill="#7A4A1E"/>
-        <circle cx="64.16" cy="40.26" r="3.87" fill="#7A4A1E"/>
-        <circle cx="50.29" cy="52.52" r="5" fill="#7A4A1E"/>
-        <circle cx="65.62" cy="53.4" r="3.31" fill="#7A4A1E"/>
-        <circle cx="39.16" cy="46.79" r="2.98" fill="#7A4A1E"/>
-        <circle cx="44.4" cy="33.24" r="1.85" fill="#A06B34"/>
-        <circle cx="63.11" cy="39.05" r="1.53" fill="#A06B34"/>
-        <circle cx="48.84" cy="50.82" r="2.02" fill="#A06B34"/>
-        <rect x="20" y="70" width="68" height="18" rx="4" fill="#2E1D14"/>
-        <g fill="none" stroke="#FFC94A" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M33,73.5 L33,84.5"/>
-          <path d="M33,73.5 L37.55,73.5 A2.75,2.75 0 0,1 37.55,79 L33,79"/>
-          <path d="M33,79 L38.57,79 A2.75,2.75 0 0,1 38.57,84.5 L33,84.5"/>
-          <path d="M46.66,79 A5.06,5.5 0 1,1 56.78,79 A5.06,5.5 0 1,1 46.66,79"/>
-          <path d="M58.81,73.5 L69.94,73.5"/>
-          <path d="M64.37,73.5 L64.37,84.5"/>
-        </g>
-      </svg>
+      <img src="icon.png" width="112" height="112" alt="크럼블 폰봇">
     </div>
     <h1 class="r r2">크럼블 폰봇</h1>
     <p class="sub r r2">쿠키런: 크럼블, 알아서 돌려 드려요</p>
