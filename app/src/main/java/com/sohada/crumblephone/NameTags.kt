@@ -16,26 +16,29 @@ import android.widget.TextView
 import kotlin.concurrent.thread
 
 /**
- * 게임 **편성 화면의 프리셋 1~5 탭 아래에 내가 붙인 이름을 덧그린다.**
+ * 게임 **편성 화면의 프리셋 1~5 탭 바로 아래에 내가 붙인 이름을 덧그린다.**
  *
  * 게임에는 조합 이름이 없고 번호뿐이다. 그래서 보스에 맞춰 덱을 짜 두고도
  * "2번이 물가였나 독이었나" 를 매번 헷갈렸다. 설정에서 붙인 이름([Prefs.presetName])을
  * 바로 그 탭 아래에 놓는다.
  *
- * ## 생김새 — **게임 글씨를 흉내 낸다**
- * 처음엔 어두운 판 위에 글자를 얹었는데, 사장님이 직접 예시를 만들어 보내 주셨다:
- * **판 없이 외곽선만 두른 금색 글씨.** 이 게임 UI 가 전부 그 문법이라 판을 깔면 혼자 튄다.
- * 안드로이드 TextView 에는 글자 외곽선이 없어서, **같은 글자를 두 번 겹쳐 그린다** —
- * 뒤에 `STROKE` 로 굵게 한 번(검정), 앞에 `FILL` 로 한 번(금색).
- * 고른 탭은 금색, 나머지는 크림색이라 어느 걸 눌렀는지 색으로 갈린다.
+ * ## 생김새 — 사장님이 직접 그려 주신 그대로
+ * "폰트도 그렇고, 획 그렇고, 뒷부분의 그림자도 이런 느낌인 거야."
+ * 게임 글씨 문법이다 — **통통한 게임 글꼴 + 흰 속 + 청록 외곽선 + 오른쪽 아래 청록 그림자.**
  *
- * 자리는 탭 **아래 빈 띠**다. 실측(2026-09-14): 탭 한가운데에서 92~151px 아래가
- * 아무것도 없는 어두운 줄이고(설계 y912~971), 그 아래부터 쿠키 카드가 시작한다.
+ * 안드로이드 TextView 로는 외곽선도 그림자도 한 번에 안 된다. 그래서 **같은 글자를 세 겹**으로
+ * 겹쳐 그린다. 뒤에서부터:
+ *   ① 그림자 — 오른쪽 아래로 밀어 놓고 `FILL_AND_STROKE` 청록 (속까지 꽉 찬 그림자)
+ *   ② 외곽선 — 제자리에 `STROKE` 청록
+ *   ③ 속    — 제자리에 `FILL` 흰색
  *
- * ⚠️ 첫 판에는 오른쪽 빈자리에 '지금 고른 조합' 이름표를 하나 더 크게 뒀다가 뺐다.
- *    사장님: "덱 글자 위치가 좀 별로야, 왼쪽에 있는 1번 바로 아래쪽에 위치하게 해줘."
- *    탭마다 하나씩이면 충분하고, 둘을 띄우면 어느 쪽을 봐야 하는지가 헷갈린다.
- *    이름을 3글자로 묶은 것도 같은 이유다 — 탭 한 칸(설계 117px)에 안 잘리고 들어간다.
+ * ⚠️ `onDraw` 안에서 색을 바꾸는 흔한 방법은 매 프레임 `invalidate` 를 불러 계속 다시 그린다.
+ *    그래서 뷰를 세 장 겹쳐 두고 `paint.style` 만 만든 자리에서 한 번씩 준다
+ *    (색은 매 그리기마다 다시 칠해지지만 style/strokeWidth 는 TextView 가 안 건드린다).
+ *
+ * 청록은 **게임에서 뽑은 값**이다(편성 화면 탭 색 계열 #0C7C8A).
+ * 자리는 탭이 끝나는 바로 아래다 — 실측(2026-09-14): 탭 그림이 한가운데 기준 -32~+31,
+ * 그 아래 22px 이 비었고 +56~+86 이 청록 구분선, +92 부터 다시 빈 줄이다.
  *
  * ## 안 지키면 사고 나는 것 넷
  *
@@ -50,8 +53,7 @@ import kotlin.concurrent.thread
  * 4. **창을 화면 전체로 잡고 `FLAG_LAYOUT_IN_SCREEN` 을 준다.**
  *    이게 없으면 창의 y 원점이 **상태표시줄 아래**라, 실측 좌표를 그대로 넣어도 그만큼
  *    (폰에서 90px 남짓) 내려앉는다. 첫 판이 정확히 그래서 이름표가 탭이 아니라
- *    **쿠키 카드 위**에 얹혔다. 화면 전체로 잡고 자식의 `topMargin` 으로 놓으면
- *    실측 좌표와 그림이 1:1 로 맞는다.
+ *    **쿠키 카드 위**에 얹혔다.
  */
 object NameTags {
 
@@ -61,22 +63,25 @@ object NameTags {
     private var wm: WindowManager? = null
     private var box: FrameLayout? = null
     private var lp: WindowManager.LayoutParams? = null
-    // 글자 하나를 두 장으로 그린다 — 뒤(외곽선) / 앞(속). 겹쳐 놓으면 게임 글씨처럼 보인다.
-    private val backs = ArrayList<TextView>()
-    private val fronts = ArrayList<TextView>()
+
+    // 글자 한 개를 세 장으로 그린다 — 그림자 / 외곽선 / 속.
+    private val shadows = ArrayList<TextView>()
+    private val outlines = ArrayList<TextView>()
+    private val fills = ArrayList<TextView>()
 
     @Volatile private var alive = false
     private var shownY = 0          // 지금 띄운 탭 줄의 설계 y (0 = 안 띄움)
 
-    private const val GOLD = "#F8E861"      // 고른 조합
-    private const val CREAM = "#E8D9C8"     // 나머지
-    private const val EDGE = "#0B0609"      // 외곽선 — 이 게임 UI 의 '거의 검정'
+    private const val INK = "#0C7C8A"       // 외곽선·그림자 — 게임 편성 화면의 청록 계열
+    private const val ON = "#FFFFFF"        // 고른 조합
+    private const val OFF = "#B7D3D7"       // 나머지 — 같은 글씨체, 한 톤 죽인 색
 
-    /**
-     * 탭 한가운데에서 이만큼 아래(설계 px).
-     * 실측으로 92~151 이 빈 띠다. 글자 높이를 생각해 그 띠 한가운데에 오도록 잡았다.
-     */
-    private const val BELOW = 88
+    /** 탭 한가운데에서 이만큼 아래(설계 px). 탭 그림이 +31 에서 끝난다. */
+    private const val BELOW = 32
+    private const val SIZE = 36             // 글자 크기(설계 px)
+    private const val EDGE = 5              // 외곽선 굵기
+    private const val DROP_X = 3            // 그림자 오른쪽으로
+    private const val DROP_Y = 4            // 그림자 아래로
 
     fun start(ctx: Context) {
         appCtx = ctx.applicationContext
@@ -146,33 +151,41 @@ object NameTags {
 
         val tabs = Screen.PRESET_TABS
         val cellW = Coords.len(tabs[1][0] - tabs[0][0])    // 탭 한 칸 너비(설계 117px)
-        // 3글자만 받으므로 32px 이면 96px — 한 칸(117) 안에 여유 있게 들어간다.
-        val size = Coords.len(32).toFloat()
-        val edge = Coords.len(7).toFloat()
+        val size = Coords.len(SIZE).toFloat()
+        val edge = Coords.len(EDGE).toFloat()
+        val face = GameFont.black(ctx)
 
-        backs.clear(); fronts.clear()
-        // 뒤(외곽선)를 다섯 개 먼저 다 깔고 앞(속)을 올린다. 나중에 넣은 것이 위에 그려진다.
-        for (pass in 0..1) {
+        shadows.clear(); outlines.clear(); fills.clear()
+        // 그림자 → 외곽선 → 속 순서로 넣는다. 나중에 넣은 것이 위에 그려진다.
+        for (layer in 0..2) {
             for (i in 0 until Boss.PRESETS) {
                 val t = TextView(ctx).apply {
+                    typeface = face
                     setTextSize(TypedValue.COMPLEX_UNIT_PX, size)
                     gravity = Gravity.CENTER
                     isSingleLine = true
                     ellipsize = android.text.TextUtils.TruncateAt.END
                     layoutParams = FrameLayout.LayoutParams(cellW, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
-                        leftMargin = Coords.x(tabs[i][0]) - cellW / 2
+                        leftMargin = Coords.x(tabs[i][0]) - cellW / 2 +
+                            (if (layer == 0) Coords.len(DROP_X) else 0)
                     }
                 }
-                if (pass == 0) {
-                    // ⚠️ paint 를 직접 만진다. `setTextColor` 는 매 그리기마다 다시 칠해지지만
-                    //    style/strokeWidth 는 TextView 가 건드리지 않아서 한 번만 줘도 남는다.
-                    t.setTextColor(Color.parseColor(EDGE))
-                    t.paint.style = Paint.Style.STROKE
-                    t.paint.strokeWidth = edge
-                    t.paint.strokeJoin = Paint.Join.ROUND
-                    backs.add(t)
-                } else {
-                    fronts.add(t)
+                when (layer) {
+                    0 -> {  // 그림자 — 속까지 꽉 찬 청록을 오른쪽 아래로
+                        t.setTextColor(Color.parseColor(INK))
+                        t.paint.style = Paint.Style.FILL_AND_STROKE
+                        t.paint.strokeWidth = edge
+                        t.paint.strokeJoin = Paint.Join.ROUND
+                        shadows.add(t)
+                    }
+                    1 -> {  // 외곽선
+                        t.setTextColor(Color.parseColor(INK))
+                        t.paint.style = Paint.Style.STROKE
+                        t.paint.strokeWidth = edge
+                        t.paint.strokeJoin = Paint.Join.ROUND
+                        outlines.add(t)
+                    }
+                    else -> fills.add(t)
                 }
                 f.addView(t)
             }
@@ -183,7 +196,7 @@ object NameTags {
         else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
 
         // ⚠️ 세 가지가 다 있어야 한다.
-        //    NOT_TOUCHABLE  — 탭 바로 위 창이라, 터치를 먹으면 사장님 탭도 봇 탭도 이 창이 가져간다.
+        //    NOT_TOUCHABLE  — 탭 바로 아래 창이라, 터치를 먹으면 사장님 탭도 봇 탭도 이 창이 가져간다.
         //    LAYOUT_IN_SCREEN + NO_LIMITS — 좌표를 **화면 절대 좌표**로 만든다.
         //                     없으면 상태표시줄 높이만큼 내려앉는다(첫 판의 그 증상).
         lp = WindowManager.LayoutParams(
@@ -212,17 +225,19 @@ object NameTags {
             val p = lp ?: return
 
             val top = Coords.y(designY) + Coords.len(BELOW)
+            val drop = Coords.len(DROP_Y)
             for (i in 0 until Boss.PRESETS) {
                 val nm = Boss.name(i + 1)
-                // 고른 탭은 금색, 나머지는 크림색 — 어느 걸 눌렀는지 색으로 갈린다.
                 val onTab = (i + 1) == sel
-                for ((k, t) in listOf(backs[i], fronts[i]).withIndex()) {
+                for ((layer, t) in listOf(shadows[i], outlines[i], fills[i]).withIndex()) {
                     if (nm.isEmpty()) { t.visibility = View.INVISIBLE; continue }
                     t.visibility = View.VISIBLE
                     t.text = nm
-                    if (k == 1) t.setTextColor(Color.parseColor(if (onTab) GOLD else CREAM))
+                    // 고른 것은 흰색, 나머지는 한 톤 죽인 색 — 글씨체는 같게 둔다.
+                    if (layer == 2) t.setTextColor(Color.parseColor(if (onTab) ON else OFF))
+                    val want = if (layer == 0) top + drop else top
                     val q = t.layoutParams as FrameLayout.LayoutParams
-                    if (q.topMargin != top) { q.topMargin = top; t.layoutParams = q }
+                    if (q.topMargin != want) { q.topMargin = want; t.layoutParams = q }
                 }
             }
 
