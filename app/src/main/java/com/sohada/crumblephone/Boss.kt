@@ -42,10 +42,36 @@ object Boss {
         return if (picked.isEmpty()) IntArray(PRESETS) { it + 1 } else picked.toIntArray()
     }
 
-    /** 사람이 읽는 순서 표시 — `2 → 3 → 4`. */
-    fun orderLabel(): String = order().joinToString(" → ")
+    /**
+     * n 번 조합에 붙여 둔 이름(안 붙였으면 빈 문자열).
+     * ⚠️ **이름을 읽는 곳도 여기 하나로 모은다** — [order] 와 같은 이유다.
+     *    보스로 가는 길이 둘([Boss] 버튼, 퀘스트 순환)이라 한쪽만 고치는 사고가 이미 여러 번 났다.
+     */
+    fun name(n: Int): String = Prefs.presetName(n)
 
-    /** 좁은 자리(목록 오른쪽 값)용 — `2·3·4`. */
+    /** 이름을 하나라도 붙여 놨나. */
+    fun anyNamed(): Boolean = (1..PRESETS).any { name(it).isNotEmpty() }
+
+    /**
+     * 문장에 넣는 이름 — `4번` 또는 `물가(2번)`.
+     * **이름을 앞에 두고 번호를 괄호에 넣는다.** 그래야 "쿠키 조합 물가(2번)으로 깼어요" 처럼
+     * 조사가 자연스럽게 붙는다("2번 물가으로" 가 되면 읽다가 걸린다).
+     */
+    fun label(n: Int): String {
+        val nm = name(n)
+        return if (nm.isEmpty()) n.toString() + "번" else nm + "(" + n + "번)"
+    }
+
+    /** 좁은 자리(알약) — 이름이 있으면 이름만, 없으면 `4번`. */
+    fun shortLabel(n: Int): String = name(n).ifEmpty { n.toString() + "번" }
+
+    /** 사람이 읽는 순서 표시 — `물가(2번) → 3번 → 4번`. */
+    fun orderLabel(): String = order().joinToString(" → ") { label(it) }
+
+    /** 알약 한 줄용 — `물가 → 3번 → 4번`. */
+    fun orderPanel(): String = order().joinToString(" → ") { shortLabel(it) }
+
+    /** 좁은 자리(설정 목록 오른쪽 값)용 — 번호만 `2·3·4`. 이름까지 넣으면 줄을 넘긴다. */
     fun orderShort(): String = order().joinToString("·")
 
     fun start(ctx: Context) {
@@ -80,7 +106,7 @@ object Boss {
             if (!Runner.awaitGame()) break
             val step = (i + 1).toString() + "/" + order.size
             if (!Runner.running) break
-            Runner.set("보스전 준비 중", "쿠키 조합 " + n + "번 (" + step + ")")
+            Runner.set("보스전 준비 중", "쿠키 조합 " + label(n) + " · " + step)
             if (!challengeOnce(n)) {
                 // 소환 배너가 사라졌다 = 그 사이에 깼거나 화면이 바뀐 것. 기다릴 이유가 없다.
                 Runner.set("도전할 보스가 없어요", "소환 배너가 사라졌어요")
@@ -92,21 +118,21 @@ object Boss {
             var s = 0L
             while (s < WAIT_SEC && Runner.running) {
                 Runner.status = "보스전 진행 중"
-                Runner.detail = "쿠키 조합 " + n + "번 (" + step + ") · " + (WAIT_SEC - s) + "초 남음"
+                Runner.detail = "쿠키 조합 " + label(n) + " · " + step + " · " + (WAIT_SEC - s) + "초 남음"
                 Runner.setProgress(s.toInt(), WAIT_SEC.toInt())
                 Runner.sleep(3000); s += 3
             }
             if (!Runner.running) break
 
-            Runner.set("승패 확인 중", "쿠키 조합 " + n + "번 (" + step + ")")
+            Runner.set("승패 확인 중", "쿠키 조합 " + label(n) + " · " + step)
             val b = Runner.shot()
             if (b != null && !Screen.hasBossBanner(b)) {
-                Runner.set("보스 클리어!", "쿠키 조합 " + n + "번으로 깼어요")
-                Runner.lastResult = "✔ 쿠키 조합 " + n + "번으로 클리어"
-                Bot.log("✔ 쿠키 조합 " + n + " 으로 보스 클리어 (스테이지 밀림)")
+                Runner.set("보스 클리어!", "쿠키 조합 " + label(n) + "으로 깼어요")
+                Runner.lastResult = "✔ 쿠키 조합 " + label(n) + "으로 클리어"
+                Bot.log("✔ 쿠키 조합 " + label(n) + "으로 보스 클리어 (스테이지 밀림)")
                 return
             }
-            Bot.log("  조합 " + n + " 실패 (보스 아직 안 깨짐) - 다음 조합")
+            Bot.log("  조합 " + label(n) + " 실패 (보스 아직 안 깨짐) - 다음 조합")
         }
 
         if (Runner.running) {

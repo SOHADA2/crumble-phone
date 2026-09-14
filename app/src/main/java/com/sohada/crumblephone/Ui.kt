@@ -143,4 +143,34 @@ open class ListActivity : AppCompatActivity() {
     protected fun LinearLayout.setValue(s: String, color: Int) {
         (findViewWithTag<TextView>("value"))?.let { it.text = s; it.setTextColor(color) }
     }
+
+    /**
+     * 창(AlertDialog)을 **앱과 같은 어두운 톤**으로 맞춘다.
+     *
+     * 앱은 다크 한 벌인데 시스템 창은 흰 바탕으로 뜬다. 그 위에 앱 색(금색 #F8E861)을 올려 놨으니
+     * 잘 보일 리가 없었다 — '보스 조합 순서' 의 번호와 순서 줄이 실제로 그랬다.
+     * 창 바탕·제목·버튼 색만 갈아 끼운다(레이아웃은 시스템 것을 그대로 쓴다).
+     *
+     * ⚠️ **`show()` 뒤에 불러야 한다.** 버튼(getButton)은 창이 뜨기 전에는 없다.
+     *    그래서 부르는 쪽은 `setOnShowListener` 안에서 쓴다.
+     */
+    protected fun styleDialog(d: android.app.AlertDialog) {
+        d.window?.setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
+            setColor(t.cell)
+            cornerRadius = dpf(16f)
+            setStroke(dp(2), t.border)
+        })
+        // 제목은 시스템이 만든 뷰라 id 로 찾는다(플랫폼마다 없을 수 있어 널 안전하게).
+        val tid = resources.getIdentifier("alertTitle", "id", "android")
+        if (tid != 0) findViewByIdIn(d, tid)?.setTextColor(t.label)
+        (d.findViewById<TextView>(android.R.id.message))?.setTextColor(t.label2)
+        for (b in intArrayOf(
+            android.app.AlertDialog.BUTTON_POSITIVE,
+            android.app.AlertDialog.BUTTON_NEGATIVE,
+            android.app.AlertDialog.BUTTON_NEUTRAL
+        )) d.getButton(b)?.setTextColor(t.gold)
+    }
+
+    private fun findViewByIdIn(d: android.app.AlertDialog, id: Int): TextView? =
+        try { d.findViewById<TextView>(id) } catch (e: Exception) { null }
 }

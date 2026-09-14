@@ -172,4 +172,22 @@ object Prefs {
     var bossOrder: String
         get() = sp?.getString("bossOrder", "1,2,3,4,5") ?: "1,2,3,4,5"
         set(v) { sp?.edit()?.putString("bossOrder", v)?.apply() }
+
+    /**
+     * 쿠키 조합 1~5 에 붙인 **짧은 이름**.
+     *
+     * 사람은 조합을 번호로 기억하지 않는다 — 보스에 맞춰 짜 놓고 "물가", "독" 처럼 부른다.
+     * 그런데 봇은 "쿠키 조합 2번" 이라고만 말해서, 그게 내가 짜 둔 어느 덱인지 매번 헷갈렸다.
+     *
+     * 안 붙였으면 빈 문자열이고, 그러면 화면에는 예전처럼 번호만 나온다.
+     * 칸마다 따로 저장한다 — 한 줄에 쉼표로 몰아 넣으면 이름에 쉼표를 못 쓴다.
+     * 읽는 곳은 [Boss.name] 하나로 모은다(순서를 [Boss.order] 하나로 모은 것과 같은 이유다).
+     */
+    const val PRESET_NAME_MAX = 6
+
+    fun presetName(n: Int): String = sp?.getString("presetName" + n, "")?.trim() ?: ""
+
+    fun setPresetName(n: Int, v: String) {
+        sp?.edit()?.putString("presetName" + n, v.trim().take(PRESET_NAME_MAX))?.apply()
+    }
 }

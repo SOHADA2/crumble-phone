@@ -414,7 +414,7 @@ object Chores {
         val order = Boss.order()
         val i = done - 1
         if (i < 0 || i >= order.size) return done.toString() + "/" + order.size
-        return order[i].toString() + "번 (" + done + "/" + order.size + ")"
+        return Boss.label(order[i]) + " · " + done + "/" + order.size
     }
 
     /**
