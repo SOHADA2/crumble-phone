@@ -91,6 +91,14 @@ object Chores {
         thread(name = "chores") {
             try {
                 if (!Runner.bringGameToFront(ctx)) { Runner.set("시작 못 함", "게임을 찾지 못했어요"); return@thread }
+                // 출발선 맞추기 — 켤 때 게임이 어느 화면이든 **메인부터** 출발한다.
+                // 예전엔 이게 없어서, 뽑기 창이나 던전 로비에 있던 채로 1바퀴가 시작되면
+                // 퀘스트 띠를 못 찾아 '가림막 치우기' 계단을 띄엄띄엄 탔다. 밖에서 보면
+                // 봇이 아무 데나 누르며 헛손질하는 것으로 보인다.
+                // 실패해도 그대로 시작한다 — 그 계단이 예전처럼 뒤를 봐 준다.
+                val (ok, why) = Runner.resetToMain()
+                if (why == "stop") return@thread
+                if (!ok) Bot.log("시작 화면으로 못 갔어요 - 그대로 시작합니다(바퀴를 돌며 스스로 정리합니다)")
                 loop(maxQuests)
             }
             catch (e: Exception) { Runner.set("오류", e.message ?: "알 수 없음") }

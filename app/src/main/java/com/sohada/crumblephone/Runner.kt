@@ -119,20 +119,30 @@ object Runner {
     }
 
     /**
-     * 어느 화면에 있든 뒤로가기만으로 메인까지 올라간다. 블라인드 좌표 탭은 쓰지 않는다.
-     * 반환: 성공여부 + 이유("" / "battle" / "stuck" / "capture")
+     * 어느 화면에 있든 메인(시작 화면)까지 올라간다. 블라인드 좌표 탭은 쓰지 않는다.
+     * 반환: 성공여부 + 이유("" / "battle" / "stuck" / "capture" / "stop")
+     *
+     * 한 걸음마다 '시작 화면으로 되돌리는 중 · 무엇을 하는 중' 을 알린다.
+     * 이게 없던 시절엔 20~30초 동안 알약이 아무 말도 안 해서, 밖에서 보면
+     * 봇이 아무 데나 누르며 헛손질하는 것처럼 보였다.
      */
     fun resetToMain(maxBack: Int = 8): Pair<Boolean, String> {
+        set(RESET, "게임 깨우는 중")
         wake()
         var dlg = 0
         for (i in 0..maxBack) {
             if (!running) return false to "stop"
             if (!awaitGame()) return false to "stop"
+            set(RESET, "지금 화면 확인 (" + (i + 1) + "/" + (maxBack + 1) + ")")
             val b = shot() ?: return false to "capture"
-            if (Screen.atMain(b)) return true to ""
+            if (Screen.atMain(b)) {
+                if (i > 0) set(RESET, "시작 화면 도착")
+                return true to ""
+            }
             if (Screen.isConfirmDialog(b)) {
                 dlg++
                 // 확인창은 왼쪽(계속하기/취소)만 누른다. 또 뜨면 전투가 계속 도는 것이라 포기한다.
+                set(RESET, "확인 창 - 안전한 왼쪽 누르기")
                 tap(Screen.DLG_SAFE)
                 if (dlg >= 2) return false to "battle"
                 continue
@@ -140,20 +150,30 @@ object Runner {
             // '자동 사냥 보상'은 ✕ 로 닫지 말고 받는다(무료이고, 안 받으면 다음에 또 막는다).
             // ✕ 판정보다 먼저 봐야 한다 — 이 팝업에도 하단 ✕ 가 있어서 그냥 닫힐 수 있다.
             if (Screen.isIdleReward(b)) {
-                Bot.log("  자동 사냥 보상 팝업 - [보상 받기]")
+                set(RESET, "자동 사냥 보상 받는 중")
                 tap(Screen.IDLE_CLAIM, 2500); continue
             }
             if (i == maxBack) break
             // 서브 화면의 주황 ✕ 가 **실제로 보일 때만** 누른다. 화면을 안 보고 좌표를 누르지 않는다.
-            if (Screen.hasCloseButton(b)) { tap(Screen.NAV_CLOSE, 1800); continue }
+            if (Screen.hasCloseButton(b)) {
+                set(RESET, "열린 창 닫는 중 (" + (i + 1) + "/" + maxBack + ")")
+                tap(Screen.NAV_CLOSE, 1800); continue
+            }
             // 뒤로가기가 주력이다(무엇도 시작시키지 않는다). 다만 뒤로가기로 안 닫히는 팝업이 있어서
             // 가끔 '팝업 바깥'도 눌러 본다 — 전장 빈 곳이라 눌러도 무해하다.
-            if (i > 0 && i % 3 == 0) { tap(Screen.OUTSIDE, 1500); continue }
+            if (i > 0 && i % 3 == 0) {
+                set(RESET, "팝업 바깥 누르는 중 (" + (i + 1) + "/" + maxBack + ")")
+                tap(Screen.OUTSIDE, 1500); continue
+            }
+            set(RESET, "뒤로가기 (" + (i + 1) + "/" + maxBack + ")")
             TapService.back()
             sleep(1800)
         }
         return false to "stuck"
     }
+
+    /** 되돌리는 중에 쓰는 한 가지 제목. 알약에 이 말이 떠 있으면 '출발선 맞추는 중' 이라는 뜻이다. */
+    const val RESET = "시작 화면으로 되돌리는 중"
 
     /**
      * **메인처럼 보이는데 무언가 덮고 있을 때** 치운다.
