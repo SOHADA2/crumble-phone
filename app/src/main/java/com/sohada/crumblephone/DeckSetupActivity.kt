@@ -73,34 +73,47 @@ class DeckSetupActivity : ListActivity() {
             })
         })
 
-        if (Prefs.deckDictSize == 0) {
-            root.addView(text("먼저 ⚙ → 실험실 → [쿠키 사전 만들기] 를 해 주세요.\n" +
-                "어느 칸이 어느 쿠키인지 알아야 이름으로 넣을 수 있어요.",
+        // ⚠️ **이름 붙이기는 쿠키 사전과 상관이 없다.**
+        //    예전엔 사전이 없으면 이 화면 내용을 통째로 안 그렸다 — 그래서 이름조차 못 붙였다.
+        //    (사장님 지적: "덱 구성이 안 되면 이름 붙이는 것도 같이 막혀서 진행이 안 돼.")
+        //    이름은 **표시용**이라 사전 없이도 바로 쓸모가 있다 — 편성 화면 탭 위([NameTags]),
+        //    알약, 보스전 상태가 전부 그 이름으로 읽힌다.
+        //    그래서 **막는 것은 '넣는 동작'([시험]·[지금 적용])뿐**이다. PC 관제창도 같은 방식이다.
+        val hasDict = Prefs.deckDictSize > 0
+        if (!hasDict) {
+            root.addView(text("이름은 지금 바로 붙일 수 있어요 — 편성 화면과 알약에 그 이름이 나와요.\n" +
+                "쿠키를 실제로 넣으려면 ⚙ → 쿠키 조합 → [쿠키 사전 만들기] 를 한 번 해 주세요" +
+                "(어느 칸이 어느 쿠키인지 알아야 찾을 수 있어요 · 2~3분).",
                 14f, t.label2).apply { setPadding(dp(22), dp(10), dp(22), dp(10)) })
         } else {
             root.addView(text("덱에 이름을 붙이고, 넣을 쿠키를 한 줄에 하나씩(또는 쉼표로) 적어 주세요. 조금 틀려도 알아서 찾아요.\n" +
                 "[시험] 은 똑같이 해 보고 저장만 안 해요 — 먼저 이걸로 확인하세요.",
                 13f, t.label3).apply { setPadding(dp(22), dp(4), dp(22), dp(10)) })
+        }
 
-            for (n in 1..5) {
-                root.addView(sectionHeader("덱 " + n + "번"))
-                val g = group()
-                g.addView(nameBox(n))
-                g.addView(separator())
-                g.addView(deckBox(n))
-                g.addView(separator())
-                g.addView(row("시험 (저장 안 함)", subtitle = "좌표가 맞는지 공짜로 봐요") {
+        for (n in 1..5) {
+            root.addView(sectionHeader("덱 " + n + "번"))
+            val g = group()
+            g.addView(nameBox(n))
+            g.addView(separator())
+            g.addView(deckBox(n))
+            g.addView(separator())
+            g.addView(row("시험 (저장 안 함)",
+                subtitle = if (hasDict) "좌표가 맞는지 공짜로 봐요" else "쿠키 사전을 먼저 만들어야 해요") {
+                if (needDict()) {
                     save(); Overlay.show(applicationContext)
                     Deck.applyPreset(applicationContext, n, true); finish()
-                })
-                g.addView(separator())
-                g.addView(row("지금 적용", value = "저장", tint = t.gold,
-                    subtitle = "실제로 덱 " + n + "번을 바꿔요") {
+                }
+            })
+            g.addView(separator())
+            g.addView(row("지금 적용", value = "저장", tint = t.gold,
+                subtitle = if (hasDict) "실제로 덱 " + n + "번을 바꿔요" else "쿠키 사전을 먼저 만들어야 해요") {
+                if (needDict()) {
                     save(); Overlay.show(applicationContext)
                     Deck.applyPreset(applicationContext, n, false); finish()
-                })
-                root.addView(g)
-            }
+                }
+            })
+            root.addView(g)
         }
 
         // ⚠️ `setContentView` 다. 처음에 `addContentView` 를 썼다가 화면이 안 떴다 —
@@ -111,6 +124,14 @@ class DeckSetupActivity : ListActivity() {
             layoutParams = android.view.ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
             addView(root, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         })
+    }
+
+    /** 사전이 없으면 '넣는 동작'만 막는다(이름 저장은 그대로 된다). 막았으면 false. */
+    private fun needDict(): Boolean {
+        if (Prefs.deckDictSize > 0) return true
+        save()      // 여기까지 적어 둔 이름·쿠키는 잃지 않는다
+        Toast.makeText(this, "쿠키 사전을 먼저 만들어야 넣을 수 있어요 (⚙ → 쿠키 조합)", Toast.LENGTH_LONG).show()
+        return false
     }
 
     /**

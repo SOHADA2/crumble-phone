@@ -215,8 +215,10 @@ class SettingsActivity : ListActivity() {
         // (어느 번호를 쓸지는 위 '보스 조합 순서' 에서 고른다).
         g.addView(row("덱 구성",
             value = (1..5).count { Prefs.deckCount(it) > 0 }.let { if (it > 0) it.toString() + "개" else "" },
+            // ⚠️ 사전이 없어도 **이름은 붙일 수 있다**(표시용이라 사전과 무관하다).
+            //    예전 문구는 '먼저 사전부터' 라고만 해서 이름도 못 붙이는 줄 알게 했다.
             subtitle = if (hasDict) "덱에 이름을 붙이고 넣을 쿠키를 적어 둬요"
-                       else "먼저 아래 [쿠키 사전 만들기] 를 한 번 해 주세요") {
+                       else "이름은 지금 붙일 수 있어요 · 쿠키를 넣으려면 아래 [쿠키 사전 만들기] 부터") {
             startActivity(Intent(this, DeckSetupActivity::class.java))
         })
         g.addView(separator())
