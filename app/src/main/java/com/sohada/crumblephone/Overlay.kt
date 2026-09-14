@@ -532,7 +532,7 @@ object Overlay {
                 Runner.status +
                 (if (pct >= 0) " " + pct + "%" else "") +
                 (if (Runner.detail.isNotEmpty()) " · " + Runner.detail else "")
-        } else "쉬는 중"
+        } else if (Runner.stopping) "멈추는 중 · 하던 동작을 마치는 중" else "쉬는 중"
         // **몇 초째인지 붙인다.** 대부분의 상태는 1~2초면 바뀌므로, 8초를 넘겼다는 건
         // '늦은 것' 이 아니라 **아직 그 일을 하고 있다**는 뜻이다(오븐·보스전처럼).
         // 멈춘 건지 오래 걸리는 건지가 이 숫자 하나로 갈린다.
@@ -540,7 +540,9 @@ object Overlay {
             (System.currentTimeMillis() - Runner.statusAt) / 1000 else 0
         flow(if (age >= 8) "$s · ${age}초째" else s)
         (dotView?.background as? GradientDrawable)?.setColor(
-            if (Runner.running) Color.parseColor("#7CC24A") else Color.parseColor("#8A7565"))
+            if (Runner.running) Color.parseColor("#7CC24A")
+            else if (Runner.stopping) Color.parseColor("#F0921E")   // 멈추는 중 = 주황
+            else Color.parseColor("#8A7565"))
         applyBrightness()
         // 설정에서 조합 이름·순서를 바꾸면 다음 tick 에 그대로 따라온다(따로 알릴 필요가 없다).
         bossLine?.text = "보스 조합  " + Boss.orderPanel()
@@ -552,9 +554,12 @@ object Overlay {
         //    (y 120~900) 안에 갇혀 있지만, 패널까지 펼치면 그 아래 판정 구역(아이콘열 y1100~)을
         //    침범한다. 그래서 시작하는 순간 접고, 도는 동안 다시 열리지 않게 한다.
         if (Runner.running) closePanel()
+        // 멈추는 중에도 잠가 둔다 — 여기서 새로 시작하면 일꾼이 둘이 된다(guard 도 막지만,
+        // 눌리는데 아무 일도 안 일어나는 버튼보다 잠긴 버튼이 낫다).
+        val busy = Runner.running || Runner.stopping
         for (b in contentBtns) {
-            b.isEnabled = !Runner.running
-            b.alpha = if (Runner.running) 0.45f else 1f
+            b.isEnabled = !busy
+            b.alpha = if (busy) 0.45f else 1f
         }
         // 쉬는 중에도 사라지지 않는다 — 이 알약이 콘텐츠를 시작하는 조작 패널이기 때문이다.
         ui.postDelayed({ tick() }, 400)

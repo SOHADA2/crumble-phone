@@ -148,8 +148,25 @@ class TapService : AccessibilityService() {
 
         private var blockedAt = 0L
 
-        /** 게임이 앞에 없으면 제스처를 넣지 않는다 — 넣으면 **사장님이 보고 있는 앱**이 눌린다. */
+        /**
+         * 제스처를 넣으면 안 되는 상황인가.
+         *
+         * ① 게임이 앞에 없다 — 넣으면 **사장님이 보고 있는 앱**이 눌린다.
+         * ② **[멈추기] 를 눌렀다** — 신호는 내려갔는데 일꾼이 아직 다음 검사 지점에 못 닿은 틈이다.
+         *
+         * ②를 여기서 막는 게 요점이다. 콘텐츠 코드는 `Runner.tap` 만 쓰는 게 아니라
+         * 보스 돌진·던전 돌진·그리드 스크롤처럼 `TapService.swipe` 를 직접 부르는 자리가 많다.
+         * 한 군데씩 막으면 반드시 빠뜨린다 — **제스처가 나가는 마지막 문**인 여기서 한 번에 막는다.
+         */
         private fun blocked(what: String): Boolean {
+            if (Runner.stopping) {
+                val now = System.currentTimeMillis()
+                if (now - blockedAt > 3000) {
+                    blockedAt = now
+                    Bot.log("멈추는 중이라 " + what + "을 넣지 않았어요")
+                }
+                return true
+            }
             if (gameIsFront) return false
             val now = System.currentTimeMillis()
             if (now - blockedAt > 5000) {          // 로그가 도배되지 않게 5초에 한 줄만

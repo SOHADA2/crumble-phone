@@ -63,7 +63,39 @@ object Runner {
         return last
     }
 
-    internal fun sleep(ms: Long) = Thread.sleep(ms)
+    /**
+     * **[멈추기] 를 눌렀는데 일꾼이 아직 안 끝났나.**
+     *
+     * `running` 은 '멈춰라' 라는 **신호**다 — 누르는 순간 false 가 된다.
+     * 그런데 일꾼 스레드는 지금 하던 한 걸음(탭 + 기다림)을 마치고 다음 검사 지점에 닿아야
+     * 실제로 손을 뗀다. 그 틈에 알약은 이미 '쉬는 중' 이라고 말해 버렸다 —
+     * 사장님이 "쉬는 중으로 뜨는데 왜 지 마음대로 계속 돌아가지" 라고 하신 게 이 틈이다.
+     *
+     * 일꾼이 살아 있는 동안은 [task] 가 차 있다(모든 시작 함수가 finally 에서 비운다).
+     * 그래서 **신호는 내려갔는데 이름표는 남아 있는 상태** = 멈추는 중이다.
+     */
+    val stopping: Boolean get() = !running && task.isNotEmpty()
+
+    /**
+     * 기다린다. 단, **멈추라고 했으면 남은 시간을 버리고 곧바로 돌아온다.**
+     *
+     * 예전엔 `Thread.sleep(ms)` 한 줄이었다. 보스 대기 3초·탭 뒤 2.8초처럼 긴 자리가 많아서,
+     * [멈추기] 를 눌러도 그 시간을 꼬박 채운 뒤에야 다음 검사 지점에 닿았다.
+     *
+     * ⚠️ [task] 가 비어 있으면 끊지 않는다. 콘텐츠 일꾼이 아니라 **점검**처럼
+     *    `running` 이 원래 false 인 곳에서 부른 것이라, 끊으면 기다림이 통째로 사라진다
+     *    (탭 점검이 정확히 그렇다 — 탭 사이 2.8초가 0 이 되면 아무것도 못 본다).
+     */
+    internal fun sleep(ms: Long) {
+        if (task.isEmpty()) { Thread.sleep(ms); return }
+        var left = ms
+        while (left > 0) {
+            val step = if (left < 200L) left else 200L
+            Thread.sleep(step)
+            left -= step
+            if (!running) return
+        }
+    }
 
     internal fun set(s: String, d: String = "") {
         status = s; detail = d; progress = -1
@@ -211,6 +243,9 @@ object Runner {
      */
     internal fun guard(): Boolean {
         if (running) { Bot.log("이미 무언가 돌고 있어요"); return false }
+        // 멈추는 중에 새로 시작하면 **일꾼이 둘**이 된다 — 둘이 각자 게임을 눌러 댄다.
+        // `running` 만 보면 이 틈이 안 잡힌다(그때 running 은 이미 false 다).
+        if (stopping) { Bot.log("아직 멈추는 중이에요 - 잠시 뒤에 다시 눌러 주세요"); return false }
         if (!TapService.isReady) { set("시작 못 함", "접근성 서비스를 켜 주세요"); return false }
         if (CaptureService.instance == null) { set("시작 못 함", "화면 읽기를 허용해 주세요"); return false }
         // 화면 비율은 여기서 안 본다. 게임을 띄워 봐야 레터박스인지 재배치인지 알 수 있고,
@@ -219,8 +254,9 @@ object Runner {
     }
 
     fun stop() {
+        if (!running && task.isEmpty()) return
         running = false
-        set("멈추는 중")
+        set("멈추는 중", "하던 동작을 마치는 중이에요")
     }
 
     // ══════════════════════════════════════════════════════════

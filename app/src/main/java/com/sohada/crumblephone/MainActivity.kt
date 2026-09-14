@@ -330,6 +330,7 @@ class MainActivity : ListActivity() {
             !Coords.ratioOk && !Coords.detected ->
                 "화면 비율이 달라요 — 시작하면 게임 화면을 보고 다시 판단합니다"
             !Coords.ratioOk -> "이 기기는 게임 UI 배치가 달라 좌표가 안 맞아요"
+            Runner.stopping -> "멈추는 중 - 하던 동작을 마치고 있어요"
             Runner.running -> "봇이 게임을 대신 하고 있어요"
             Prefs.testMode -> "시험 모드 · 재화를 쓰지 않고 진입까지만"
             ready          -> "무엇을 자동으로 돌릴지 골라 주세요"
@@ -338,9 +339,15 @@ class MainActivity : ListActivity() {
 
         // 지금 상태
         val running = Runner.running
-        (dot.background as GradientDrawable).setColor(if (running) t.green else t.label3)
-        lblTask.text = if (running) (if (Runner.task.isEmpty()) "실행 중" else Runner.task + " 도는 중") else "대기 중"
-        lblTask.setTextColor(if (running) t.green else t.label2)
+        val stopping = Runner.stopping
+        (dot.background as GradientDrawable).setColor(
+            if (running) t.green else if (stopping) t.orange else t.label3)
+        lblTask.text = when {
+            running  -> if (Runner.task.isEmpty()) "실행 중" else Runner.task + " 도는 중"
+            stopping -> Runner.task + " 멈추는 중"
+            else     -> "대기 중"
+        }
+        lblTask.setTextColor(if (running) t.green else if (stopping) t.orange else t.label2)
         lblStatus.text = Runner.status
         lblDetail.text = if (Runner.detail.isNotEmpty()) Runner.detail
                          else if (Runner.lastResult.isNotEmpty()) "지난 결과 · " + Runner.lastResult else ""
