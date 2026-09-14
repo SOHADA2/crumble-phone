@@ -193,9 +193,13 @@ object Prefs {
      * 칸마다 따로 저장한다 — 한 줄에 쉼표로 몰아 넣으면 이름에 쉼표를 못 쓴다.
      * 읽는 곳은 [Boss.name] 하나로 모은다(순서를 [Boss.order] 하나로 모은 것과 같은 이유다).
      */
-    const val PRESET_NAME_MAX = 6
+    // 3글자. 이름표가 앉을 자리는 탭 한 칸 너비(설계 117px)뿐이라 그 이상은 어차피 잘린다.
+    // 사장님 지적: "최대 3글자로 잡아야 될 듯?"
+    const val PRESET_NAME_MAX = 3
 
-    fun presetName(n: Int): String = sp?.getString("presetName" + n, "")?.trim() ?: ""
+    // 읽는 쪽에서도 자른다 — 글자 수를 줄이기 전에 저장해 둔 긴 이름이 그대로 남지 않게.
+    fun presetName(n: Int): String =
+        sp?.getString("presetName" + n, "")?.trim()?.take(PRESET_NAME_MAX) ?: ""
 
     fun setPresetName(n: Int, v: String) {
         sp?.edit()?.putString("presetName" + n, v.trim().take(PRESET_NAME_MAX))?.apply()

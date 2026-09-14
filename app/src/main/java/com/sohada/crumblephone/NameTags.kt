@@ -16,26 +16,32 @@ import android.widget.TextView
 import kotlin.concurrent.thread
 
 /**
- * 게임 **편성 화면의 프리셋 1~5 탭 위에 내가 붙인 이름을 덧그린다.**
+ * 게임 **편성 화면의 프리셋 1~5 탭 바로 아래에 내가 붙인 이름을 덧그린다.**
  *
  * 게임에는 조합 이름이 없고 번호뿐이다. 그래서 보스에 맞춰 덱을 짜 두고도
  * "2번이 물가였나 독이었나" 를 매번 헷갈렸다. 설정에서 붙인 이름([Prefs.presetName])을
- * 바로 그 탭 자리에 띄워 준다.
+ * 바로 그 탭 아래에 놓는다. 지금 고른 탭은 게임처럼 노란 판으로 뒤집힌다.
  *
- * 그리는 것은 둘이다.
- *   ① 탭마다 작은 이름 칩 — 어느 번호가 무엇인지 한눈에. 좁아서 긴 이름은 잘린다.
- *   ② 오른쪽 빈자리에 **지금 고른 조합의 이름**을 큼직하게 — 잘리지 않는 전체 이름.
+ * ⚠️ 첫 판에는 오른쪽 빈자리에 '지금 고른 조합' 이름표를 하나 더 크게 뒀다가 뺐다.
+ *    사장님: "덱 글자 위치가 좀 별로야, 왼쪽에 있는 1번 바로 아래쪽에 위치하게 해줘."
+ *    탭마다 하나씩이면 충분하고, 둘을 띄우면 어느 쪽을 봐야 하는지가 헷갈린다.
+ *    이름을 3글자로 묶은 것도 같은 이유다 — 탭 한 칸(설계 117px)에 안 잘리고 들어간다.
  *
- * ## 안 지키면 사고 나는 것 셋
+ * ## 안 지키면 사고 나는 것 넷
  *
- * 1. **절대 터치를 먹지 않는다**(`FLAG_NOT_TOUCHABLE`). 이 창은 탭 바로 위에 앉는데,
+ * 1. **절대 터치를 먹지 않는다**(`FLAG_NOT_TOUCHABLE`). 이 창은 탭 바로 아래에 앉는데,
  *    터치를 가로채면 사장님이 1번을 눌러도 안 눌리고 **봇이 조합을 바꾸는 탭도 먹힌다.**
  * 2. **봇이 도는 동안에는 쉰다.** 화면 판정을 하려면 캡처를 해야 하는데,
  *    `acquireLatestImage` 는 한 프레임을 한 쪽만 가져간다 — 옆에서 같이 집으면
  *    봇이 빈손으로 돌아간다. 이름표는 사람이 직접 편성할 때 쓰는 것이라 쉬어도 된다.
  * 3. **`Runner.shot()` 을 쓰지 않는다.** 그건 마지막 장을 들고 있다가 다음에 recycle 하는데,
- *    다른 스레드가 그걸 들고 있으면 `getPixel() on a recycled bitmap` 으로 죽는다.
+ *    다른 스레드가 그걸 들고 있으면 `getPixel() on a recycled bitmap` 으로 죽는다(v1.33 전례).
  *    `CaptureService.grab()` 은 매번 새 장이라 서로 안 엉킨다.
+ * 4. **창을 화면 전체로 잡고 `FLAG_LAYOUT_IN_SCREEN` 을 준다.**
+ *    이게 없으면 창의 y 원점이 **상태표시줄 아래**라, 실측 좌표를 그대로 넣어도 그만큼
+ *    (폰에서 90px 남짓) 내려앉는다. 첫 판이 정확히 그래서 이름표가 탭이 아니라
+ *    **쿠키 카드 위**에 얹혔다. 화면 전체로 잡고 자식의 `topMargin` 으로 놓으면
+ *    실측 좌표와 그림이 1:1 로 맞는다.
  */
 object NameTags {
 
@@ -46,7 +52,6 @@ object NameTags {
     private var box: FrameLayout? = null
     private var lp: WindowManager.LayoutParams? = null
     private val chips = ArrayList<TextView>()
-    private var big: TextView? = null
 
     @Volatile private var alive = false
     private var shownY = 0          // 지금 띄운 탭 줄의 설계 y (0 = 안 띄움)
@@ -54,6 +59,9 @@ object NameTags {
     private const val GOLD = "#F8E861"
     private const val INK = "#2E1D14"
     private const val PLATE = "#E6231A18"     // 게임의 어두운 판 + 살짝 비침
+
+    /** 탭 한가운데에서 이만큼 아래에 놓는다(설계 px). 탭 그림을 안 가리는 자리다. */
+    private const val BELOW = 34
 
     fun start(ctx: Context) {
         appCtx = ctx.applicationContext
@@ -118,7 +126,7 @@ object NameTags {
     private fun plate(color: String, radiusPx: Int) = GradientDrawable().apply {
         setColor(Color.parseColor(color))
         cornerRadius = radiusPx.toFloat()
-        setStroke(if (radiusPx > 2) 2 else 1, Color.parseColor("#0B0609"))
+        setStroke(2, Color.parseColor("#0B0609"))
     }
 
     /** 창과 글자들을 한 번만 만든다. 좌표는 기기에 맞춰 [Coords] 로 환산한다. */
@@ -128,11 +136,10 @@ object NameTags {
         val f = FrameLayout(ctx)
 
         val tabs = Screen.PRESET_TABS
-        val gap = Coords.len(tabs[1][0] - tabs[0][0])      // 탭 사이 간격
+        val gap = Coords.len(tabs[1][0] - tabs[0][0])      // 탭 사이 간격(설계 117px)
         val chipW = gap - Coords.len(6)
-        // 24 설계px — 111px 칩에 한글 4~5자가 들어간다. 더 키우면 두 글자 만에 잘린다.
-        // (잘려도 괜찮다. 전체 이름은 오른쪽 큰 이름표가 보여 준다.)
-        val chipSize = Coords.len(24).toFloat()
+        // 3글자만 받으므로 28 설계px 로 키워도 안 잘린다(3×28=84 < 칩 안쪽 103).
+        val chipSize = Coords.len(28).toFloat()
 
         chips.clear()
         for (i in 0 until Boss.PRESETS) {
@@ -143,6 +150,7 @@ object NameTags {
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(Coords.len(4), Coords.len(3), Coords.len(4), Coords.len(3))
                 background = plate(PLATE, Coords.len(4))
+                // 탭 한가운데에 맞춰 가로 정렬. 세로는 show() 가 탭 줄에 맞춰 다시 잡는다.
                 layoutParams = FrameLayout.LayoutParams(chipW, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
                     leftMargin = Coords.x(tabs[i][0]) - chipW / 2
                 }
@@ -151,36 +159,21 @@ object NameTags {
             f.addView(t)
         }
 
-        // 오른쪽 빈자리 — 탭 다섯 개가 x543 에서 끝나고 [편성] 버튼은 한참 오른쪽에 있다.
-        // 그 사이가 비어 있어서 **잘리지 않는 전체 이름**을 여기 둔다.
-        big = TextView(ctx).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_PX, Coords.len(38).toFloat())
-            gravity = Gravity.CENTER_VERTICAL
-            isSingleLine = true
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            setTextColor(Color.parseColor(GOLD))
-            setPadding(Coords.len(14), Coords.len(5), Coords.len(14), Coords.len(5))
-            background = plate(PLATE, Coords.len(6))
-            // 이름 길이에 맞춰 줄어든다 — 고정 폭으로 두면 짧은 이름일 때 빈 판이 길게 남는다.
-            maxWidth = Coords.len(500)
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
-            ).apply { leftMargin = Coords.x(625) }
-        }
-        f.addView(big)
-
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
 
-        // ⚠️ NOT_TOUCHABLE 이 핵심이다. 이 창은 탭 바로 위에 앉으므로,
-        //    터치를 가로채면 사장님의 탭도 봇의 탭도 이 창이 먹어 버린다.
+        // ⚠️ 세 가지가 다 있어야 한다.
+        //    NOT_TOUCHABLE  — 탭 바로 위 창이라, 터치를 먹으면 사장님 탭도 봇 탭도 이 창이 가져간다.
+        //    LAYOUT_IN_SCREEN + NO_LIMITS — 좌표를 **화면 절대 좌표**로 만든다.
+        //                     없으면 상태표시줄 높이만큼 내려앉는다(첫 판의 그 증상).
         lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -199,6 +192,7 @@ object NameTags {
             val v = box ?: return
             val p = lp ?: return
 
+            val top = Coords.y(designY) + Coords.len(BELOW)
             for (i in 0 until Boss.PRESETS) {
                 val t = chips[i]
                 val nm = Boss.name(i + 1)
@@ -209,21 +203,11 @@ object NameTags {
                 val onTab = (i + 1) == sel
                 t.setTextColor(Color.parseColor(if (onTab) INK else GOLD))
                 t.background = plate(if (onTab) GOLD else PLATE, Coords.len(4))
+                val q = t.layoutParams as FrameLayout.LayoutParams
+                if (q.topMargin != top) { q.topMargin = top; t.layoutParams = q }
             }
 
-            val selName = if (sel in 1..Boss.PRESETS) Boss.name(sel) else ""
-            big?.let {
-                it.visibility = if (selName.isEmpty()) View.GONE else View.VISIBLE
-                it.text = "▸ " + selName
-            }
-
-            // 탭 한가운데보다 조금 아래 — 탭 그림을 가리지 않는 자리다.
-            val y = Coords.y(designY) + Coords.len(42)
-            val first = v.parent == null
-            if (first || p.y != y) {
-                p.y = y
-                if (first) w.addView(v, p) else w.updateViewLayout(v, p)
-            }
+            if (v.parent == null) w.addView(v, p)
             shownY = designY
         } catch (e: Exception) {
             Bot.log("조합 이름표를 못 띄웠어요: " + (e.message ?: "알 수 없음"))
