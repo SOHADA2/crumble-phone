@@ -2,8 +2,8 @@ package com.sohada.crumblephone
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -16,11 +16,21 @@ import android.widget.TextView
 import kotlin.concurrent.thread
 
 /**
- * 게임 **편성 화면의 프리셋 1~5 탭 바로 아래에 내가 붙인 이름을 덧그린다.**
+ * 게임 **편성 화면의 프리셋 1~5 탭 아래에 내가 붙인 이름을 덧그린다.**
  *
  * 게임에는 조합 이름이 없고 번호뿐이다. 그래서 보스에 맞춰 덱을 짜 두고도
  * "2번이 물가였나 독이었나" 를 매번 헷갈렸다. 설정에서 붙인 이름([Prefs.presetName])을
- * 바로 그 탭 아래에 놓는다. 지금 고른 탭은 게임처럼 노란 판으로 뒤집힌다.
+ * 바로 그 탭 아래에 놓는다.
+ *
+ * ## 생김새 — **게임 글씨를 흉내 낸다**
+ * 처음엔 어두운 판 위에 글자를 얹었는데, 사장님이 직접 예시를 만들어 보내 주셨다:
+ * **판 없이 외곽선만 두른 금색 글씨.** 이 게임 UI 가 전부 그 문법이라 판을 깔면 혼자 튄다.
+ * 안드로이드 TextView 에는 글자 외곽선이 없어서, **같은 글자를 두 번 겹쳐 그린다** —
+ * 뒤에 `STROKE` 로 굵게 한 번(검정), 앞에 `FILL` 로 한 번(금색).
+ * 고른 탭은 금색, 나머지는 크림색이라 어느 걸 눌렀는지 색으로 갈린다.
+ *
+ * 자리는 탭 **아래 빈 띠**다. 실측(2026-09-14): 탭 한가운데에서 92~151px 아래가
+ * 아무것도 없는 어두운 줄이고(설계 y912~971), 그 아래부터 쿠키 카드가 시작한다.
  *
  * ⚠️ 첫 판에는 오른쪽 빈자리에 '지금 고른 조합' 이름표를 하나 더 크게 뒀다가 뺐다.
  *    사장님: "덱 글자 위치가 좀 별로야, 왼쪽에 있는 1번 바로 아래쪽에 위치하게 해줘."
@@ -51,17 +61,22 @@ object NameTags {
     private var wm: WindowManager? = null
     private var box: FrameLayout? = null
     private var lp: WindowManager.LayoutParams? = null
-    private val chips = ArrayList<TextView>()
+    // 글자 하나를 두 장으로 그린다 — 뒤(외곽선) / 앞(속). 겹쳐 놓으면 게임 글씨처럼 보인다.
+    private val backs = ArrayList<TextView>()
+    private val fronts = ArrayList<TextView>()
 
     @Volatile private var alive = false
     private var shownY = 0          // 지금 띄운 탭 줄의 설계 y (0 = 안 띄움)
 
-    private const val GOLD = "#F8E861"
-    private const val INK = "#2E1D14"
-    private const val PLATE = "#E6231A18"     // 게임의 어두운 판 + 살짝 비침
+    private const val GOLD = "#F8E861"      // 고른 조합
+    private const val CREAM = "#E8D9C8"     // 나머지
+    private const val EDGE = "#0B0609"      // 외곽선 — 이 게임 UI 의 '거의 검정'
 
-    /** 탭 한가운데에서 이만큼 아래에 놓는다(설계 px). 탭 그림을 안 가리는 자리다. */
-    private const val BELOW = 34
+    /**
+     * 탭 한가운데에서 이만큼 아래(설계 px).
+     * 실측으로 92~151 이 빈 띠다. 글자 높이를 생각해 그 띠 한가운데에 오도록 잡았다.
+     */
+    private const val BELOW = 88
 
     fun start(ctx: Context) {
         appCtx = ctx.applicationContext
@@ -123,12 +138,6 @@ object NameTags {
     // ══════════════════════════════════════════════════════════
     //  그리기
     // ══════════════════════════════════════════════════════════
-    private fun plate(color: String, radiusPx: Int) = GradientDrawable().apply {
-        setColor(Color.parseColor(color))
-        cornerRadius = radiusPx.toFloat()
-        setStroke(2, Color.parseColor("#0B0609"))
-    }
-
     /** 창과 글자들을 한 번만 만든다. 좌표는 기기에 맞춰 [Coords] 로 환산한다. */
     private fun build(ctx: Context) {
         if (box != null) return
@@ -136,27 +145,37 @@ object NameTags {
         val f = FrameLayout(ctx)
 
         val tabs = Screen.PRESET_TABS
-        val gap = Coords.len(tabs[1][0] - tabs[0][0])      // 탭 사이 간격(설계 117px)
-        val chipW = gap - Coords.len(6)
-        // 3글자만 받으므로 28 설계px 로 키워도 안 잘린다(3×28=84 < 칩 안쪽 103).
-        val chipSize = Coords.len(28).toFloat()
+        val cellW = Coords.len(tabs[1][0] - tabs[0][0])    // 탭 한 칸 너비(설계 117px)
+        // 3글자만 받으므로 32px 이면 96px — 한 칸(117) 안에 여유 있게 들어간다.
+        val size = Coords.len(32).toFloat()
+        val edge = Coords.len(7).toFloat()
 
-        chips.clear()
-        for (i in 0 until Boss.PRESETS) {
-            val t = TextView(ctx).apply {
-                setTextSize(TypedValue.COMPLEX_UNIT_PX, chipSize)
-                gravity = Gravity.CENTER
-                isSingleLine = true
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(Coords.len(4), Coords.len(3), Coords.len(4), Coords.len(3))
-                background = plate(PLATE, Coords.len(4))
-                // 탭 한가운데에 맞춰 가로 정렬. 세로는 show() 가 탭 줄에 맞춰 다시 잡는다.
-                layoutParams = FrameLayout.LayoutParams(chipW, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
-                    leftMargin = Coords.x(tabs[i][0]) - chipW / 2
+        backs.clear(); fronts.clear()
+        // 뒤(외곽선)를 다섯 개 먼저 다 깔고 앞(속)을 올린다. 나중에 넣은 것이 위에 그려진다.
+        for (pass in 0..1) {
+            for (i in 0 until Boss.PRESETS) {
+                val t = TextView(ctx).apply {
+                    setTextSize(TypedValue.COMPLEX_UNIT_PX, size)
+                    gravity = Gravity.CENTER
+                    isSingleLine = true
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    layoutParams = FrameLayout.LayoutParams(cellW, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                        leftMargin = Coords.x(tabs[i][0]) - cellW / 2
+                    }
                 }
+                if (pass == 0) {
+                    // ⚠️ paint 를 직접 만진다. `setTextColor` 는 매 그리기마다 다시 칠해지지만
+                    //    style/strokeWidth 는 TextView 가 건드리지 않아서 한 번만 줘도 남는다.
+                    t.setTextColor(Color.parseColor(EDGE))
+                    t.paint.style = Paint.Style.STROKE
+                    t.paint.strokeWidth = edge
+                    t.paint.strokeJoin = Paint.Join.ROUND
+                    backs.add(t)
+                } else {
+                    fronts.add(t)
+                }
+                f.addView(t)
             }
-            chips.add(t)
-            f.addView(t)
         }
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
@@ -194,17 +213,17 @@ object NameTags {
 
             val top = Coords.y(designY) + Coords.len(BELOW)
             for (i in 0 until Boss.PRESETS) {
-                val t = chips[i]
                 val nm = Boss.name(i + 1)
-                if (nm.isEmpty()) { t.visibility = View.INVISIBLE; continue }
-                t.visibility = View.VISIBLE
-                t.text = nm
-                // 고른 탭은 게임처럼 노란 판에 짙은 글씨로 뒤집는다(어느 걸 눌렀는지 한눈에).
+                // 고른 탭은 금색, 나머지는 크림색 — 어느 걸 눌렀는지 색으로 갈린다.
                 val onTab = (i + 1) == sel
-                t.setTextColor(Color.parseColor(if (onTab) INK else GOLD))
-                t.background = plate(if (onTab) GOLD else PLATE, Coords.len(4))
-                val q = t.layoutParams as FrameLayout.LayoutParams
-                if (q.topMargin != top) { q.topMargin = top; t.layoutParams = q }
+                for ((k, t) in listOf(backs[i], fronts[i]).withIndex()) {
+                    if (nm.isEmpty()) { t.visibility = View.INVISIBLE; continue }
+                    t.visibility = View.VISIBLE
+                    t.text = nm
+                    if (k == 1) t.setTextColor(Color.parseColor(if (onTab) GOLD else CREAM))
+                    val q = t.layoutParams as FrameLayout.LayoutParams
+                    if (q.topMargin != top) { q.topMargin = top; t.layoutParams = q }
+                }
             }
 
             if (v.parent == null) w.addView(v, p)
