@@ -20,6 +20,8 @@ object Daily {
 
     /** 일일 던전 목록은 위→아래 순서가 고정이라, 방문한 순서로 이름을 붙인다. */
     /** [SKIP] 으로 횟수를 더 받는 최대 횟수(던전 하나당). 무한히 눌리지 않게 상한을 둔다. */
+    // 칸을 안 쓰고 다시 시도할 수 있는 최대 횟수. 이걸 넘으면 뭔가 잘못된 것이므로 끝낸다.
+    private const val MISS_MAX = 12
     private const val AD_MAX = 3
 
     // 실측(2026-09-09): 목록을 맨 위로 올리면 위→아래가 이 순서로 고정되고,
@@ -67,8 +69,25 @@ object Daily {
         var battled = 0
         var scrolls = 0
 
-        for (d in 1..maxDungeons) {
-            if (!Runner.running) break
+        /*
+         * ⚠️ 2026-09-16: 예전엔 `for (d in 1..maxDungeons)` 안에서 전환 실패 때 `continue` 를 했다.
+         *    그러면 **로딩·팝업으로 한 프레임만 놓쳐도 던전 칸이 한 칸씩 사라진다.**
+         *    사장님 지적: *"일일 던전 진행할 때 한 던전 2개쯤 하면 멈춰 있다."*
+         *    칸 5개 중 둘을 헛시도로 태우면 실제 던전 2~3개만 돌고 끝난다 — 정확히 그 증상이다.
+         *
+         *    PC(daily.ps1)는 2026-09-09 에 이미 고쳤는데 **폰에 안 넘어왔다.**
+         *    (문서에 '② PC 만' 이라고 적어 둔 것이 틀렸다 — 폰도 같은 모양이었다.)
+         *
+         *    → 칸(`d`)은 **던전을 하나 처리했을 때만** 쓰고, 헛시도는 `misses` 로 따로 센다.
+         *      그리고 화면을 잠깐 놓친 것으로 **한 바퀴를 끝내지 않는다** —
+         *      아직 전투가 이어지는 중이면 기다리고(연속 도전이 켜져 있으면 몇 분씩 걸린다),
+         *      끝내 실패하면 '완료' 가 아니라 **'중간에 끊겼다'** 고 적는다.
+         */
+        var d = 1
+        var misses = 0          // 칸을 안 쓰고 다시 시도한 횟수
+        var battleWaits = 0     // '아직 전투 중' 이라 그냥 더 기다린 횟수
+        var brokeOff = ""       // 비어 있지 않으면 중간에 끊긴 것
+        while (d <= maxDungeons && Runner.running) {
             if (!Runner.awaitGame()) break
 
             // ⚠️ 화면 읽기가 한 번 실패했다고 **한 바퀴 전체를 끝내면 안 된다**(예전엔 `?: break` 였다).
@@ -79,14 +98,39 @@ object Daily {
                 if (b != null || !Runner.running) break
                 Runner.sleep(800)
             }
-            if (b == null) { Bot.log("화면을 못 읽어요 - 종료"); break }
+            if (b == null) {
+                misses++
+                if (misses >= MISS_MAX) { Bot.log("화면을 못 읽어요 - 종료"); brokeOff = "화면을 못 읽음"; break }
+                continue
+            }
 
             // ── 던전 화면이 아니면 목록에서 하나 골라 들어간다 ──
             if (!Screen.atDailyEntry(b)) {
                 if (!Screen.atDailyList(b) && !backToList()) {
-                    Bot.log("일일 던전 화면을 못 찾았어요 - 종료"); break
+                    // 아직 싸우는 중이면 **끊을 일이 아니다 - 기다리면 된다.**
+                    // (연속 도전이 켜져 있으면 게임이 혼자 여러 판을 이어 돌아 몇 분이 걸린다.
+                    //  resetToMain 은 확인창의 왼쪽('계속하기')만 눌러 전투를 끝내지 않는다.)
+                    val (okR, whyR) = Runner.resetToMain()
+                    if (!okR && whyR == "battle") {
+                        battleWaits++
+                        if (battleWaits > 6) {
+                            Bot.log("10분 넘게 전투가 이어져요 - 종료 (연속 도전이 켜져 있는지 확인해 주세요)")
+                            brokeOff = "전투가 계속 이어짐"; break
+                        }
+                        Bot.log("아직 전투가 이어지고 있어요 - 기다립니다 (" + battleWaits + "/6)")
+                        Runner.set("일일 던전", "전투가 끝나기를 기다리는 중 (" + battleWaits + "/6)")
+                        Runner.sleep(60_000); continue
+                    }
+                    misses++
+                    if (misses >= MISS_MAX) {
+                        Bot.log("일일 던전 화면을 못 찾았어요 - 종료"); brokeOff = "일일 던전 화면을 못 찾음"; break
+                    }
+                    Bot.log("일일 던전 화면을 놓쳤어요 - 다시 들어갑니다 (" + misses + "/" + MISS_MAX + ")")
+                    if (!enter()) continue
+                    Runner.shot()?.let { if (Screen.atDailyList(it)) scrollListTop() }
+                    continue
                 }
-                b = Runner.shot() ?: break
+                b = Runner.shot() ?: continue
                 var pick = -1
                 for (y in Screen.findDailyBanners(b)) {
                     val sig = Screen.dailyRowSig(b, y)
@@ -108,8 +152,13 @@ object Daily {
                     if (Runner.shot()?.let { Screen.atDailyEntry(it) } == true) { opened = true; break }
                     Runner.sleep(700)
                 }
-                if (!opened) { Bot.log("  들어가지 못했어요 - 다시 시도"); continue }
-                b = Runner.shot() ?: break
+                if (!opened) {
+                    misses++
+                    if (misses >= MISS_MAX) { Bot.log("  던전에 들어가지 못했어요 - 종료"); brokeOff = "던전에 못 들어감"; break }
+                    Bot.log("  들어가지 못했어요 - 다시 시도 (" + misses + "/" + MISS_MAX + ")")
+                    continue
+                }
+                b = Runner.shot() ?: continue
             }
 
             // ── 한 바퀴 돌았나 ──
@@ -192,6 +241,9 @@ object Daily {
             if (!Screen.atDailyEntry(b)) {
                 Bot.log("던전 " + idx + ": 화면이 안정되지 않아 수령을 건너뜁니다(안전)")
                 results.add(name + " 확인불가")
+                // 그래도 다음 던전으로는 넘겨 순환은 이어간다(PC 와 같은 처리).
+                Runner.shot()?.let { if (Screen.atDailyEntry(it)) Runner.tap(Screen.DAILY_NEXT, 2200) }
+                d++
                 continue
             }
 
@@ -207,6 +259,7 @@ object Daily {
                 Runner.shot()?.let {
                     if (Screen.atDailyEntry(it)) Runner.tap(Screen.DAILY_NEXT, 2000)
                 }
+                d++
                 continue
             }
 
@@ -238,9 +291,15 @@ object Daily {
                 if (Screen.atDailyEntry(it)) Runner.tap(Screen.DAILY_NEXT, 2200)
                 else Bot.log("  던전 화면이 아니라 ▶ 를 누르지 않았어요(목록에서 다시 고릅니다)")
             }
+            d++
         }
 
-        val head = if (battled == 0) "돌 수 있는 던전이 없었어요" else battled.toString() + "개 던전 진행함"
+        // ⚠️ 끊겼는데 '완료' 로 적으면 **고장이 성공처럼 보인다**(PC 에서 겪은 그대로).
+        var head = if (battled == 0) "돌 수 있는 던전이 없었어요" else battled.toString() + "개 던전 진행함"
+        if (brokeOff.isNotEmpty()) {
+            head = "중간에 끊김 (" + brokeOff + ") · " + head + " - 다시 눌러 주세요"
+            Bot.log("=== 일일 던전 중간에 끊김 (" + brokeOff + ") · " + battled + "개 진행함")
+        }
         if (Runner.running) Runner.set("일일 던전 끝", head) else Runner.set("멈췄어요", head)
         Runner.lastResult = if (results.isEmpty()) head else head + " — " + results.joinToString(" · ")
     }
