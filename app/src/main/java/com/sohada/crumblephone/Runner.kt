@@ -39,6 +39,16 @@ object Runner {
     @Volatile var lastScore = 0L           // 이번 판 점수
     @Volatile var bestScore = 0L           // 이번 세션 최고 점수
 
+    /**
+     * ★ 내 최고 기록 — 게임이 토벌전 로비 '개인 랭킹' 칸에 적어 두는 **내 시즌 최고 점수**.
+     * 사장님: *"내 원래 최고 점수랑 그런거를 제대로 볼 수가 없더라고."*
+     * `bestScore` 는 **이번에 돌린 것 중의 최고**라, 그것만으로는 잘한 건지 알 수가 없다.
+     * 실측(2026-09-21 · PC 로비): `개인 랭킹 · 20G 206M` = 202.1억 — 전투 화면 아래
+     * '내 최고 기록' 표지판과 같은 값인데, 그 표지판은 순위를 따라 움직여 고정 좌표로 못 읽는다.
+     */
+    @Volatile var myRecord = 0L            // 지금 게임에 적힌 내 최고 기록
+    @Volatile var myRecordStart = 0L       // 돌리기 시작할 때의 기록(이걸 넘으면 '경신')
+
     /** 화면 한 장.
      *  ⚠️ 다음에 shot() 을 부르면 앞 장은 **recycle 된다**(한 장이 18MB 라 들고 있을 수 없다).
      *     받은 그 자리에서 판정까지 끝낼 것.
@@ -380,6 +390,8 @@ object Runner {
     fun startTobol(ctx: Context, maxAttempts: Int = if (Prefs.testMode) 0 else -1) {
         if (!guard()) return
         running = true; task = "토벌전"; lastScore = 0L; bestScore = 0L
+        // 내 기록은 **이번 돌림 기준**으로 다시 잡는다(시작값이 있어야 '경신' 을 가릴 수 있다).
+        myRecord = 0L; myRecordStart = 0L
         thread(name = "tobol") {
             try {
                 if (!bringGameToFront(ctx)) { set("시작 못 함", "게임을 찾지 못했어요"); return@thread }
@@ -483,6 +495,47 @@ object Runner {
         }
     }
 
+    /** 큰 점수를 눈이 따라갈 수 있게 접는다. `13,128,203,112` → `131.3억` (PC 봇 `FmtShort` 와 같은 규칙). */
+    private fun fmtShort(n: Long): String = when {
+        n >= 100_000_000L -> String.format("%.1f억", n / 100_000_000.0)
+        n >= 10_000L      -> String.format("%,d만", n / 10_000L)
+        else              -> Ocr.comma(n)
+    }
+
+    /**
+     * 로비에서 내 최고 기록을 읽어 둔다 — '개인 랭킹' 점수 칸(실측 1040,1300,350,80).
+     * `readNumber` 가 아니라 **`readPower`** 를 쓴다: 값이 `20G 206M` 처럼 단위가 섞여 나와서
+     * 숫자만 뽑으면 `20206` 이 되고, `58G 96M` 은 `5896`(실제의 1/10)이 된다.
+     * ⚠️ 받은 그 자리에서 읽을 것 — 다음 `shot()` 이 이 장을 recycle 한다.
+     */
+    private fun updateMyRecord(b: Bitmap) {
+        val v = Ocr.readPower(b, 1040, 1300, 350, 80) ?: return
+        if (v < 1_000_000L) return          // 한 자리 오독을 기록으로 삼지 않는다
+        myRecord = v
+        if (myRecordStart == 0L) {
+            myRecordStart = v
+            Bot.log("내 최고 기록: " + Ocr.comma(v))
+        }
+    }
+
+    /**
+     * 끝냈을 때 남길 한 줄. '이번에 돌린 최고' 만으로는 잘한 건지 알 수가 없으니
+     * **내 기록을 나란히** 적고, 넘었으면 경신·아직이면 얼마가 모자란지를 붙인다.
+     */
+    private fun tobolSummary(attempts: Int): String {
+        val sb = StringBuilder("토벌전 " + attempts + "회")
+        if (bestScore > 0) sb.append(" · 최고 ").append(fmtShort(bestScore))
+        if (myRecord > 0) {
+            sb.append(" · 내 기록 ").append(fmtShort(myRecord))
+            if (myRecordStart > 0 && myRecord > myRecordStart) {
+                sb.append(" (경신! 시작 ").append(fmtShort(myRecordStart)).append(")")
+            } else if (bestScore > 0 && bestScore < myRecord) {
+                sb.append(" (").append(fmtShort(myRecord - bestScore)).append(" 모자람)")
+            }
+        }
+        return sb.toString()
+    }
+
     private fun tobolLoop(maxAttempts: Int) {
         set("토벌전 준비 중")
         var b = shot()
@@ -504,12 +557,17 @@ object Runner {
         // maxAttempts < 0 이면 상한 없음 — [멈추기] 를 누를 때까지 돈다.
         while (running && (maxAttempts < 0 || attempts < maxAttempts)) {
             if (!awaitGame()) break
-            var atLobby = shot()?.let { Screen.atTobolLobby(it) } ?: false
+            var lobbyShot = shot()
+            var atLobby = lobbyShot?.let { Screen.atTobolLobby(it) } ?: false
             if (!atLobby) {
                 sleep(2000)
-                atLobby = shot()?.let { Screen.atTobolLobby(it) } ?: false
+                lobbyShot = shot()
+                atLobby = lobbyShot?.let { Screen.atTobolLobby(it) } ?: false
                 if (!atLobby) { set("토벌전 끝", "로비를 벗어났어요 (시즌 종료로 보임)"); break }
             }
+            // 로비에 있는 김에 내 최고 기록을 읽는다 — 방금 찍은 장을 그대로 쓰므로 캡처가 안 늘어난다.
+            // (판마다 다시 읽으니 넘어서는 순간 '경신' 이 바로 뜬다.)
+            lobbyShot?.let { updateMyRecord(it) }
             attempts++
             set("토벌전 " + attempts + "회차", "도전하는 중")
             tap(Screen.TOBOL_CHALLENGE, 3000)
@@ -522,7 +580,10 @@ object Runner {
                 val s = shot()
                 if (s != null && Screen.isBattleOver(s)) { over = true; break }
                 status = "토벌전 " + attempts + "회차"
-                detail = if (bestScore > 0) "자동 전투 중 · 최고 " + Ocr.comma(bestScore) else "자동 전투 중"
+                detail = if (bestScore > 0) "자동 전투 중 · 최고 " + fmtShort(bestScore) +
+                             (if (myRecord > 0) " · 내 기록 " + fmtShort(myRecord) else "")
+                         else if (myRecord > 0) "자동 전투 중 · 내 기록 " + fmtShort(myRecord)
+                         else "자동 전투 중"
                 // 전투가 얼마나 걸릴지는 모른다. 이 막대는 '포기까지 얼마나 남았나'다 —
                 // 전투가 끝나면 다음 회차에서 0 부터 다시 찬다.
                 setProgress(((System.currentTimeMillis() - started) / 1000).toInt(), (WAIT_MS / 1000).toInt())
@@ -549,11 +610,14 @@ object Runner {
             }
             set("토벌전 " + attempts + "회차", "결과창 닫는 중")
             if (!closeResult()) { set("토벌전 끝", "결과창을 닫지 못했어요"); break }
-            lastResult = if (bestScore > 0) "토벌전 " + attempts + "회 · 최고 " + Ocr.comma(bestScore) else "토벌전 " + attempts + "회 도전함"
+            lastResult = tobolSummary(attempts)
         }
         if (running) set("토벌전 끝", attempts.toString() + "회 도전했어요") else set("멈췄어요", "토벌전 " + attempts + "회까지 했어요")
         // (여기 오는 길은 셋뿐이다: [멈추기] · 로비 이탈(시즌 종료) · 결과창을 못 닫음)
-        lastResult = "토벌전 " + attempts + "회 도전함"
+        // ⚠️ 여기서 `"토벌전 N회 도전함"` 으로 덮어쓰고 있었다 — 루프 안에서 애써 적어 둔
+        //    최고 점수가 **끝나는 순간 사라져서**, 정작 끝난 뒤에는 점수를 볼 수가 없었다.
+        //    (사장님: *"점수를 알려주기는 하는데 제대로 볼 수가 없더라고."*)
+        lastResult = tobolSummary(attempts)
     }
 
     private fun closeResult(): Boolean {
