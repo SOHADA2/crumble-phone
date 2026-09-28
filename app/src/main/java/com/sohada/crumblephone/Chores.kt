@@ -140,6 +140,14 @@ object Chores {
         var probeAllowedAt = 0L   // 보스가 필요한 퀘스트라 쉬는 중이면 이 시각까지 탐색을 미룬다
         var bossNoticed = false   // '보스에 막혔다'는 안내를 한 번만 남기려고
         var bossTries = 0         // 이 스테이지에서 조합을 몇 번 바꿔 도전했는지
+        // 이번 보스 도전이 **배너를 보고** 시작됐나. 보스로 가는 길은 둘이다.
+        //   A) 배너를 보고 간다        -> 배너가 사라지면 '그 보스는 끝났다' 가 맞다
+        //   B) 탐색이 막혀서 눈 감고 간다 -> **배너는 원래부터 없다**
+        // 아래 '배너가 사라졌다 -> 순번 리셋' 을 B 에도 적용하면 순번이 매 바퀴 0 으로 돌아가
+        // 영원히 첫 조합만 반복한다(PC 에서 2026-09-23 실측: 조합 2번 (1/5) 을 49초마다 9분 내내).
+        var bossFromBanner = false
+        // 한 바퀴를 다 쓴 뒤 '다시 도전해도 되는 시각'. probeAllowedAt 은 수령 때마다 풀려서 못 쓴다.
+        var bossRetryAt = 0L
         var bossWaitUntil = 0L    // 내가 소환한 보스전이 끝날 때까지
         var bulkTries = 0         // '한번에 클리어'를 몇 번 눌러 봤는지(안 먹으면 그만 두려고)
         var loggedFirst = false   // 시작 화면 판정값을 한 번만 남기려고
@@ -296,8 +304,24 @@ object Chores {
                 ovenTried = false
                 gachaSwitchTried = false
                 probeAllowedAt = 0L
+                // ★ **눈 감고 간 도전(B)** 뒤에 수령이 일어났다면 그 보스를 깬 것이다 (2026-09-28).
+                //   B 경로는 탐색이 막혔을 때만 오므로, 그 뒤 퀘스트 완료 = 스테이지가 밀렸다는 뜻.
+                //   안 되돌리면 다음 보스에서 남은 두어 개만 써 보고 "다 써 봤지만 못 깼어요" 라고
+                //   거짓 보고하며 일찍 포기한다. 위 경고는 **배너를 보고 간 도전(A)** 이야기다.
+                if (bossTries > 0 && !bossFromBanner) { bossTries = 0; bossNoticed = false; bossRetryAt = 0L }
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 continue
+            }
+
+            // ★ 백오프가 끝났으면 **한 바퀴를 새로 시작한다** (2026-09-28).
+            //   "N분 뒤 재시도" 라고 안내해 놓고 순번을 안 되돌려서, 돌아와 봐야
+            //   bossTries < order.size 도 !bossNoticed 도 거짓이라 **아무것도 안 했다.**
+            //   그 뒤로는 퀘스트만 돌았다 - 사용자가 "그냥 퀘스트만 계속 한다" 고 한 게 이 상태다.
+            //   ⚠️ probeAllowedAt 이 아니라 bossRetryAt 으로 잰다 - probeAllowedAt 은 퀘스트를
+            //      받을 때마다 0 으로 풀리므로, 그걸로 재면 수령이 잦은 계정에서 계속 두드린다.
+            if (bossNoticed && bossRetryAt > 0L && System.currentTimeMillis() >= bossRetryAt) {
+                Bot.log(BACKOFF_MINUTES.toString() + "분이 지났어요 - 쿠키 조합을 처음부터 다시 도전합니다")
+                bossTries = 0; bossNoticed = false; bossRetryAt = 0L
             }
 
             // ── ★ 보스 배너가 보이면 **바로** 간다 (PC 봇 'B안') ──
@@ -322,7 +346,7 @@ object Chores {
                     // 실제로 소환을 눌렀을 때만 한 칸을 쓴다. 배너를 못 찾아 그냥 돌아왔으면
                     // 싸우지도 않고 '전부 실패' 로 가 버린다(예전 사고와 같은 모양).
                     if (Boss.challengeOnce(n)) {
-                        bossTries++
+                        bossTries++; bossFromBanner = true   // A 경로 - 배너가 사라지면 깼다고 봐도 된다
                         bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
                     } else Runner.sleep(3000)
                     continue
@@ -334,17 +358,21 @@ object Chores {
                     Bot.log("쿠키 조합 " + Boss.orderLabel() + " 을 다 도전했지만 못 깼어요 - 손으로 한 번 밀어 주세요 (" + BACKOFF_MINUTES + "분 뒤 재시도)")
                     Runner.set("보스에 막혔어요", "손으로 한 번 밀어 주세요 · " + BACKOFF_MINUTES + "분 뒤 다시 해 볼게요")
                     probeAllowedAt = System.currentTimeMillis() + BACKOFF_MINUTES * 60_000
+                    bossRetryAt = probeAllowedAt
                     Runner.sleep(8000); continue
                 }
-            } else if (bossTries > 0 || bossNoticed) {
+            } else if ((bossTries > 0 || bossNoticed) && bossFromBanner) {
                 // ★ **배너가 사라졌다 = 이 보스는 끝났다**(깼거나 애초에 없다).
                 //   조합 순번은 **여기서만** 되돌린다.
                 //
                 //   ⚠️ 예전엔 퀘스트를 받을 때마다 되돌렸는데, 스테이지가 높은 계정은 퀘스트가
                 //      초 단위로 완료된다 — 그래서 조합 1·2 만 반복하고 **3·4·5 로 넘어가지
                 //      못했다**(사용자 신고). 퀘스트가 바뀌는 것과 보스가 바뀌는 것은 별개다.
+                //   ⚠️ 단, **배너를 보고 간 도전(A)일 때만** 그렇다 (2026-09-28).
+                //      탐색이 막혀 눈 감고 간 도전(B)은 배너가 원래 없으므로, 여기서 되돌리면
+                //      순번이 영원히 0 -> 첫 조합만 무한 반복하고 3·4·5 도 '막혔습니다' 안내도 못 간다.
                 Bot.log("보스 배너가 사라졌어요 - 쿠키 조합을 처음(" + Boss.order()[0] + "번)부터 다시 셉니다")
-                bossTries = 0; bossNoticed = false
+                bossTries = 0; bossNoticed = false; bossRetryAt = 0L
             }
 
             // ── 미완료 퀘스트 ──
@@ -371,6 +399,11 @@ object Chores {
                 ovenTried = false
                 gachaSwitchTried = false
                 probeAllowedAt = 0L
+                // ★ **눈 감고 간 도전(B)** 뒤에 수령이 일어났다면 그 보스를 깬 것이다 (2026-09-28).
+                //   B 경로는 탐색이 막혔을 때만 오므로, 그 뒤 퀘스트 완료 = 스테이지가 밀렸다는 뜻.
+                //   안 되돌리면 다음 보스에서 남은 두어 개만 써 보고 "다 써 봤지만 못 깼어요" 라고
+                //   거짓 보고하며 일찍 포기한다. 위 경고는 **배너를 보고 간 도전(A)** 이야기다.
+                if (bossTries > 0 && !bossFromBanner) { bossTries = 0; bossNoticed = false; bossRetryAt = 0L }
                 Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
                 Runner.sleep(3000); continue
             }
@@ -386,7 +419,7 @@ object Chores {
                 // 여기까지 왔으면 '스테이지 클리어형'이 거의 확실하다 = 배너는 있는데 이펙트에 가렸을 수 있다.
                 // 그래서 이 경로에서만 배너 기준을 느슨하게 본다(그래도 **찾은 자리**만 누른다).
                 if (Boss.challengeOnce(n, loose = true)) {
-                    bossTries++
+                    bossTries++; bossFromBanner = false   // B 경로 - 배너가 원래 없다. 없다고 순번을 되돌리면 안 된다
                     bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
                     continue
                 }
@@ -399,6 +432,7 @@ object Chores {
             }
             Runner.set("보스에 막혔어요", "손으로 한 번 밀어 주세요 · " + BACKOFF_MINUTES + "분 뒤 다시 해 볼게요")
             probeAllowedAt = System.currentTimeMillis() + BACKOFF_MINUTES * 60_000
+            bossRetryAt = probeAllowedAt
             Runner.sleep(8000)
         }
         if (Runner.running) Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요")

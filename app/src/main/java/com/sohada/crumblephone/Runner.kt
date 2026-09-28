@@ -509,8 +509,14 @@ object Runner {
      * ⚠️ 받은 그 자리에서 읽을 것 — 다음 `shot()` 이 이 장을 recycle 한다.
      */
     private fun updateMyRecord(b: Bitmap) {
-        val v = Ocr.readPower(b, 1040, 1300, 350, 80) ?: return
-        if (v < 1_000_000L) return          // 한 자리 오독을 기록으로 삼지 않는다
+        // 랭킹 줄 위에 무엇이 붙느냐에 따라 칸이 아래위로 밀릴 수 있다(토벌 탭 줄이 시즌마다
+        // 밀려 로비 판정이 통째로 죽은 적이 있다). 그래서 못 읽으면 y 를 ±40 만 훑어 본다.
+        var v: Long? = null
+        for (dy in intArrayOf(0, -40, 40)) {
+            val t = Ocr.readPower(b, 1040, 1300 + dy, 350, 80)
+            if (t != null && t >= 1_000_000L) { v = t; break }   // 한 자리 오독을 기록으로 삼지 않는다
+        }
+        if (v == null) return
         myRecord = v
         if (myRecordStart == 0L) {
             myRecordStart = v
