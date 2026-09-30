@@ -31,6 +31,17 @@ object Runner {
         set(v) { if (field != v) { field = v; statusAt = System.currentTimeMillis() } }
     @Volatile var lastResult = ""          // 끝난 뒤에도 남길 결과
     /**
+     * 끝난 뒤 **정산 창**에 띄울 여러 줄 글. 화면이 한 번 보여 주고 지운다(`takeSummary`).
+     * `lastResult` 는 카드에 남는 한 줄이고, 이건 '무엇을 얼마나 했나' 를 펼쳐 놓은 것이다.
+     */
+    @Volatile var lastSummary = ""
+    /** 정산 창을 **한 번만** 띄우려고, 읽어 가면서 지운다. */
+    @Synchronized fun takeSummary(): String {
+        val s = lastSummary
+        lastSummary = ""
+        return s
+    }
+    /**
      * 진행률 0~100. **-1 이면 막대를 숨긴다.**
      * 진짜 분모가 있을 때만 채운다 — 없는 걸 지어내면 막대가 거짓말을 한다.
      * `set()` 으로 새 상태를 쓰면 자동으로 -1 이 된다(다음 단계로 넘어갔으니 앞 막대는 의미가 없다).

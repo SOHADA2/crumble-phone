@@ -46,6 +46,15 @@ object Chores {
     private const val PROBE_DID = 1       // 뽑기·상자·오븐을 대신 해 줬다
     private const val PROBE_CLAIMED = 2   // 누르고 보니 완료 퀘스트였다(보상을 받았다)
     private const val BACKOFF_MINUTES = 10L       // 보스에 막혔을 때 사람에게 넘기고 쉬는 시간
+
+    // ── 정산 창에 쓸 이번 실행분 내역 (2026-09-28) ─────────────────────────
+    //   사용자: "봇을 돌리고 나서 멈춤이나 종료를 눌렀을 때 정산창이 별도로 뜨지 않는 것 같아."
+    //   여태 남는 건 lastResult 한 줄뿐이었다. 무엇을 얼마나 했는지 볼 수 있게 따로 센다.
+    @Volatile var nGacha = 0
+    @Volatile var nBox = 0
+    @Volatile var nOven = 0
+    @Volatile var nBoss = 0
+    @Volatile var runStartAt = 0L
     private const val BOSS_WAIT_SEC = 35L         // 보스 소환 후 결과 대기 (실측: 전투 ~30초)
     private const val REWARD_STEPS = 6            // 보상 받기 걸음 수(미션 3탭 + 출석 3단계) — 진행률용
 
@@ -132,6 +141,9 @@ object Chores {
     private fun loop(maxQuests: Int) {
         var quests = 0            // 받아 낸 퀘스트 수
         var handled = 0           // 뽑기·상자처럼 직접 해 준 횟수
+        // 정산 창에 '어떤 걸 했는지' 를 적으려고 이번 실행분만 따로 센다(PC 관제창과 같은 내역).
+        nGacha = 0; nBox = 0; nOven = 0; nBoss = 0
+        runStartAt = System.currentTimeMillis()
         var offMain = 0           // 메인이 아닌 상태가 연속 몇 번인지
         var covered = 0           // 퀘스트 띠 가림이 연속 몇 번째인지
         var coverSig: IntArray? = null   // 직전에 잰 '덮은 것'의 지문(움직이는지 보려고)
@@ -346,6 +358,7 @@ object Chores {
                     // 실제로 소환을 눌렀을 때만 한 칸을 쓴다. 배너를 못 찾아 그냥 돌아왔으면
                     // 싸우지도 않고 '전부 실패' 로 가 버린다(예전 사고와 같은 모양).
                     if (Boss.challengeOnce(n)) {
+                        nBoss++
                         bossTries++; bossFromBanner = true   // A 경로 - 배너가 사라지면 깼다고 봐도 된다
                         bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
                     } else Runner.sleep(3000)
@@ -419,6 +432,7 @@ object Chores {
                 // 여기까지 왔으면 '스테이지 클리어형'이 거의 확실하다 = 배너는 있는데 이펙트에 가렸을 수 있다.
                 // 그래서 이 경로에서만 배너 기준을 느슨하게 본다(그래도 **찾은 자리**만 누른다).
                 if (Boss.challengeOnce(n, loose = true)) {
+                    nBoss++
                     bossTries++; bossFromBanner = false   // B 경로 - 배너가 원래 없다. 없다고 순번을 되돌리면 안 된다
                     bossWaitUntil = System.currentTimeMillis() + BOSS_WAIT_SEC * 1000
                     continue
@@ -438,6 +452,34 @@ object Chores {
         if (Runner.running) Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요")
         else Runner.set("멈췄어요", "퀘스트 " + quests + "개까지 받았어요")
         Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
+        Runner.lastSummary = buildSummary(quests, handled)
+    }
+
+    /**
+     * 정산 창에 띄울 글. **고정폭으로 그리므로 칸을 맞춰 적는다**(PC 관제창과 같은 차림).
+     * 폰은 `Runner.stop()` 이 협조적이라(플래그만 내리고 루프가 스스로 빠져나온다)
+     * 멈춤을 눌러도 여기까지 반드시 도달한다 — PC 처럼 죽이지 않는다.
+     */
+    private fun buildSummary(quests: Int, handled: Int): String {
+        val sb = StringBuilder()
+        if (runStartAt > 0L) {
+            val ms = System.currentTimeMillis() - runStartAt
+            val min = ms / 60000
+            val dur = if (min >= 60) (min / 60).toString() + "시간 " + (min % 60) + "분"
+                      else if (min >= 1) min.toString() + "분"
+                      else (ms / 1000).toString() + "초"
+            val f = java.text.SimpleDateFormat("HH:mm", java.util.Locale.KOREA)
+            sb.appendLine(f.format(java.util.Date(runStartAt)) + " ~ " + f.format(java.util.Date()) + " · " + dur)
+            sb.appendLine()
+        }
+        sb.appendLine(String.format("퀘스트 수령   %4d", quests))
+        sb.appendLine(String.format("대신 한 일    %4d   뽑기 %d · 상자 %d · 오븐 %d", handled, nGacha, nBox, nOven))
+        if (nBoss > 0) sb.appendLine(String.format("보스 도전     %4d", nBoss))
+        if (quests + handled + nBoss == 0) {
+            sb.appendLine()
+            sb.appendLine("이번에는 한 일이 없어요.")
+        }
+        return sb.toString().trimEnd()
     }
 
     /**
@@ -477,7 +519,9 @@ object Chores {
             } else {
                 Bot.log("  뽑기 화면 -> 10회 수행")
                 tapsProven = true
-                return gachaQuest(before)
+                val g = gachaQuest(before)
+                if (g == PROBE_DID) nGacha++
+                return g
             }
         }
 
@@ -495,7 +539,8 @@ object Chores {
             }
             Bot.log("  가방 열림 -> 상자 사용")
             tapsProven = true
-            return if (useBox()) PROBE_DID else PROBE_NONE
+            if (useBox()) { nBox++; return PROBE_DID }
+            return PROBE_NONE
         }
 
         if (Screen.dockRatio(b) >= 0.1) {
@@ -541,6 +586,7 @@ object Chores {
             } else {
                 ovenColdUntil = 0L
             }
+            nOven++
             return PROBE_DID
         }
 

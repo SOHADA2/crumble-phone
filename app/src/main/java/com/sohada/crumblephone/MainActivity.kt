@@ -32,6 +32,31 @@ import androidx.core.view.WindowCompat
  */
 class MainActivity : ListActivity() {
 
+    /**
+     * 정산 창. 표를 그리므로 **고정폭 글꼴**로 띄운다 — 비례 글꼴이면 칸이 안 맞는다
+     * (PC 관제창도 본문만 Consolas 로 바꿔 같은 문제를 풀었다).
+     * 화면이 앞에 없을 때 띄우면 터지므로 `isFinishing` 을 본다.
+     */
+    private fun showSummaryDialog(text: String) {
+        if (text.isEmpty() || isFinishing) return
+        val tv = TextView(this).apply {
+            setText(text)
+            typeface = Typeface.MONOSPACE
+            textSize = 13f
+            setTextColor(t.label2)
+            val pad = dp(20)
+            setPadding(pad, dp(14), pad, dp(4))
+        }
+        val d = android.app.AlertDialog.Builder(this)
+            .setTitle("봇 정산")
+            .setView(tv)
+            .setPositiveButton("확인", null)
+            .create()
+        d.show()
+        styleDialog(d)
+    }
+
+
     private val ui = Handler(Looper.getMainLooper())
     private val REQ_CAP = 1001
 
@@ -349,6 +374,12 @@ class MainActivity : ListActivity() {
         }
         lblTask.setTextColor(if (running) t.green else if (stopping) t.orange else t.label2)
         lblStatus.text = Runner.status
+        // ★ 정산 창 — 돌다가 끝나면 '무엇을 얼마나 했나' 를 창으로 보여 준다 (2026-09-28).
+        //   사용자: "멈춤이나 종료를 눌렀을 때 정산창이 별도로 뜨지 않는 것 같아."
+        //   Chores 가 끝에서 lastSummary 를 채우고, 여기서 **한 번만** 꺼내 띄운다
+        //   (takeSummary 가 읽으면서 지우므로 tick 이 계속 돌아도 다시 안 뜬다).
+        if (!Runner.running && Runner.lastSummary.isNotEmpty()) showSummaryDialog(Runner.takeSummary())
+
         lblDetail.text = if (Runner.detail.isNotEmpty()) Runner.detail
                          else if (Runner.lastResult.isNotEmpty()) "지난 결과 · " + Runner.lastResult else ""
         lblDetail.visibility = if (lblDetail.text.isNullOrEmpty()) View.GONE else View.VISIBLE
