@@ -62,6 +62,12 @@
             android:exported="false"
             android:label="쿠키 사전" />
 
+        <!-- 일일 던전 던전별 컨트롤 — 방향키 + 시간표 (설정 → 일일 던전 컨트롤) -->
+        <activity
+            android:name=".DailyPlanActivity"
+            android:exported="false"
+            android:label="던전별 컨트롤" />
+
         <!-- 덱 1~5 구성 (설정 → 게임) -->
         <activity
             android:name=".DeckSetupActivity"

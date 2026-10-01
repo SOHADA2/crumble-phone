@@ -105,6 +105,16 @@ object DailyPlan {
         return Plan(sorted, repeat, errs)
     }
 
+    /**
+     * 계획 → 글 (2026-10-01 · 방향키 편집 화면이 저장할 때). PC `ConvertTo-DailyPlanText` 와 같은 모양.
+     * 편집은 칸으로 하고 저장은 **엔진이 이미 읽는 글 형식** 그대로 — 엔진·PC 형식은 하나도 안 바뀐다.
+     */
+    fun toText(steps: List<Step>, repeat: Double): String {
+        val lines = steps.sortedBy { it.at }.map { fmt(it.at) + " " + it.dir + " " + fmt(it.dur) }.toMutableList()
+        if (repeat > 0 && lines.isNotEmpty()) lines.add("반복 " + fmt(repeat))
+        return lines.joinToString("\n")
+    }
+
     /** 사람이 읽는 한 줄 요약(편집 창 미리보기·로그에 같이 쓴다). PC `Format-DailyPlan` 과 같은 모양. */
     fun format(p: Plan): String {
         if (p.steps.isEmpty()) return "조작 안 함 (자동 전투만)"
