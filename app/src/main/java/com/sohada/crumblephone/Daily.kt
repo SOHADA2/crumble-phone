@@ -187,10 +187,12 @@ object Daily {
             // ── 남은 열쇠를 다 쓰고, (광고 제거가 있으면) [SKIP] 으로 더 받아 또 쓴다 ──
             var fought = 0
             var adUsed = 0
+            dWins = 0; dLosses = 0; gaveUp = false
             while (Runner.running) {
                 if (!Runner.awaitGame()) break
                 fought += runKeys(idx, name)
                 if (!Runner.running) break
+                if (gaveUp) break        // 연달아 졌다 — [SKIP] 으로 횟수를 더 받아 봐야 또 진다
                 if (!Prefs.adFree || adUsed >= AD_MAX) break
                 val s0 = Runner.shot() ?: break
                 if (!Screen.atDailyEntry(s0) || !Screen.hasDailyAdSkip(s0)) break
@@ -228,6 +230,8 @@ object Daily {
                 }
             }
             if (fought > 0) battled++
+            if (fought > 0) Bot.log("던전 " + idx + "(" + name + "): " + fought + "판 (승 " + dWins + " · 패 " + dLosses + ")" +
+                (if (gaveUp) " · 연달아 져서 넘어감" else ""))
             if (!Runner.running) break
 
             // ── 수령 전에 던전 화면이 '안정'됐는지 본다 ──
@@ -254,7 +258,7 @@ object Daily {
             // 던전마다 창을 여닫던 걸 없애서 한 바퀴가 눈에 띄게 빨라진다.
             if (!Screen.hasRedDot(b, Screen.DOT_ACHIEVE)) {
                 Bot.log("던전 " + idx + ": 받을 달성 보상이 없어요(빨간 점 없음) - 건너뜁니다")
-                results.add(name + " " + (if (fought > 0) fought.toString() + "판" else "열쇠 없음"))
+                results.add(name + " " + (if (fought > 0) fought.toString() + "판" + lossTag() else "열쇠 없음"))
                 Runner.lastResult = results.joinToString(" · ")
                 Runner.shot()?.let {
                     if (Screen.atDailyEntry(it)) Runner.tap(Screen.DAILY_NEXT, 2000)
@@ -282,7 +286,7 @@ object Daily {
                 Bot.log("던전 " + idx + ": 달성 보상 창이 안 열렸어요 - 건너뜁니다")
             }
 
-            results.add(name + " " + (if (fought > 0) fought.toString() + "판" else "열쇠 없음"))
+            results.add(name + " " + (if (fought > 0) fought.toString() + "판" + lossTag() else "열쇠 없음"))
             Runner.lastResult = results.joinToString(" · ")
 
             // ── ▶ 다음 던전 ──
@@ -334,7 +338,7 @@ object Daily {
 
     private fun battleOver(): Boolean {
         val s = Runner.shot() ?: return false
-        return Screen.atDailyEntry(s) || Screen.isDailyKeyPopup(s)
+        return Screen.atDailyEntry(s) || Screen.isDailyKeyPopup(s) || Screen.isDailyDefeat(s)   // 지면 조작을 멈춘다
     }
 
     private fun runPlan(name: String) {
@@ -388,9 +392,19 @@ object Daily {
         Bot.log("  컨트롤: 계획 끝 (" + done + " 번 움직임)")
     }
 
+    // ── 승패 (2026-10-01) ── 던전마다 다시 센다. 지면 입장권이 돌아와 기회가 안 줄므로 연달아 지면 넘어간다.
+    private var dWins = 0
+    private var dLosses = 0
+    private var gaveUp = false
+    private const val MAX_LOSS_STREAK = 2
+    private fun lossTag(): String = (if (gaveUp) "·연속 패배" else "") + (if (dLosses > 0) "(패 " + dLosses + ")" else "")
+
     private fun runKeys(idx: Int, name: String): Int {
         var fought = 0
         var idle = 0
+        var lossStreak = 0
+        var fightAt = 0L           // 마지막으로 [도전하기] 를 누른 시각(돌아왔을 때 승리로 칠지 가른다)
+        var defeatOpen = false     // 이미 센 패배 화면이 아직 떠 있나(✕ 가 한 번에 안 닫혀도 두 번 세지 않게)
         // ⚠️ 2026-09-09: 예전엔 던전당 260초 고정이었다. 전투 한 판이 40~60초라 기회가 4~5개면
         //    **남은 기회가 있는데도 시간에 걸려 끊겼다**(PC 로그: 던전 하나에 296초 쓴 판이 있다).
         //    끊길 때 로그도 없어서 '그냥 끝나버린다'로 보였다(사장님 지적).
@@ -408,7 +422,44 @@ object Daily {
                 Runner.tap(intArrayOf(720, 430), 1500)   // 판 바깥을 눌러 닫는다
                 break
             }
+            if (Screen.isDailyDefeat(s)) {
+                // ⚠️ 처음 볼 때만 센다 — ✕ 가 한 번에 안 닫혀 다음 바퀴에 또 보면 한 번 졌는데 '연달아 2번' 이 된다.
+                var counted = false
+                if (!defeatOpen) {
+                    dLosses++; lossStreak++; fightAt = 0L; counted = true
+                    Bot.log("  패배 (이 던전 연속 " + lossStreak + "번) - 입장권은 돌아왔어요. [✕] 로 닫습니다")
+                    Runner.set("일일 던전 " + idx + "번째", name + " · 패배 " + dLosses + "번")
+                }
+                val pt = Screen.defeatClose(s) ?: Screen.TOBOL_CLOSE
+                Runner.tap(pt, 1500)
+                var closed = false
+                for (k in 1..8) {
+                    if (!Runner.running) break
+                    val n = Runner.shot()
+                    if (n != null && Screen.atDailyEntry(n)) { closed = true; break }
+                    if (k == 4 && n != null && Screen.isDailyDefeat(n)) Runner.tap(pt, 1500)   // 한 번 더
+                    Runner.sleep(400)
+                }
+                defeatOpen = !closed
+                if (!closed) Bot.log("  패배 화면이 안 닫혀요 - 잠시 뒤 다시 봅니다")
+                if (counted && lossStreak >= MAX_LOSS_STREAK) {
+                    Bot.log("던전 " + idx + ": 연달아 " + lossStreak + "번 졌어요 - 이 던전은 넘어갑니다 (컨트롤을 조정해 보세요)")
+                    gaveUp = true
+                    break
+                }
+                deadline = System.currentTimeMillis() + stallMs   // 진전 있음 → 시계 다시
+                continue
+            }
             if (Screen.atDailyEntry(s)) {
+                defeatOpen = false
+                // 싸우고 돌아왔다 = 이겼다(졌으면 위에서 DEFEAT 로 걸린다).
+                // ⚠️ 너무 빨리(8초 안에) 돌아왔으면 승리로 치지 않는다 — [도전하기] 가 안 먹혀 그대로 있던 것이다.
+                if (fightAt > 0L) {
+                    val took = (System.currentTimeMillis() - fightAt) / 1000
+                    if (took >= 8) { dWins++; lossStreak = 0; Bot.log("  승리 (" + took + "초)") }
+                    else { fought--; Bot.log("  도전이 시작되지 않은 것 같아요 - 다시 누릅니다") }
+                    fightAt = 0L
+                }
                 if (Screen.dailyChallengeDone(s)) break        // 청록 = 남은 열쇠 없음
                 if (Screen.dailyChallengeOpen(s)) {            // 주황 = 아직 남음
                     idle = 0
@@ -416,6 +467,7 @@ object Daily {
                     Runner.set("일일 던전 " + idx + "번째", name + " · " + fought + "번째 도전")
                     Runner.setProgress(2, 4)
                     Runner.tap(Screen.DAILY_CHALLENGE, 3000)
+                    fightAt = System.currentTimeMillis() - 3000      // 누른 시각(위 탭이 3초 기다렸다)
                     // 그 던전에 적어 둔 컨트롤을 따라 움직인다(없으면 자동 전투만).
                     // 이름은 순번으로 붙지만 진입 직후 목록을 맨 위로 정리하므로 순서가 고정이다(실측 확인).
                     runPlan(name)

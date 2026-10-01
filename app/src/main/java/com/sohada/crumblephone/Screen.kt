@@ -824,6 +824,64 @@ object Screen {
      * 판정: 팝업 판은 **완전한 단색**이라 멀리 떨어진 네 점이 전부 같은 청록이다(PC 실측 `R21 G142 B160`).
      *       던전 배경은 그림이라 점마다 색이 달라 안 걸린다(실측 6장 전수 확인).
      */
+    /**
+     * ══ 일일 던전 패배(DEFEAT) 화면 (2026-10-01) ══ — PC daily.ps1 `Test-DailyDefeat` 와 같은 판정.
+     * 사장님: "이렇게 패배하면 못 알아먹는 것 같은데 일일 던전은?" — 어두운 막 + 하늘색 DEFEAT + 아래 주황 [✕].
+     * 예전엔 '아직 전투 중' 으로 보고 기다리기만 했다. ⚠️ 지면 **입장권이 돌아와서** 기회가 안 줄므로,
+     * 못 이기는 던전이면 계속 지면서 15분 상한까지 매달린다 → 알아보고 닫고, 연달아 지면 넘어간다.
+     *
+     * 셋 다 맞아야 패배다(사장님 화면 실측):
+     *  ① **단색 막** — 멀리 떨어진 다섯 점이 전부 R10 G54 B75(아홉 점 모두 정확히 같은 값). 그림이면 점마다 다르다.
+     *  ② **하늘색 DEFEAT 글자** — 글자 띠의 16.5% 가 하늘색(기준 6%).
+     *  ③ **주황 [✕]** — 아래 가운데의 66% 가 주황(기준 25%).
+     * ⚠️ ③ 만으로는 안 된다 — **메인·가방·토벌 화면에도 같은 자리에 주황 단추가 있다**(PC 시험에서 확인).
+     *    ① 이 그것들을 전부 걸러 낸다.
+     */
+    private val DEFEAT_FLAT = arrayOf(intArrayOf(80, 300), intArrayOf(1360, 300), intArrayOf(720, 600),
+                                      intArrayOf(80, 1700), intArrayOf(1360, 1700))
+
+    fun isDailyDefeat(b: Bitmap): Boolean {
+        var r0 = -1; var g0 = -1; var b0 = -1
+        for (p in DEFEAT_FLAT) {
+            val c = px(b, p[0], p[1])
+            val r = Color.red(c); val g = Color.green(c); val bl = Color.blue(c)
+            if (!(r < 35 && g in 36..79 && bl in 56..99)) return false
+            if (r0 < 0) { r0 = r; g0 = g; b0 = bl }
+            else if (Math.abs(r - r0) > 12 || Math.abs(g - g0) > 12 || Math.abs(bl - b0) > 12) return false
+        }
+        var hit = 0; var n = 0
+        var y = 900
+        while (y <= 1650) {
+            var x = 150
+            while (x <= 1300) {
+                val c = px(b, x, y); n++
+                val r = Color.red(c); val g = Color.green(c); val bl = Color.blue(c)
+                if (bl > 200 && g > 130 && r < 200 && bl - r > 40) hit++
+                x += 20
+            }
+            y += 20
+        }
+        if (n == 0 || hit.toDouble() / n < 0.06) return false
+        return defeatClose(b) != null
+    }
+
+    /** 패배 화면 주황 [✕] 의 한가운데(설계 좌표). 주황이 25% 안 되면 null — 고정 좌표 대신 **찾은 자리**를 누른다. */
+    fun defeatClose(b: Bitmap): IntArray? {
+        var sx = 0L; var sy = 0L; var hits = 0; var tot = 0
+        var y = 2900
+        while (y <= 3100) {
+            var x = 640
+            while (x <= 790) {
+                val c = px(b, x, y); tot++
+                if (Color.red(c) > 150 && Color.green(c) < 100 && Color.blue(c) < 50) { hits++; sx += x; sy += y }
+                x += 8
+            }
+            y += 8
+        }
+        if (tot == 0 || hits.toDouble() / tot < 0.25) return null
+        return intArrayOf((sx / hits).toInt(), (sy / hits).toInt())
+    }
+
     fun isDailyKeyPopup(b: Bitmap): Boolean {
         val pts = arrayOf(
             intArrayOf(720, 1250), intArrayOf(720, 1400),
