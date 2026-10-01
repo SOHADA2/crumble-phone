@@ -33,7 +33,16 @@ object DailyPlan {
         "왼아래" to intArrayOf(270, 1650),
         "오른아래" to intArrayOf(1170, 1650)
     )
+    /**
+     * '손 떼기' (2026-10-01) — 아무것도 안 누르고 자동 전투에 맡기는 시간. PC `$DAILY_REST` 와 같다.
+     * 사장님: "화살표가 누르고 있는 거 기준이야? 손을 떼는 것도 하나 만들어 줘야 할 듯 — 화살표 없는 가운데."
+     * 엔진은 이 동작에서 **아무것도 누르지 않는다**(그 시간은 다음 동작을 기다리는 동안 흘러간다).
+     * 한 낱말이어야 한다(`3 손떼기 2` — 띄어 쓰면 세 칸 형식이 깨진다).
+     */
+    const val REST = "손떼기"
+
     private val ALIAS = mapOf(
+        "손뗌" to REST, "떼기" to REST, "멈춤" to REST, "쉬기" to REST, "대기" to REST, "정지" to REST, "가운데" to REST,
         "상" to "위", "하" to "아래", "좌" to "왼쪽", "우" to "오른쪽", "왼" to "왼쪽", "오른" to "오른쪽", "오" to "오른쪽",
         "왼쪽위" to "왼위", "오른쪽위" to "오른위", "왼쪽아래" to "왼아래", "오른쪽아래" to "오른아래",
         "위왼쪽" to "왼위", "위오른쪽" to "오른위", "아래왼쪽" to "왼아래", "아래오른쪽" to "오른아래"
@@ -57,6 +66,7 @@ object DailyPlan {
             if (t.length > suf.length && t.endsWith(suf)) { t = t.removeSuffix(suf); break }
         }
         if (DIRS.containsKey(t)) return t
+        if (t == REST) return t
         return ALIAS[t]
     }
 

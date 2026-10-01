@@ -368,6 +368,9 @@ object Daily {
             }
             if (!Runner.running) return
 
+            // 손 떼기 — 아무것도 누르지 않는다. 그 시간은 다음 동작을 기다리는 동안(위 대기 고리) 흘러가고
+            // 그 사이에도 전투가 끝났는지 본다. 움직임 수에도 안 센다.
+            if (st.dir == DailyPlan.REST) { i++; continue }
             val to = DailyPlan.DIRS[st.dir]
             if (to == null) { i++; continue }
             val ms = (st.dur * 1000 * DailyPlan.PAD).toLong()

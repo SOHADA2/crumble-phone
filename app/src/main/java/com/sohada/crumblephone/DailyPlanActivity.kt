@@ -89,8 +89,9 @@ class DailyPlanActivity : ListActivity() {
             })
             addView(text("던전별 컨트롤", 26f, t.gold, Typeface.DEFAULT_BOLD).apply { setPadding(dp(14), dp(12), dp(20), 0) })
         })
-        root.addView(text("방향키를 누르면 동작이 하나씩 붙어요. [도전하기] 를 누르고 3초 뒤가 0초예요. " +
-            "동작이 없는 동안은 자동 전투가 싸워요.", 13f, t.label3).apply { setPadding(dp(22), dp(6), dp(22), dp(10)) })
+        root.addView(text("화살표 = 그 방향으로 누른 채 그 시간만큼 끌고 있기. 가운데 ○ = 손 떼기" +
+            "(아무것도 안 누르고 자동 전투에 맡김). 누르면 앞 동작 바로 뒤에 이어 붙어요. " +
+            "[도전하기] 를 누르고 3초 뒤가 0초예요.", 13f, t.label3).apply { setPadding(dp(22), dp(6), dp(22), dp(10)) })
 
         // 던전 탭
         tabRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(18), 0, dp(18), 0) }
@@ -169,8 +170,13 @@ class DailyPlanActivity : ListActivity() {
     private fun snap(v: Double) = Math.round(v * 2) / 2.0               // 0.5초 눈금
     private fun changed() { dirty = true; steps().sortBy { it.at }; render() }
 
+    /**
+     * 방향키 → 동작 추가. ★ 2026-10-01 3차: **앞 동작 바로 뒤에 이어 붙인다**(예전엔 1초 빈틈을 저절로 넣었다 —
+     * 그 빈틈이 곧 '손 뗀 시간' 이었는데 안 보였다). 손 뗀 시간은 가운데 [손 떼기] 로 직접 넣는다.
+     * 첫 동작만 1초에 시작한다(전투 직후엔 조이스틱이 바로 안 먹는다).
+     */
     private fun addStep(d: String) {
-        val at = if (steps().isEmpty()) 1.0 else snap(lastEnd() + 1.0)
+        val at = if (steps().isEmpty()) 1.0 else snap(lastEnd())
         if (at > DailyPlan.MAX_AT) { Toast.makeText(this, "더 붙일 자리가 없어요", Toast.LENGTH_SHORT).show(); return }
         steps().add(E(at, d, 1.0))
         changed()
@@ -278,13 +284,13 @@ class DailyPlanActivity : ListActivity() {
 
     /** 3x3 방향키판. 가운데는 비운다. */
     private fun dirPad(cellDp: Int, onPick: (String) -> Unit): View {
-        val order = arrayOf("왼위", "위", "오른위", "왼쪽", "", "오른쪽", "왼아래", "아래", "오른아래")
+        val order = arrayOf("왼위", "위", "오른위", "왼쪽", DailyPlan.REST, "오른쪽", "왼아래", "아래", "오른아래")   // 가운데 = 손 떼기
         return GridLayout(this).apply {
             rowCount = 3; columnCount = 3
             for (d in order) {
-                val v: View = if (d.isEmpty()) View(this@DailyPlanActivity)
-                else ArrowView(this@DailyPlanActivity, d, t.label).apply {
-                    background = t.chunky(t.cell, dpf(12f), dp(1), dp(3))
+                val v: View = ArrowView(this@DailyPlanActivity, d, t.label).apply {
+                    // 손 떼기는 한 단계 어둡게 — 움직이는 단추들과 갈려 보이게
+                    background = t.chunky(if (d == DailyPlan.REST) t.fill else t.cell, dpf(12f), dp(1), dp(3))
                     setOnClickListener { onPick(d) }
                 }
                 addView(v, GridLayout.LayoutParams().apply { width = dp(cellDp); height = dp(cellDp); setMargins(dp(3), dp(3), dp(3), dp(3)) })
@@ -328,6 +334,12 @@ class ArrowView(ctx: Context, var dir: String, private val color: Int) : View(ct
 
         /** (cx,cy) 를 가운데로, 크기 size 의 화살표를 dir 방향으로 그린다. */
         fun drawArrow(c: Canvas, cx: Float, cy: Float, size: Float, dir: String, p: Paint) {
+            if (dir == DailyPlan.REST) {
+                // 손 떼기 = 화살표 없는 고리(손을 뗀 조이스틱 손잡이). 채우는 붓을 빌려 테두리만 그린다.
+                val ring = Paint(p).apply { style = Paint.Style.STROKE; strokeWidth = maxOf(2f, size / 4.5f) }
+                c.drawCircle(cx, cy, size * 0.62f, ring)
+                return
+            }
             val s = size / 10f                              // 원래 그림은 가로 1~20 · 세로 2~18 (가운데 10.5,10)
             val path = Path().apply {
                 moveTo(1f, 8f); lineTo(11f, 8f); lineTo(11f, 2f); lineTo(20f, 10f)
@@ -353,6 +365,8 @@ class PlanTimeline(ctx: Context, private val th: Theme) : View(ctx) {
     private val track = Paint().apply { color = th.separator }
     private val block = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = th.orange }
     private val arrow = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = th.bg }
+    private val restBlock = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = th.cell }
+    private val restIcon = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = th.label }
     private val tick = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = th.label3; textSize = 10 * d }
     private val rep = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = th.gold; strokeWidth = 1.6f * d; style = Paint.Style.STROKE
@@ -385,8 +399,10 @@ class PlanTimeline(ctx: Context, private val th: Theme) : View(ctx) {
         for ((at, dir, dur) in steps) {
             val x = (pad + at * sx).toFloat()
             val bw = maxOf(6 * d, (dur * sx).toFloat() - 1)
-            c.drawRoundRect(RectF(x, top, x + bw, top + bh), 6 * d, 6 * d, block)
-            if (bw >= 16 * d) ArrowView.drawArrow(c, x + bw / 2, top + bh / 2, 9 * d, dir, arrow)
+            // 손 떼기는 어두운 막대 + 크림색 고리 — 움직이는 주황 막대가 도드라지게
+            val rest = dir == DailyPlan.REST
+            c.drawRoundRect(RectF(x, top, x + bw, top + bh), 6 * d, 6 * d, if (rest) restBlock else block)
+            if (bw >= 16 * d) ArrowView.drawArrow(c, x + bw / 2, top + bh / 2, 9 * d, dir, if (rest) restIcon else arrow)
         }
         if (repeat > 0) {
             val rx = (pad + repeat * sx).toFloat()
