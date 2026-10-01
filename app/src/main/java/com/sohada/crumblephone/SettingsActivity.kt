@@ -32,8 +32,7 @@ class SettingsActivity : ListActivity() {
     private lateinit var rowArena: LinearLayout
     private lateinit var rowOven: LinearLayout
     private lateinit var rowCharge: LinearLayout
-    private lateinit var rowDCharge: LinearLayout
-    private lateinit var rowDDelay: LinearLayout
+    private lateinit var rowDPlan: LinearLayout
     private lateinit var rowDelay: LinearLayout
     private lateinit var rowBossOrder: LinearLayout
     private lateinit var rowGame: LinearLayout
@@ -107,10 +106,9 @@ class SettingsActivity : ListActivity() {
             subtitle = "보스 소환 직후엔 아직 조이스틱이 안 먹어요") { cycleDelay() }
         rowCharge = row("보스전 돌진 시간", value = chargeLabel(),
             subtitle = "보스가 나오면 오른쪽으로 밀어붙여요 · 달려들면 잘 잡히는 보스가 많아요") { cycleCharge() }
-        rowDDelay = row("던전 돌진 시작 지연", value = secLabel(Prefs.dailyDelayMs),
-            subtitle = "도전 직후엔 아직 조이스틱이 안 먹어요") { cycleDDelay() }
-        rowDCharge = row("경험치 던전 돌진 시간", value = dChargeLabel(),
-            subtitle = "경험치 던전에서만 아래로 밀어붙여요 · 보스전 돌진과는 별개 값이에요") { cycleDCharge() }
+        // 예전 두 줄('던전 돌진 시작 지연'·'경험치 던전 돌진 시간')을 던전별 타임라인 하나로 바꿨다(2026-10-01).
+        rowDPlan = row("일일 던전 컨트롤", value = DailyPlan.summary(),
+            subtitle = "던전마다 몇 초에 어느 방향으로 움직일지 적어요 · 보스전 돌진과는 별개") { editDailyPlan() }
         val (rAd, _) = switchRow("광고 제거 있음",
             "일일 던전에서 [SKIP]으로 횟수를 더 받아요", Prefs.adFree) { Prefs.adFree = it }
         gRun.addView(rAd); gRun.addView(separator())
@@ -119,8 +117,7 @@ class SettingsActivity : ListActivity() {
         gRun.addView(rowBossOrder); gRun.addView(separator())
         gRun.addView(rowDelay); gRun.addView(separator())
         gRun.addView(rowCharge); gRun.addView(separator())
-        gRun.addView(rowDDelay); gRun.addView(separator())
-        gRun.addView(rowDCharge)
+        gRun.addView(rowDPlan)
         root.addView(gRun)
         // 보스 조합 순서 바로 다음에 온다 — '어느 덱을 쓸까' 와 '그 덱에 누구를 넣을까' 는 한 이야기다.
         root.addView(deckSection())
@@ -588,22 +585,162 @@ class SettingsActivity : ListActivity() {
         val v = ms / 1000.0
         return (if (v == v.toInt().toDouble()) v.toInt().toString() else v.toString()) + "초"
     }
-    private fun dChargeLabel(): String {
-        val ms = Prefs.dailyChargeMs
-        if (ms <= 0) return "안 함"
-        return secLabel(ms)
-    }
-    private fun cycleDCharge() {
-        val c = Prefs.DAILY_CHARGE_CHOICES
-        val i = c.indexOf(Prefs.dailyChargeMs)
-        Prefs.dailyChargeMs = c[(if (i < 0) 0 else i + 1) % c.size]
-        rowDCharge.setValue(dChargeLabel(), t.label2)
-    }
-    private fun cycleDDelay() {
-        val c = Prefs.DAILY_DELAY_CHOICES
-        val i = c.indexOf(Prefs.dailyDelayMs)
-        Prefs.dailyDelayMs = c[(if (i < 0) 0 else i + 1) % c.size]
-        rowDDelay.setValue(secLabel(Prefs.dailyDelayMs), t.label2)
+    /**
+     * ══ 일일 던전 — 던전별 컨트롤 편집 (2026-10-01) ══
+     * PC 관제창 [던전별 컨트롤 편집] 과 같은 일. 예전 두 줄('던전 돌진 시작 지연'·'경험치 던전 돌진 시간')을
+     * 대신한다 — 그 값은 처음 열 때 경험치 = '{지연} 아래 {돌진}' 으로 옮겨져 있다([DailyPlan.load]).
+     *
+     * 글로 적게 했다(줄 복사·숫자 고치기가 칸 고르기보다 빠르다). 대신 **치는 즉시**
+     * '이렇게 움직여요' 와 틀린 줄(몇 번째·왜)을 보여 준다. 해석은 실제로 도는 것과 같은 [DailyPlan.parse].
+     */
+    private fun editDailyPlan() {
+        val names = DailyPlan.DUNGEONS
+        val texts = HashMap<String, String>()
+        for (d in names) texts[d] = DailyPlan.load(d)
+        var cur = names[0]
+        var ready = false      // ⚠️ 처음 채우기 전에 '지금 글을 담아 두기' 를 하면 경험치 글을 빈 글로 덮어쓴다(PC 에서 잡은 함정)
+        var loading = false
+        var dirty = false
+
+        val tabs = HashMap<String, TextView>()
+        val tabRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val tabScroll = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(tabRow)
+        }
+        val edit = android.widget.EditText(this).apply {
+            typeface = Typeface.MONOSPACE
+            textSize = 15f
+            setTextColor(t.label)
+            setHintTextColor(t.label3)
+            hint = "1 아래 2\n6 왼쪽 1.5\n반복 12"
+            gravity = Gravity.TOP or Gravity.START
+            minLines = 6
+            maxLines = 12
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(t.fill); cornerRadius = dpf(10f); setStroke(dp(1), t.separator)
+            }
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        val cap = text("이렇게 움직여요", 11f, t.label3)
+        val preview = text("", 14f, t.gold)
+        val errs = text("", 12f, t.orange)
+        val legend = text(
+            "한 줄에 한 동작 —  시작초  방향  길이초\n" +
+            "방향: 위 · 아래 · 왼쪽 · 오른쪽 · 왼위 · 오른위 · 왼아래 · 오른아래\n" +
+            "반복 12 → 12초마다 처음부터 · # 뒤는 메모\n" +
+            "[도전하기] 를 누르고 3초 뒤가 0초예요. 길이는 0.3~10초.", 12f, t.label2)
+
+        fun refreshTabs() {
+            for (d in names) {
+                val tv = tabs[d] ?: continue
+                val n = DailyPlan.parse(texts[d]).steps.size
+                tv.text = if (n > 0) "$d · $n" else d
+                val on = d == cur
+                tv.setTextColor(if (on) t.bg else t.label)
+                tv.background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(if (on) t.orange else t.cell)
+                    cornerRadius = dpf(14f)
+                    setStroke(dp(1), if (on) t.orange else t.separator)
+                }
+            }
+        }
+        fun showPlan() {
+            val p = DailyPlan.parse(edit.text.toString())
+            preview.text = DailyPlan.format(p)
+            if (p.errors.isEmpty()) { errs.text = ""; errs.visibility = View.GONE }
+            else {
+                errs.text = "건너뛰는 줄:\n" + p.errors.joinToString("\n") { "  · $it" }
+                errs.visibility = View.VISIBLE
+            }
+        }
+        fun load(d: String) {
+            if (ready) texts[cur] = edit.text.toString()      // 탭을 바꿔도 지금 글이 안 날아가게
+            cur = d
+            loading = true
+            edit.setText(texts[d] ?: "")
+            edit.setSelection(edit.text.length)
+            loading = false
+            ready = true
+            refreshTabs()
+            showPlan()
+        }
+
+        for (d in names) {
+            val tv = text(d, 14f, t.label).apply {
+                setPadding(dp(14), dp(7), dp(14), dp(7))
+                setOnClickListener { load(d) }
+            }
+            val lp = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { rightMargin = dp(6) }
+            tabRow.addView(tv, lp)
+            tabs[d] = tv
+        }
+        edit.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                if (loading) return
+                dirty = true
+                texts[cur] = edit.text.toString()
+                showPlan()
+                refreshTabs()
+            }
+        })
+
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(6), dp(16), dp(4))
+            addView(tabScroll)
+            addView(edit, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
+            addView(cap, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
+            addView(preview)
+            addView(errs, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
+            addView(legend, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(12) })
+        }
+        val scroll = ScrollView(this).apply { addView(box) }
+        load(cur)
+        dirty = false
+
+        val d = android.app.AlertDialog.Builder(this)
+            .setTitle("던전별 컨트롤")
+            .setView(scroll)
+            .setPositiveButton("저장", null)
+            .setNegativeButton("닫기", null)
+            .setNeutralButton("예시 넣기", null)
+            .create()
+        d.setOnShowListener {
+            styleDialog(d)
+            d.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+                texts[cur] = edit.text.toString()
+                for (n in names) DailyPlan.save(n, texts[n] ?: "")
+                rowDPlan.setValue(DailyPlan.summary(), t.label2)
+                Bot.log("일일 던전 컨트롤을 저장했어요 — " + DailyPlan.summary())
+                Toast.makeText(this, "저장했어요 — 다음 판부터 이대로 움직여요", Toast.LENGTH_SHORT).show()
+                d.dismiss()
+            }
+            // 저장 안 하고 닫으려 하면 한 번 묻는다 — 몇 줄 고쳐 놓고 그냥 닫아 날리는 일이 제일 흔하다.
+            d.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).setOnClickListener {
+                if (!dirty) { d.dismiss(); return@setOnClickListener }
+                val ask = android.app.AlertDialog.Builder(this)
+                    .setTitle("저장하지 않고 닫을까요?")
+                    .setMessage("고친 내용이 아직 저장되지 않았어요.")
+                    .setPositiveButton("버리고 닫기") { _, _ -> d.dismiss() }
+                    .setNegativeButton("계속 고치기", null)
+                    .create()
+                ask.setOnShowListener { styleDialog(ask) }
+                ask.show()
+            }
+            d.getButton(android.content.DialogInterface.BUTTON_NEUTRAL).setOnClickListener {
+                val ex = "# 예시 — 숫자를 바꿔 가며 맞춰 보세요\n1   아래    2\n6   왼쪽    1.5\n9.5 오른위  1\n반복 12"
+                val now = edit.text.toString().trimEnd()
+                edit.setText(if (now.isEmpty()) ex else now + "\n" + ex)
+                edit.setSelection(edit.text.length)
+            }
+        }
+        d.show()
     }
 
     private fun delayLabel(): String {

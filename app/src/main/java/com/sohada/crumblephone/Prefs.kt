@@ -165,6 +165,14 @@ object Prefs {
     var dailyDelayMs: Int
         get() = sp?.getInt("dailyDelayMs", 2000) ?: 2000
         set(v) { sp?.edit()?.putInt("dailyDelayMs", v)?.apply() }
+
+    /**
+     * 일일 던전 던전별 컨트롤 글(2026-10-01). **한 번도 저장 안 했으면 `null`** —
+     * 그래야 [DailyPlan.load] 가 '아직 안 정함' 과 '일부러 비움' 을 가려 옛 설정을 옮겨 올 수 있다.
+     * 위 `dailyChargeMs` / `dailyDelayMs` 는 이제 그 옮겨 오기에만 쓴다.
+     */
+    fun dailyPlan(name: String): String? = sp?.getString("dailyPlan_" + name, null)
+    fun setDailyPlan(name: String, text: String) { sp?.edit()?.putString("dailyPlan_" + name, text)?.apply() }
     var bossDelayMs: Int
         get() = sp?.getInt("bossDelayMs", 6000) ?: 6000
         set(v) { sp?.edit()?.putInt("bossDelayMs", v)?.apply() }

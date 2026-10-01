@@ -317,24 +317,72 @@ object Daily {
      *   신호일 뿐 **없다고 없는 게 아니다.** 버튼 색이 유일하게 믿을 수 있는 신호다.
      */
     /**
-     * 경험치 던전 '아래로 돌진' — 보스전 돌진과 같은 원리다.
-     * 전장을 누른 채 끌면 **조이스틱**이라 그 방향으로 움직이는데,
-     * 보스는 오른쪽으로 달려들지만 **경험치 던전은 아래로 내려가는 게 낫다**(사장님 지정).
+     * ══ 던전별 컨트롤 실행 (2026-10-01) ══
+     * 예전 `dailyCharge()` 는 **경험치 던전에서 아래로 한 번**만 밀었다. 던전 레벨이 오르면서
+     * 그것만으론 못 깨게 됐다(사장님). 이제 던전마다 적어 둔 타임라인([DailyPlan])을 따라
+     * **몇 초에 어느 방향으로 몇 초** 를 차례로 민다.
      *
-     * ⚠️ 옵션은 보스와 **따로**다(`dailyChargeMs` / `dailyDelayMs`). 0 이면 안 한다.
-     * ⚠️ 도전 직후엔 아직 조이스틱이 안 먹는다 → 지연을 두고 민다.
-     * ⚠️ `swipe` 는 선형으로 끌어 처음 얼마간이 데드존에 묻힌다 → 10% 더 준다(보스와 같은 보정).
+     * ★ **미는 동안 화면을 본다.** 폰의 `TapService.swipe` 는 원래 **기다리지 않는다**(제스처를 맡기고 바로
+     *   돌아온다). 그래서 미는 그 시간에 한 장 찍어 전투가 끝났는지 알 수 있다 — 타이밍을 하나도 안 늦춘다.
+     *   (PC 는 `input swipe` 가 막혀서 일부러 프로세스를 띄워 놓고 같은 일을 한다.)
+     * ⚠️ PC 모의 시험에서 잡힌 결함: 차례로 막아 가며 밀면 간격이 촘촘할 때(반복 1.5초) 볼 틈이 없어
+     *    **전투가 4초에 끝났는데 6.3초까지 계속 밀었다.** 같은 함정을 처음부터 피한다.
+     * ⚠️ 짧게 미는 동작(0.9초 미만)은 화면 한 장이 더 길어서 다음 동작을 밀어낸다 →
+     *    마지막으로 본 지 1.5초가 넘었을 때만 본다.
      */
-    private fun dailyCharge() {
-        val chargeMs = Prefs.dailyChargeMs
-        if (chargeMs <= 0 || !Runner.running) return
-        Runner.sleep(Prefs.dailyDelayMs.toLong())
-        if (!Runner.running) return
-        val ms = (chargeMs * 1.10).toLong()
-        Bot.log("  경험치 던전 - 아래로 " + (chargeMs / 1000.0) + "초 밀어붙임")
-        TapService.swipe(Screen.DCHARGE_FROM[0], Screen.DCHARGE_FROM[1],
-            Screen.DCHARGE_TO[0], Screen.DCHARGE_TO[1], ms)
-        Runner.sleep(ms + 300L)
+    private val planShown = HashSet<String>()   // 던전마다 계획 요약은 한 번만 로그에 남긴다
+
+    private fun battleOver(): Boolean {
+        val s = Runner.shot() ?: return false
+        return Screen.atDailyEntry(s) || Screen.isDailyKeyPopup(s)
+    }
+
+    private fun runPlan(name: String) {
+        val plan = DailyPlan.parse(DailyPlan.load(name))     // 판마다 다시 읽는다 — 고치면 다음 판부터
+        if (planShown.add(name)) {
+            Bot.log("  " + name + " 던전 컨트롤: " + DailyPlan.format(plan))
+            for (e in plan.errors) Bot.log("    (건너뛴 줄) " + e)
+        }
+        if (plan.steps.isEmpty() || !Runner.running) return
+
+        val t0 = System.currentTimeMillis()
+        var lastLook = t0
+        var done = 0; var cycle = 0; var i = 0
+        while (Runner.running) {
+            if (i >= plan.steps.size) {
+                if (plan.repeat == null) break
+                cycle++; i = 0
+            }
+            val st = plan.steps[i]
+            val due = st.at + (plan.repeat ?: 0.0) * cycle
+            if (due > DailyPlan.MAX_AT) break                 // 반복이 끝없이 이어지지 않게
+
+            // 차례가 올 때까지 기다리되, 시간이 남으면 그 틈에 전투가 끝났는지 본다.
+            while (Runner.running) {
+                val left = due - (System.currentTimeMillis() - t0) / 1000.0
+                if (left <= 0) break
+                if (left > 1.5) {
+                    if (battleOver()) { Bot.log("  컨트롤: 전투가 끝나 멈춤 (" + done + " 번 움직임)"); return }
+                    lastLook = System.currentTimeMillis()
+                } else { Runner.sleep((left * 1000).toLong()); break }
+            }
+            if (!Runner.running) return
+
+            val to = DailyPlan.DIRS[st.dir]
+            if (to == null) { i++; continue }
+            val ms = (st.dur * 1000 * DailyPlan.PAD).toLong()
+            TapService.swipe(DailyPlan.JOY_FROM[0], DailyPlan.JOY_FROM[1], to[0], to[1], ms)   // 기다리지 않는다
+            val swipeEnd = System.currentTimeMillis() + ms
+            var over = false
+            if (ms >= 900 || System.currentTimeMillis() - lastLook > 1500) {
+                over = battleOver(); lastLook = System.currentTimeMillis()
+            }
+            val rest = swipeEnd - System.currentTimeMillis()
+            if (rest > 0) Runner.sleep(rest)                  // 다음 동작이 이 동작을 끊지 않게 끝날 때까지
+            done++; i++
+            if (over) { Bot.log("  컨트롤: 전투가 끝나 멈춤 (" + done + " 번 움직임)"); return }
+        }
+        Bot.log("  컨트롤: 계획 끝 (" + done + " 번 움직임)")
     }
 
     private fun runKeys(idx: Int, name: String): Int {
@@ -365,9 +413,9 @@ object Daily {
                     Runner.set("일일 던전 " + idx + "번째", name + " · " + fought + "번째 도전")
                     Runner.setProgress(2, 4)
                     Runner.tap(Screen.DAILY_CHALLENGE, 3000)
-                    // 경험치 던전에서만 아래로 밀어붙인다. 이름은 순번으로 붙지만
-                    // 진입 직후 목록을 맨 위로 정리하므로 1번은 항상 경험치다(실측 확인).
-                    if (name == "경험치") dailyCharge()
+                    // 그 던전에 적어 둔 컨트롤을 따라 움직인다(없으면 자동 전투만).
+                    // 이름은 순번으로 붙지만 진입 직후 목록을 맨 위로 정리하므로 순서가 고정이다(실측 확인).
+                    runPlan(name)
                     deadline = System.currentTimeMillis() + stallMs   // 진전 있음 → 시계 다시
                     continue
                 }
