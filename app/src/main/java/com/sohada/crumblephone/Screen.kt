@@ -976,6 +976,42 @@ object Screen {
         return intArrayOf(bestRun, (topY + botY) / 2, botY - topY + 4)
     }
 
+    /**
+     * ★ 보스전 '진행 중' 판정 (PC 2026-10-12 와 같은 방식) — **게임이 스스로 소환한 보스전**도 잡는다.
+     * '자동 소환 예약 ☑' 이면 봇이 소환 안 해도 보스전이 시작되는데, 봇은 그걸 몰라 탐색하러 화면을 옮겼다.
+     * 색 평균이 아니라 **HP 바의 틀**을 본다. x 420~1040 (32점) 각 점에서
+     *   y = HP 채움(분홍) 또는 빈 칸(어두움) / y+16 = 아래 테두리(어두움) / y+48 = 시간 막대 아래 검은 선.
+     * 바 높이는 화면마다 달라(PC 실측 y428·y556) y 380~660 을 내려가며 **찾는다**.
+     * PC 실측: 실화면 387장 중 보스전 6장 전부 30~32/32, 나머지는 12 미만.
+     * 검은 화면(로딩)은 다 어두워 통과하므로 분홍이 한 점은 있어야 한다.
+     */
+    fun isBossFight(b: Bitmap): Boolean {
+        var y = 380
+        while (y <= 660) {
+            var ok = 0; var bad = 0; var pink = 0
+            var x = 420
+            while (x <= 1040) {
+                var good = false
+                val k = px(b, x, y + 48)
+                if ((Color.red(k) + Color.green(k) + Color.blue(k)) / 3 < 30) {
+                    val e = px(b, x, y + 16)
+                    if ((Color.red(e) + Color.green(e) + Color.blue(e)) / 3 < 45) {
+                        val h = px(b, x, y)
+                        val hp = Color.red(h) > 200 && Color.green(h) < 110 && Color.blue(h) > 50 && Color.blue(h) < 150
+                        if (hp) pink++
+                        good = hp || (Color.red(h) + Color.green(h) + Color.blue(h)) / 3 < 90
+                    }
+                }
+                if (good) ok++ else { bad++; if (bad > 32 - BOSSFIGHT_MIN) break }
+                x += 20
+            }
+            if (ok >= BOSSFIGHT_MIN && pink >= 1) return true
+            y += 4
+        }
+        return false
+    }
+    private const val BOSSFIGHT_MIN = 28
+
     /** 배너의 세로 중심. 없으면 -1. */
     fun findBossBanner(b: Bitmap, loose: Boolean = false): Int {
         val s = bannerScan(b)

@@ -161,6 +161,8 @@ object Chores {
         // 한 바퀴를 다 쓴 뒤 '다시 도전해도 되는 시각'. probeAllowedAt 은 수령 때마다 풀려서 못 쓴다.
         var bossRetryAt = 0L
         var bossWaitUntil = 0L    // 내가 소환한 보스전이 끝날 때까지
+        var fightSince = 0L       // 화면에 보스 HP 바가 보이기 시작한 시각(게임이 소환한 보스전 포함)
+        var fightIgnoreUntil = 0L // 판정이 너무 오래 붙어 있으면 잠깐 무시(오판 안전장치)
         var bulkTries = 0         // '한번에 클리어'를 몇 번 눌러 봤는지(안 먹으면 그만 두려고)
         var loggedFirst = false   // 시작 화면 판정값을 한 번만 남기려고
         tapsProven = false        // 증거는 실행마다 새로 모은다
@@ -203,6 +205,43 @@ object Chores {
                 Runner.sleep(4000); continue
             }
             if (powersave > 0) { powersave = 0; Bot.log("화면 정상 - 작업 재개") }
+
+            // ── 보스전 진행 중이면 퀘스트보다 보스가 먼저 (PC 2026-10-12 와 같음) ──
+            // '자동 소환 예약' 으로 **게임이 스스로 소환한** 보스전도 잡는다(Screen.isBossFight).
+            // 스테이지를 미는 게 목적이라 보스전 동안은 탐색으로 화면을 옮기지 않고 돌진만 한다.
+            // 봇이 소환한 보스전(bossWaitUntil)은 소환 직후 이미 돌진했으니 다시 밀지 않는다.
+            val now = System.currentTimeMillis()
+            if (dock.ratio >= 0.1 && now >= fightIgnoreUntil && Screen.isBossFight(b)) {
+                if (fightSince == 0L) {
+                    fightSince = now
+                    if (now >= bossWaitUntil) {
+                        Bot.log("보스전 감지 (게임이 자동 소환) - 퀘스트는 잠시 두고 보스 먼저")
+                        val chargeMs = Prefs.bossChargeMs
+                        if (chargeMs > 0) {
+                            Runner.set("보스전 진행 중", "오른쪽으로 돌진")
+                            Bot.log("  오른쪽으로 " + (chargeMs / 1000.0) + "초 밀어붙임")
+                            val ms = (chargeMs * 1.10).toLong()
+                            TapService.swipe(Screen.CHARGE_FROM[0], Screen.CHARGE_FROM[1],
+                                Screen.CHARGE_TO[0], Screen.CHARGE_TO[1], ms)
+                            Runner.sleep(ms + 300L)
+                        }
+                    }
+                }
+                val sec = (System.currentTimeMillis() - fightSince) / 1000
+                if (sec > 180) {
+                    // 보스전은 ~30초다. 3분 내내 보이면 판정이 틀린 화면 → 5분 무시.
+                    Bot.log("  보스 HP 바 판정이 3분째 이어짐 - 오판으로 보고 5분간 무시")
+                    fightIgnoreUntil = System.currentTimeMillis() + 5 * 60_000L
+                    fightSince = 0L
+                } else {
+                    Runner.status = "보스전 진행 중"
+                    Runner.detail = sec.toString() + "초째"
+                    Runner.sleep(4000); continue
+                }
+            } else if (fightSince != 0L) {
+                Bot.log("  보스전 끝 (" + ((now - fightSince) / 1000) + "초)")
+                fightSince = 0L
+            }
 
             // ── 내가 소환한 보스전이 도는 중이면 아무것도 누르지 않고 기다린다 ──
             // 전투 중인지를 화면 색으로 알아내려던 시도는 PC 봇에서 두 번 다 실패했다
