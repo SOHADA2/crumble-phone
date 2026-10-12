@@ -985,7 +985,10 @@ object Screen {
      * PC 실측: 실화면 387장 중 보스전 6장 전부 30~32/32, 나머지는 12 미만.
      * 검은 화면(로딩)은 다 어두워 통과하므로 분홍이 한 점은 있어야 한다.
      */
-    fun isBossFight(b: Bitmap): Boolean {
+    fun isBossFight(b: Bitmap): Boolean = bossFightY(b) >= 0
+
+    /** HP 바의 y(설계 좌표). 못 찾으면 -1. 스테이지 번호는 이 y 기준으로 읽는다. */
+    fun bossFightY(b: Bitmap): Int {
         var y = 380
         while (y <= 660) {
             var ok = 0; var bad = 0; var pink = 0
@@ -1005,10 +1008,32 @@ object Screen {
                 if (good) ok++ else { bad++; if (bad > 32 - BOSSFIGHT_MIN) break }
                 x += 20
             }
-            if (ok >= BOSSFIGHT_MIN && pink >= 1) return true
+            if (ok >= BOSSFIGHT_MIN && pink >= 1) return y
             y += 4
         }
-        return false
+        return -1
+    }
+
+    /**
+     * 스테이지 번호 자리(설계 좌표 x, y, w, h). 게임이 소환한 보스전의 **승패**를 이걸로 가른다 —
+     * 이기면 번호가 넘어가고(PC 실측 278-1 보스 → 278-2), 지면 그대로다.
+     *   보스전 중: HP 바 아래 노란 글씨 / 평소: 왼쪽 위 '스테이지 278-2'
+     */
+    fun fightStageRect(hpY: Int) = intArrayOf(560, hpY + 44, 550, 52)
+    val MAIN_STAGE_RECT = intArrayOf(340, 405, 380, 70)
+    private val STAGE_RE = Regex("(\\d{1,3})\\s*[-–—]\\s*(\\d{1,2})")
+
+    /** OCR 원문에서 'N-N' 만 뽑는다(앞의 '스테이지' 는 깨져 섞인다). */
+    fun parseStage(text: String?): String? {
+        val m = STAGE_RE.find(text ?: return null) ?: return null
+        return m.groupValues[1] + "-" + m.groupValues[2]
+    }
+
+    /** 같은 스테이지인가. OCR 이 앞 글자를 숫자로 붙여 읽는 일이 있어('10-27' → '110-27') 끝이 맞으면 같다고 본다. */
+    fun sameStage(a: String, b: String): Boolean {
+        val pa = a.split("-"); val pb = b.split("-")
+        if (pa.size != 2 || pb.size != 2 || pa[1] != pb[1]) return false
+        return pa[0].endsWith(pb[0]) || pb[0].endsWith(pa[0])
     }
     private const val BOSSFIGHT_MIN = 28
 

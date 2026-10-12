@@ -163,6 +163,12 @@ object Chores {
         var bossWaitUntil = 0L    // 내가 소환한 보스전이 끝날 때까지
         var fightSince = 0L       // 화면에 보스 HP 바가 보이기 시작한 시각(게임이 소환한 보스전 포함)
         var fightIgnoreUntil = 0L // 판정이 너무 오래 붙어 있으면 잠깐 무시(오판 안전장치)
+        var fightByGame = false   // 이번 보스전을 게임이 소환했나(봇이 소환한 건 배너 경로가 조합을 돌린다)
+        var fightStage: String? = null  // 지금 보스전의 스테이지 번호(OCR)
+        var judgeStage: String? = null  // 끝난 보스전의 스테이지 — 평소 화면 번호와 비교해 승패를 가른다
+        var judgeUntil = 0L
+        var autoTries = 0         // 게임이 소환한 보스전에서 진 뒤 바꿔 쓴 조합 수(Boss.order 순번)
+        var autoNoticed = false
         var bulkTries = 0         // '한번에 클리어'를 몇 번 눌러 봤는지(안 먹으면 그만 두려고)
         var loggedFirst = false   // 시작 화면 판정값을 한 번만 남기려고
         tapsProven = false        // 증거는 실행마다 새로 모은다
@@ -211,10 +217,13 @@ object Chores {
             // 스테이지를 미는 게 목적이라 보스전 동안은 탐색으로 화면을 옮기지 않고 돌진만 한다.
             // 봇이 소환한 보스전(bossWaitUntil)은 소환 직후 이미 돌진했으니 다시 밀지 않는다.
             val now = System.currentTimeMillis()
-            if (dock.ratio >= 0.1 && now >= fightIgnoreUntil && Screen.isBossFight(b)) {
+            val fightY = if (dock.ratio >= 0.1 && now >= fightIgnoreUntil) Screen.bossFightY(b) else -1
+            if (fightY >= 0) {
                 if (fightSince == 0L) {
                     fightSince = now
-                    if (now >= bossWaitUntil) {
+                    fightStage = null; judgeStage = null
+                    fightByGame = now >= bossWaitUntil
+                    if (fightByGame) {
                         Bot.log("보스전 감지 (게임이 자동 소환) - 퀘스트는 잠시 두고 보스 먼저")
                         val chargeMs = Prefs.bossChargeMs
                         if (chargeMs > 0) {
@@ -226,6 +235,12 @@ object Chores {
                             Runner.sleep(ms + 300L)
                         }
                     }
+                }
+                else if (fightStage == null) {
+                    // 돌진이 끝난 뒤(다음 바퀴부터) 번호를 읽는다.
+                    val r = Screen.fightStageRect(fightY)
+                    fightStage = Screen.parseStage(Ocr.readText(b, r[0], r[1], r[2], r[3]))
+                    if (fightStage != null) Bot.log("  보스전 스테이지 " + fightStage)
                 }
                 val sec = (System.currentTimeMillis() - fightSince) / 1000
                 if (sec > 180) {
@@ -241,6 +256,39 @@ object Chores {
             } else if (fightSince != 0L) {
                 Bot.log("  보스전 끝 (" + ((now - fightSince) / 1000) + "초)")
                 fightSince = 0L
+                if (fightStage != null && fightByGame) { judgeStage = fightStage; judgeUntil = now + 40_000L }
+            }
+            // 끝난 보스전의 승패: 평소 화면의 스테이지 번호가 그대로면 진 것 → ⚙ 순서대로 다음 조합으로 바꿔 둔다.
+            //   (다음 자동 소환이 바뀐 덱으로 싸운다. 보스전 중엔 편성 화면이 안 열려 끝난 뒤에 바꾼다.)
+            val was = judgeStage
+            if (was != null && fightY < 0 && dock.ratio >= 0.1) {
+                val r = Screen.MAIN_STAGE_RECT
+                val nowStage = Screen.parseStage(Ocr.readText(b, r[0], r[1], r[2], r[3]))
+                if (nowStage != null) {
+                    judgeStage = null
+                    if (!Screen.sameStage(nowStage, was)) {
+                        Bot.log("  보스 깼어요 (" + was + " → " + nowStage + ")")
+                        if (autoTries > 0 || autoNoticed) { Bot.log("  조합 순번을 처음부터 다시 셉니다"); autoTries = 0; autoNoticed = false }
+                    } else {
+                        val order = Boss.order()
+                        if (autoTries >= order.size) {
+                            if (!autoNoticed) {
+                                autoNoticed = true
+                                Bot.log("스테이지 " + was + " 보스: 쿠키 조합 " + Boss.orderLabel() + " 다 졌어요 - 손으로 한 번 밀어 주세요")
+                                Runner.set("보스에 막혔어요", "조합을 다 써 봤어요 - 손으로 밀어 주세요")
+                            }
+                        } else {
+                            val n = order[autoTries]
+                            Bot.log("  보스전 졌어요 (스테이지 " + was + " 그대로) - 다음 자동 소환은 쿠키 조합 " + Boss.label(n) + "으로 (" + (autoTries + 1) + "/" + order.size + ")")
+                            Runner.set("보스 졌어요", "쿠키 조합 " + Boss.label(n) + "으로 바꾸는 중")
+                            if (Boss.switchForNextFight(n)) autoTries++
+                            else Bot.log("  조합을 못 바꿨어요 - 다음에 다시 시도합니다")
+                        }
+                    }
+                } else if (now >= judgeUntil) {
+                    Bot.log("  스테이지 번호를 못 읽어 이번 보스전 승패는 넘어갑니다")
+                    judgeStage = null
+                }
             }
 
             // ── 내가 소환한 보스전이 도는 중이면 아무것도 누르지 않고 기다린다 ──

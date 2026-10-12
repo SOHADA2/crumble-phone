@@ -213,16 +213,28 @@ object Boss {
         Bot.log("  장비 비교 팝업이 안 닫혀요 - 그래도 진행합니다")
     }
 
-    /** 쿠키 조합(프리셋) n 번으로 바꾼다. 쿠키 화면 → 프리셋 탭 → 전투 화면으로 복귀. */
-    private fun switchPreset(n: Int) {
-        if (n < 1 || n > Screen.PRESET_TABS.size) return
+    /**
+     * 게임이 소환한 보스전에서 진 뒤, 다음 자동 소환에 쓸 조합으로 바꿔 둔다. 바꿨으면 true.
+     * 이미 다음 보스전이 시작됐으면(편성 화면이 안 열린다) 건드리지 않는다.
+     */
+    fun switchForNextFight(n: Int): Boolean {
+        val s = Runner.shot() ?: return false
+        if (Screen.isBossFight(s)) return false
+        clearEquipPopup()
+        return switchPreset(n)
+    }
+
+    /** 쿠키 조합(프리셋) n 번으로 바꾼다. 쿠키 화면 → 프리셋 탭 → 전투 화면으로 복귀. 편성 화면이 열렸으면 true. */
+    private fun switchPreset(n: Int): Boolean {
+        if (n < 1 || n > Screen.PRESET_TABS.size) return false
         Runner.tap(Screen.NAV_COOKIE, 2500)
 
         // ⚠️ 편성 화면이 열린 걸 **확인하고** 누른다. 옛 좌표가 팀 진열대 배경을 가리키는 바람에
         //    쿠키 상세 화면이 열려 봇이 거기서 길을 잃은 적이 있다.
         //    화면이 아니면 조합 변경만 건너뛰고 전투로 돌아간다 — 헤매느니 조합 하나를 포기한다.
         val b = Runner.shot()
-        if (b != null && Screen.atCookieRoster(b)) {
+        val opened = b != null && Screen.atCookieRoster(b)
+        if (opened) {
             Runner.tap(Screen.PRESET_TABS[n - 1], 1500)
         } else {
             Bot.log("  편성 화면이 안 열렸어요 - 조합 " + n + " 변경을 건너뜁니다")
@@ -235,5 +247,6 @@ object Boss {
             if (Screen.atMain(s)) break
             TapService.back(); Runner.sleep(1500)
         }
+        return opened
     }
 }
