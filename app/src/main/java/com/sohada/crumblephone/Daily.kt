@@ -178,11 +178,7 @@ object Daily {
             // 켜면 게임이 봇과 상관없이 자동으로 다음 판을 이어가서 화면이 어긋난다
             // (엉뚱한 팝업 위에 탭이 들어간다). 봇이 매 판 직접 눌러
             // '한 판 끝 → 던전 화면 복귀'를 확인하며 동기적으로 나아간다.
-            for (k in 1..2) {
-                val s = Runner.shot() ?: break
-                if (!Screen.dailyContChecked(s)) break
-                Runner.tap(Screen.DAILY_CONT_CHK, 1200)
-            }
+            Runner.shot()?.let { disableCont(it) }
 
             // ── 남은 열쇠를 다 쓰고, (광고 제거가 있으면) [SKIP] 으로 더 받아 또 쓴다 ──
             var fought = 0
@@ -336,6 +332,22 @@ object Daily {
      */
     private val planShown = HashSet<String>()   // 던전마다 계획 요약은 한 번만 로그에 남긴다
 
+    /**
+     * '연속 도전' 이 켜져 있으면 끄고, 다시 보고 확인한다(최대 3번). 꺼져 있으면 아무것도 안 누른다.
+     * 던전에 들어갈 때 + **[도전하기] 직전마다** 부른다(사람이 중간에 켜거나 던전마다 따로 켜져 있어도 잡게).
+     * 이미 찍은 화면으로 먼저 보므로 꺼져 있으면 공짜다.
+     */
+    private fun disableCont(first: android.graphics.Bitmap) {
+        var at = Screen.dailyContAt(first) ?: return
+        for (k in 1..3) {
+            Bot.log("  연속 도전이 켜져 있어요 - 끕니다 (" + k + "/3) · 켜 두면 게임이 혼자 다음 판을 이어가서 컨트롤이 첫 판에만 먹어요")
+            Runner.tap(at, 1200)
+            val s = Runner.shot() ?: return
+            at = Screen.dailyContAt(s) ?: run { Bot.log("  연속 도전 꺼짐 확인"); return }
+        }
+        Bot.log("  ⚠️ 연속 도전을 3번 눌렀는데 안 꺼져요 - 그대로 진행합니다 (게임에서 직접 꺼 주세요)")
+    }
+
     private fun battleOver(): Boolean {
         val s = Runner.shot() ?: return false
         return Screen.atDailyEntry(s) || Screen.isDailyKeyPopup(s) || Screen.isDailyDefeat(s)   // 지면 조작을 멈춘다
@@ -462,6 +474,7 @@ object Daily {
                 }
                 if (Screen.dailyChallengeDone(s)) break        // 청록 = 남은 열쇠 없음
                 if (Screen.dailyChallengeOpen(s)) {            // 주황 = 아직 남음
+                    disableCont(s)     // 누르기 직전마다 — 켜져 있으면 이번 판부터 컨트롤이 어긋난다
                     idle = 0
                     fought++
                     Runner.set("일일 던전 " + idx + "번째", name + " · " + fought + "번째 도전")

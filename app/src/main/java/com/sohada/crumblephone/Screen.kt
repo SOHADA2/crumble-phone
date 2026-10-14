@@ -741,11 +741,32 @@ object Screen {
         return Color.red(c) < 80 && Color.green(c) > 140 && Color.blue(c) > 150
     }
 
-    /** '연속 도전' 이 켜져 있나(노란 체크)? 켜져 있으면 꺼야 한다 — 아래 Daily 주석 참고. */
-    fun dailyContChecked(b: Bitmap): Boolean {
-        val c = px(b, DAILY_CONT_CHK[0], DAILY_CONT_CHK[1])
-        return Color.red(c) > 230 && Color.green(c) > 200 && Color.blue(c) < 120
+    /**
+     * '연속 도전' 이 켜져 있으면 **누를 자리**(노란 체크의 가운데), 꺼져 있으면 null.
+     *
+     * ★ 2026-10-14 (PC 와 같이): 예전엔 DAILY_CONT_CHK **한 점**이 노란가만 봤다. PC 에서 상자를 다시 재 보니
+     *   x1048~1110 · y2598~2650 이고 그 점은 **상자 아래 테두리**였다 — 체크(✓)가 그 점을 안 지나가면
+     *   켜져 있어도 '꺼짐' 으로 읽고 그대로 돌았다 → 게임이 혼자 다음 판을 이어가 ① 던전별 컨트롤이 첫 판에만
+     *   먹고 ② 진입 화면이 안 돌아와 끝내 '쉬는 중'(사장님 증상 둘 다).
+     *   → 상자 둘레의 **노란 점 개수**로 본다(꺼진 상자는 흰 테두리뿐이라 0개). 폰이 몇십 px 밀려 그려도
+     *     걸리게 넉넉히 잡았다. 누를 자리는 찾은 노란 점들의 가운데라 틀릴 수가 없다.
+     */
+    fun dailyContAt(b: Bitmap): IntArray? {
+        var n = 0; var sx = 0; var sy = 0
+        var y = 2560
+        while (y <= 2700) {
+            var x = 1020
+            while (x <= 1140) {
+                val c = px(b, x, y)
+                if (Color.red(c) > 200 && Color.green(c) > 150 && Color.blue(c) < 120) { n++; sx += x; sy += y }
+                x += 4
+            }
+            y += 4
+        }
+        return if (n >= 12) intArrayOf(sx / n, sy / n) else null
     }
+
+    fun dailyContChecked(b: Bitmap): Boolean = dailyContAt(b) != null
 
     private val DAILY_SIG_PTS = arrayOf(
         intArrayOf(160, 600), intArrayOf(280, 600), intArrayOf(400, 600),
