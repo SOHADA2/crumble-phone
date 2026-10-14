@@ -92,9 +92,18 @@ object Chores {
     /** 방금 어느 탭에서 뽑았나(진단·기억용). */
     private var lastPulledTab = "모름"
 
-    fun start(ctx: Context, maxQuests: Int = 0) {
+    /**
+     * ★ 스테이지 돌파 (2026-10-14 · PC `bot.ps1 -StageOnly` 와 같음) — 퀘스트는 손대지 않고 **스테이지만 민다.**
+     * 하는 일: 보스전 감지·돌진 · 진 보스전이면 ⚙ 보스 조합 순서대로 덱 교체 · '보스 소환' 배너면 덱 바꿔 소환 ·
+     * 팝업·절전 처리. 안 하는 일: 퀘스트 수령 · 탐색(뽑기/상자/오븐) · 한번에 클리어 ·
+     * '탐색이 막혔으니 눈 감고 보스'(퀘스트를 안 보니 막혔다고 볼 근거가 없다).
+     */
+    private var stageOnly = false
+
+    fun start(ctx: Context, maxQuests: Int = 0, stage: Boolean = false) {
         if (!Runner.guard()) return
-        Runner.running = true; Runner.task = "퀘스트"
+        stageOnly = stage
+        Runner.running = true; Runner.task = if (stage) "스테이지 돌파" else "퀘스트"
         ovenTried = false
         gachaSwitchTried = false
         thread(name = "chores") {
@@ -369,7 +378,7 @@ object Chores {
             // ── '퀘스트 NNNN 까지 한번에 클리어 하기' ──
             // 밀린 퀘스트를 한 번에 받는 새 버튼. 띠가 파랗게 바뀌어 기존 판정이 전부 놓쳤다
             // (완료도 미완료도 아니라 계속 탐색만 돌았다). 보이면 눌러서 받고 이어간다.
-            if (Screen.isBulkClear(b)) {
+            if (!stageOnly && Screen.isBulkClear(b)) {
                 bulkTries++
                 if (bulkTries > 3) {
                     // 세 번 눌러도 안 바뀐다 = 누를 수 없는 상태다. 더 두드리지 않고 넘어간다.
@@ -388,7 +397,7 @@ object Chores {
                 }
             } else bulkTries = 0
 
-            if (ratio >= doneRatio) {
+            if (!stageOnly && ratio >= doneRatio) {
                 quests++
                 Runner.set("퀘스트 보상 받는 중", "지금까지 " + quests + "개")
                 Bot.log("퀘스트 수령 (" + fmt(ratio) + ")")
@@ -475,6 +484,13 @@ object Chores {
                 bossTries = 0; bossNoticed = false; bossRetryAt = 0L
             }
 
+            // 스테이지 돌파는 여기까지 — 탐색도, 눈 감고 보스도 안 한다. 게임이 스테이지를 밀고 보스가 나오면 위가 받는다.
+            if (stageOnly) {
+                Runner.status = "스테이지 미는 중"
+                Runner.detail = "보스가 나오면 바로 도전 · 보스 덱 " + Boss.orderShort()
+                Runner.sleep(3000); continue
+            }
+
             // ── 미완료 퀘스트 ──
             Runner.status = "퀘스트 기다리는 중"
             Runner.detail = "받은 퀘스트 " + quests + "개 · 대신 해 준 일 " + handled + "번"
@@ -536,7 +552,8 @@ object Chores {
             bossRetryAt = probeAllowedAt
             Runner.sleep(8000)
         }
-        if (Runner.running) Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요")
+        if (stageOnly) Runner.set(if (Runner.running) "스테이지 돌파 끝" else "멈췄어요", "보스 도전 " + nBoss + "번")
+        else if (Runner.running) Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요")
         else Runner.set("멈췄어요", "퀘스트 " + quests + "개까지 받았어요")
         Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
         Runner.lastSummary = buildSummary(quests, handled)

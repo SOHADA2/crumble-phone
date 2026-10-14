@@ -264,7 +264,7 @@ object Overlay {
         contentBtns.clear()
         val items = listOf<Pair<String, (Context) -> Unit>>(
             "퀘스트" to { c -> Chores.start(c) },
-            "보스전" to { c -> Boss.start(c) },
+            "스테이지 돌파" to { c -> Chores.start(c, stage = true) },
             "토벌전" to { c -> Runner.startTobol(c) },
             "일일 던전" to { c -> Daily.start(c) },
             "아레나" to { c -> Arena.start(c) },
@@ -312,7 +312,7 @@ object Overlay {
             // [보스전] 바로 아래에 **어느 조합으로 도전할지**를 한 줄 붙인다.
             // 게임을 보는 중에는 설정 화면까지 들어가지 않는다 — 여기서 바로 확인돼야 한다.
             // 폭을 버튼과 같은 168dp 로 못박는다(패널이 WRAP_CONTENT 라, 안 박으면 이 줄이 패널을 늘린다).
-            if (name == "보스전") {
+            if (name == "스테이지 돌파") {
                 bossLine = TextView(ctx).apply {
                     setTextColor(Color.parseColor("#C8B79F"))
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)

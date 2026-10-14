@@ -236,8 +236,9 @@ class MainActivity : ListActivity() {
         // 값 칸에 조합 순서를 그대로 보여 준다 — ⚙ 에서 2·3·4 만 골라 뒀는데
         // 여기는 '1~5' 라고 적혀 있으면, 안 도는 게 고장으로 보인다.
         // (설정에서 바꾸고 돌아올 수 있으니 onResume 에서 다시 그린다)
-        rowBoss = row("보스전", value = Boss.orderShort(), subtitle = "막힌 보스만 한 번 · 쿠키 조합") {
-            withCapture { Boss.start(applicationContext) }
+        // ★ 2026-10-14: [보스전](막힌 보스에 한 번) → [스테이지 돌파] — 퀘스트는 빼고 스테이지만 민다(PC 와 같이).
+        rowBoss = row("스테이지 돌파", value = Boss.orderShort(), subtitle = "퀘스트 없이 스테이지만 · 지면 보스 덱 바꿔 도전") {
+            withCapture { Chores.start(applicationContext, stage = true) }
         }
         val rBoss = rowBoss
         val rTobol = row("토벌전", subtitle = "멈출 때까지 계속 도전 · 최고 점수 기록") {
