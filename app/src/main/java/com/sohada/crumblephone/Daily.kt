@@ -86,6 +86,7 @@ object Daily {
         var d = 1
         var misses = 0          // 칸을 안 쓰고 다시 시도한 횟수
         var battleWaits = 0     // '아직 전투 중' 이라 그냥 더 기다린 횟수
+        var nextTries = 0       // 같은 던전이 그대로 보여 ▶ 를 다시 누른 횟수
         var brokeOff = ""       // 비어 있지 않으면 중간에 끊긴 것
         while (d <= maxDungeons && Runner.running) {
             if (!Runner.awaitGame()) break
@@ -165,6 +166,30 @@ object Daily {
             // 던전 안에서는 ▶ 로 오른쪽으로 넘어간다. 첫 던전으로 되돌아오면 한 바퀴다.
             // 중간 던전끼리는 서로 비슷해서 전부와 대조하면 일찍 멈춘다 — 첫 던전하고만 본다.
             val sig = Screen.dailySig(b)
+            // ★ 이미 돈 던전을 **새 던전으로 세지 않는다** (2026-10-14 · PC 와 같이, '옵션과 다르게 돌진' 제보).
+            //   이름은 화면에서 읽지 않고 **방문 순번**으로 붙는다. ▶ 가 안 먹어 같은 던전에 그대로 있는데
+            //   그걸 다음 칸으로 세면, 그 던전이 **다음 던전의 이름과 컨트롤**로 돈다.
+            //   · 방금 돈 던전 그대로(첫 던전 하나만 돈 경우 포함) → ▶ 를 다시 누른다(두 번까지)
+            //   · 더 앞에 돈 던전(첫 던전 말고) → 순서가 어긋나 이름을 믿을 수 없다 → 끝낸다
+            var seenAt = -1
+            for (k in 1 until sigs.size) { if (Screen.dailySigMatch(sigs[k], sig)) { seenAt = k; break } }
+            val stillHere = (sigs.size == 1 && Screen.dailySigMatch(sigs[0], sig)) ||
+                (seenAt >= 1 && seenAt == sigs.size - 1)
+            if (stillHere) {
+                if (nextTries >= 2) {
+                    Bot.log("  ▶ 를 눌러도 다음 던전으로 안 넘어가요 - 종료")
+                    brokeOff = "다음 던전으로 못 넘어감"; break
+                }
+                nextTries++
+                Bot.log("  방금 돈 던전(" + nameOf(sigs.size) + ")이 그대로 보여요 - ▶ 를 다시 누릅니다 (" + nextTries + "/2)")
+                Runner.tap(Screen.DAILY_NEXT, 2200)
+                continue
+            }
+            if (seenAt >= 1) {
+                Bot.log("  앞서 돈 던전(" + nameOf(seenAt + 1) + ")이 다시 보여요 - 순서가 어긋나 이름·컨트롤을 믿을 수 없어 끝냅니다")
+                brokeOff = "던전 순서가 어긋남"; break
+            }
+            nextTries = 0
             if (sigs.isNotEmpty() && Screen.dailySigMatch(sigs[0], sig)) {
                 Bot.log("첫 던전으로 되돌아옴 - 한 바퀴 완료"); break
             }
