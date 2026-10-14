@@ -375,7 +375,8 @@ object Daily {
 
     private fun battleOver(): Boolean {
         val s = Runner.shot() ?: return false
-        return Screen.atDailyEntry(s) || Screen.isDailyKeyPopup(s) || Screen.isDailyDefeat(s)   // 지면 조작을 멈춘다
+        return Screen.atDailyEntry(s) || Screen.isDailyKeyPopup(s) || Screen.isDailyDefeat(s) ||
+            Screen.isDailyResult(s)   // 지거나 시간이 끝나면 조작을 멈춘다
     }
 
     private fun runPlan(name: String) {
@@ -433,7 +434,8 @@ object Daily {
     private var dWins = 0
     private var dLosses = 0
     private var gaveUp = false
-    private const val MAX_LOSS_STREAK = 2
+    // ⚠️ 2026-10-14: 예전엔 연달아 2번 지면 던전을 넘겼다(MAX_LOSS_STREAK). 사장님: "타임아웃이나 패배면 계속 도전할 수
+    //    있도록" → 넘기지 않는다. 끝없이 매달리지 않는 장치는 던전당 15분 상한(hardStop) 하나다.
     private fun lossTag(): String = (if (gaveUp) "·연속 패배" else "") + (if (dLosses > 0) "(패 " + dLosses + ")" else "")
 
     private fun runKeys(idx: Int, name: String): Int {
@@ -442,6 +444,9 @@ object Daily {
         var lossStreak = 0
         var fightAt = 0L           // 마지막으로 [도전하기] 를 누른 시각(돌아왔을 때 승리로 칠지 가른다)
         var defeatOpen = false     // 이미 센 패배 화면이 아직 떠 있나(✕ 가 한 번에 안 닫혀도 두 번 세지 않게)
+        var resultSeen = 0         // 결과 막을 연속으로 본 장 수 — 두 장째에 누른다
+        var lastSig: IntArray? = null
+        var staticSince = 0L       // 화면이 멈춘 채 있기 시작한 시각(0 = 안 멈춤)
         // ⚠️ 2026-09-09: 예전엔 던전당 260초 고정이었다. 전투 한 판이 40~60초라 기회가 4~5개면
         //    **남은 기회가 있는데도 시간에 걸려 끊겼다**(PC 로그: 던전 하나에 296초 쓴 판이 있다).
         //    끊길 때 로그도 없어서 '그냥 끝나버린다'로 보였다(사장님 지적).
@@ -459,13 +464,32 @@ object Daily {
                 Runner.tap(intArrayOf(720, 430), 1500)   // 판 바깥을 눌러 닫는다
                 break
             }
-            if (Screen.isDailyDefeat(s)) {
+            // 결과 화면 — 패배는 바로, 그 밖(시간 초과 등)은 막이 두 장 연속이거나 화면이 10초 넘게 멈췄을 때.
+            val isDefeat = Screen.isDailyDefeat(s)
+            var isResult = false
+            var why = "패배"
+            if (!isDefeat && Screen.isDailyResult(s)) {
+                resultSeen++
+                if (resultSeen >= 2) { isResult = true; why = "결과 화면(시간 초과 등)" }
+            } else if (!isDefeat) resultSeen = 0
+            if (!isDefeat && !isResult && !Screen.atDailyEntry(s)) {
+                val sig = Screen.screenSig(s)
+                if (Screen.sameScreen(lastSig, sig)) {
+                    if (staticSince == 0L) staticSince = System.currentTimeMillis()
+                    else if (System.currentTimeMillis() - staticSince >= 10_000 && Screen.defeatClose(s) != null) {
+                        isResult = true; why = "멈춘 결과 화면"
+                    }
+                } else staticSince = 0L
+                lastSig = sig
+            }
+            if (isDefeat || isResult) {
+                resultSeen = 0; staticSince = 0L; lastSig = null
                 // ⚠️ 처음 볼 때만 센다 — ✕ 가 한 번에 안 닫혀 다음 바퀴에 또 보면 한 번 졌는데 '연달아 2번' 이 된다.
                 var counted = false
                 if (!defeatOpen) {
                     dLosses++; lossStreak++; fightAt = 0L; counted = true
-                    Bot.log("  패배 (이 던전 연속 " + lossStreak + "번) - 입장권은 돌아왔어요. [✕] 로 닫습니다")
-                    Runner.set("일일 던전 " + idx + "번째", name + " · 패배 " + dLosses + "번")
+                    Bot.log("  " + why + " (이 던전 연속 " + lossStreak + "번) - [✕] 로 닫고 다시 도전합니다")
+                    Runner.set("일일 던전 " + idx + "번째", name + " · " + why + " " + dLosses + "번 · 다시 도전")
                 }
                 val pt = Screen.defeatClose(s) ?: Screen.TOBOL_CLOSE
                 Runner.tap(pt, 1500)
@@ -474,21 +498,20 @@ object Daily {
                     if (!Runner.running) break
                     val n = Runner.shot()
                     if (n != null && Screen.atDailyEntry(n)) { closed = true; break }
-                    if (k == 4 && n != null && Screen.isDailyDefeat(n)) Runner.tap(pt, 1500)   // 한 번 더
+                    if (k == 4 && n != null && (Screen.isDailyDefeat(n) || Screen.isDailyResult(n))) Runner.tap(pt, 1500)   // 한 번 더
                     Runner.sleep(400)
                 }
                 defeatOpen = !closed
-                if (!closed) Bot.log("  패배 화면이 안 닫혀요 - 잠시 뒤 다시 봅니다")
-                if (counted && lossStreak >= MAX_LOSS_STREAK) {
-                    Bot.log("던전 " + idx + ": 연달아 " + lossStreak + "번 졌어요 - 이 던전은 넘어갑니다 (컨트롤을 조정해 보세요)")
-                    gaveUp = true
-                    break
+                if (!closed) Bot.log("  결과 화면이 안 닫혀요 - 잠시 뒤 다시 봅니다")
+                if (counted && lossStreak >= 3 && lossStreak % 3 == 0) {
+                    Bot.log("  (연달아 " + lossStreak + "번 못 깼어요 - 계속 도전합니다. 컨트롤을 조정해 보세요)")
                 }
                 deadline = System.currentTimeMillis() + stallMs   // 진전 있음 → 시계 다시
                 continue
             }
             if (Screen.atDailyEntry(s)) {
                 defeatOpen = false
+                staticSince = 0L; lastSig = null
                 // 싸우고 돌아왔다 = 이겼다(졌으면 위에서 DEFEAT 로 걸린다).
                 // ⚠️ 너무 빨리(8초 안에) 돌아왔으면 승리로 치지 않는다 — [도전하기] 가 안 먹혀 그대로 있던 것이다.
                 if (fightAt > 0L) {

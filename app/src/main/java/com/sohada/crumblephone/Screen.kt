@@ -886,6 +886,44 @@ object Screen {
         return defeatClose(b) != null
     }
 
+    /**
+     * ══ 결과 화면(패배 · 시간 초과 …) 넓게 (2026-10-14 · PC daily.ps1 `Test-DailyResult` 와 같은 판정) ══
+     * 사장님: "타임아웃이나 패배면 계속 도전할 수 있어야 하는데 그 화면에서 멈춰 있어."
+     * [isDailyDefeat] 는 DEFEAT 글자와 막의 정확한 색까지 요구해서 **시간 초과** 화면은 못 잡는다.
+     * → 진입 화면이 아니고 + 다섯 점이 서로 거의 같은 **어두운** 색(색 자체는 안 따짐) + 아래 가운데 주황 [✕].
+     * ⚠️ [✕] 만으로는 안 된다(메인·가방·토벌에도 있다). 부르는 쪽은 두 장 연속일 때만 누른다.
+     */
+    fun isDailyResult(b: Bitmap): Boolean {
+        if (atDailyEntry(b)) return false
+        var r0 = -1; var g0 = -1; var b0 = -1
+        for (p in DEFEAT_FLAT) {
+            val c = px(b, p[0], p[1])
+            val r = Color.red(c); val g = Color.green(c); val bl = Color.blue(c)
+            if (r + g + bl > 330) return false
+            if (r0 < 0) { r0 = r; g0 = g; b0 = bl }
+            else if (Math.abs(r - r0) > 14 || Math.abs(g - g0) > 14 || Math.abs(bl - b0) > 14) return false
+        }
+        return defeatClose(b) != null
+    }
+
+    /** 화면이 멈춰 있나 보려는 거친 지문(6x8 = 48점). 전투는 자동 전투 애니메이션으로 늘 바뀐다. */
+    fun screenSig(b: Bitmap): IntArray {
+        val v = IntArray(48)
+        var n = 0
+        for (gy in 0 until 8) for (gx in 0 until 6) {
+            val c = px(b, 120 + gx * 240, 300 + gy * 340)
+            v[n++] = Color.red(c) + Color.green(c) + Color.blue(c)
+        }
+        return v
+    }
+    /** 48점 중 크게(합 40 넘게) 바뀐 점이 4개 이하 = 멈춘 화면. */
+    fun sameScreen(a: IntArray?, b: IntArray?): Boolean {
+        if (a == null || b == null || a.size != b.size) return false
+        var diff = 0
+        for (i in a.indices) if (Math.abs(a[i] - b[i]) > 40) diff++
+        return diff <= 4
+    }
+
     /** 패배 화면 주황 [✕] 의 한가운데(설계 좌표). 주황이 25% 안 되면 null — 고정 좌표 대신 **찾은 자리**를 누른다. */
     fun defeatClose(b: Bitmap): IntArray? {
         var sx = 0L; var sy = 0L; var hits = 0; var tot = 0
