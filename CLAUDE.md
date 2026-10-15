@@ -2794,3 +2794,10 @@ PC 쪽에서 해석기·엔진 모의·편집 창 클릭 시나리오로 확인�
 
 ### 2차 (같은 날) — 시간 초과 결과의 [✕] 는 원래 목록으로 나간다
 PC 실측: 결과 [✕] 한 번에 매번 목록. 되돌아가기를 '2번까지' 로 세서 세 번째에 던전을 포기했다 → 연달아 실패만 센다(성공 시 0).
+
+## 덱 구성·쿠키 사전·덱 이름 기능 제거 (2026-10-15)
+사장님 판단: **실제로 쓸 일이 없다** → 앱을 가볍게 하려고 통째로 뺐다.
+- 지운 파일: `Deck.kt`·`DeckDict.kt`·`DeckDictActivity.kt`·`DeckSetupActivity.kt`(쿠키 카드 인식으로 프리셋에 쿠키 배치·쿠키 사전), `NameTags.kt`(편성 화면 탭 위 덱 이름표), `GameFont.kt` + `assets/fonts/cookierun_black.ttf`(이름표 전용 글꼴, 약 2MB)
+- 같이 뺀 것: 매니페스트 액티비티 2개, 설정의 '쿠키 조합' 묶음(덱 구성·사전 만들기/점검/보기)과 '조합 이름표 보이기' 스위치, 진단의 사전 출력, `Prefs` 의 `deckDict`·`deckNames`·`deckUnseen`·`deckChecked`·`showNameTags`·`presetName`, `Screen` 의 편성 격자·카드 지문·상세 화면 판정(`atDeckEdit`·`findStarRows`·`cardThumb` 등). 옛 SharedPreferences 값은 그냥 남아도 무해(아무도 안 읽음).
+- **덱(프리셋)은 이제 번호로만 보인다**: `Boss.label(n)` = `N번 덱`, `orderLabel()` = `2 → 3 → 4번 덱`, `orderPanel()`/`orderShort()` = `2·3·4번 덱`.
+- **그대로 남은 것**: 보스 조합 순서(`Prefs.bossOrder`·`Boss.order()`·설정 '보스 조합 순서'), 번호로 프리셋 바꾸기(`Boss.switchPreset`·`atCookieRoster`), 한글 OCR(`Ocr.readKorean`, 실험실 글자 점검이 씀).

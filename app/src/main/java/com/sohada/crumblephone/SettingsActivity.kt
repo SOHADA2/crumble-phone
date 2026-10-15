@@ -98,10 +98,6 @@ class SettingsActivity : ListActivity() {
         // 안 짜 둔 칸으로도 한 번씩 싸우면 한 바퀴에 35초씩 그냥 버린다 → 쓸 것만 고르게 한다.
         rowBossOrder = row("보스 조합 순서", value = Boss.orderShort(),
             subtitle = "고른 조합만, 고른 차례대로 도전해요") { pickBossOrder() }
-        // ⚠️ 여기 있던 '쿠키 조합 이름' 줄을 없앴다.
-        //    사장님: "1번 덱 이름을 '연타덱' 으로 해놓고 원하는 덱들을 넣는 게 자연스럽다."
-        //    이름과 내용이 딴 화면에 있으면 같은 덱을 두 군데서 손봐야 한다 →
-        //    이름칸은 [덱 구성] 화면의 각 덱 묶음 안으로 옮겼다([DeckSetupActivity]).
         rowDelay = row("돌진 시작 지연", value = delayLabel(),
             subtitle = "보스 소환 직후엔 아직 조이스틱이 안 먹어요") { cycleDelay() }
         rowCharge = row("보스전 돌진 시간", value = chargeLabel(),
@@ -121,8 +117,7 @@ class SettingsActivity : ListActivity() {
         gRun.addView(rowCharge); gRun.addView(separator())
         gRun.addView(rowDPlan)
         root.addView(gRun)
-        // 보스 조합 순서 바로 다음에 온다 — '어느 덱을 쓸까' 와 '그 덱에 누구를 넣을까' 는 한 이야기다.
-        root.addView(deckSection())
+        // (덱 구성·쿠키 사전·덱 이름은 2026-10-15 에 통째로 뺐다 — 쓸모가 없다는 사장님 판단)
 
         // ── 화면 ──
         root.addView(sectionHeader("화면"))
@@ -139,15 +134,7 @@ class SettingsActivity : ListActivity() {
                     .show()
             }
         }
-        gScr.addView(rDim); gScr.addView(separator())
-        // 게임에는 조합 이름이 없다. 편성 화면에 들어가면 우리가 붙인 이름을 탭 위에 덧그린다.
-        // 이름을 하나도 안 붙였으면 아무것도 안 뜨고 화면도 안 읽는다.
-        val (rTags, _) = switchRow("조합 이름표 보이기",
-            "편성 화면에서 1~5번 탭 위에 이름을 띄워요", Prefs.showNameTags) {
-            Prefs.showNameTags = it
-            Bot.log(if (it) "조합 이름표를 켰어요" else "조합 이름표를 껐어요")
-        }
-        gScr.addView(rTags)
+        gScr.addView(rDim)
         root.addView(gScr)
 
         // ── 점검 ──
@@ -193,76 +180,16 @@ class SettingsActivity : ListActivity() {
     }
 
     /**
-     * **쿠키 조합** — 덱 1~5 에 넣을 쿠키를 **이름으로 적어 두면 봇이 맞춰 준다.**
-     *
-     * 2026-09-07 에 실기로 끝까지 확인됐는데(쿠키 9마리를 이름으로 넣고 저장) 그동안 실험실에
-     * 갇혀 있었다 — 제목을 일곱 번 눌러야 나오니 사실상 없는 기능이었다. 이제 꺼내 놓는다.
-     *
-     * ⚠️ **쿠키 사전이 먼저다.** 배치는 이름이 아니라 **그림으로** 찾는다(게임에 이름 검색이 없다).
-     *    사전이 없으면 덱 구성은 아무것도 못 한다. 그래서 사전이 없을 때는 그 줄이 먼저 눈에
-     *    띄도록 문구를 바꾼다.
-     */
-    private fun deckSection(): LinearLayout {
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        box.addView(sectionHeader("쿠키 조합"))
-        box.addView(text("넣을 쿠키를 이름으로 적어 두면 봇이 그대로 맞춰 줘요.",
-            13f, t.label3).apply { setPadding(dp(22), 0, dp(22), dp(8)) })
-        val g = group()
-        val hasDict = Prefs.deckDictSize > 0
-
-        // 보스전이 조합을 하나씩 바꿔 가며 도전하므로 쓸 덱끼리 서로 달라야 의미가 있다
-        // (어느 번호를 쓸지는 위 '보스 조합 순서' 에서 고른다).
-        g.addView(row("덱 구성",
-            value = (1..5).count { Prefs.deckCount(it) > 0 }.let { if (it > 0) it.toString() + "개" else "" },
-            // ⚠️ 사전이 없어도 **이름은 붙일 수 있다**(표시용이라 사전과 무관하다).
-            //    예전 문구는 '먼저 사전부터' 라고만 해서 이름도 못 붙이는 줄 알게 했다.
-            subtitle = if (hasDict) "덱에 이름을 붙이고 넣을 쿠키를 적어 둬요"
-                       else "이름은 지금 붙일 수 있어요 · 쿠키를 넣으려면 아래 [쿠키 사전 만들기] 부터") {
-            startActivity(Intent(this, DeckSetupActivity::class.java))
-        })
-        g.addView(separator())
-        g.addView(row("쿠키 사전 만들기",
-            value = if (hasDict) "다시" else "먼저 이것부터",
-            subtitle = "이름과 그림을 한 번 읽어 둬요 · 2~3분") {
-            Overlay.show(applicationContext); Deck.buildDict(applicationContext); finish()
-        })
-        if (hasDict) {
-            g.addView(separator())
-            // 배치는 그림으로 찾으므로, 못 알아보는 쿠키는 덱에 적어도 안 들어간다.
-            // 어떤 쿠키가 그런지 미리 알 수 있어야 한다.
-            g.addView(row("쿠키 사전 점검",
-                value = if (!Prefs.deckChecked) "아직"
-                        else Prefs.deckUnseen.split(",").count { it.isNotBlank() }.let {
-                            if (it == 0) "전부 OK" else it.toString() + "마리 ✕" },
-                subtitle = "어떤 쿠키가 덱에 안 들어가는지 봐요 · 안 건드려요") {
-                Overlay.show(applicationContext); Deck.checkDict(applicationContext); finish()
-            })
-            g.addView(separator())
-            g.addView(row("쿠키 사전 보기",
-                value = Prefs.deckDictSize.toString() + "마리" + (if (DeckDict.ready(this)) "" else " ⚠"),
-                subtitle = "잘못 읽힌 이름을 고칠 수 있어요") {
-                startActivity(Intent(this, DeckDictActivity::class.java))
-            })
-        }
-        box.addView(g)
-        return box
-    }
-
-    /**
      * **실험실** — 아직 다 못 만든 것들만 모아 둔 묶음. 기본으로는 안 보인다.
      *
      * 지우면 이어 만들 때 다시 짜야 하고, 그냥 두면 받은 사람이 눌러 보고 고장인 줄 안다.
      * 그래서 **코드는 그대로 두고 문만 닫았다** — 여는 법은 제목 '설정' 일곱 번 누르기([onTitleTap]).
-     *
-     * 덱 구성·쿠키 사전은 **여기서 나갔다**([deckSection]) — 실기로 끝까지 확인된 것은
-     * 실험실에 둘 이유가 없다. 남은 건 정말 덜 된 것들뿐이다.
      */
     private fun labSection(): LinearLayout {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         box.addView(sectionHeader("실험실"))
         box.addView(text("아직 만드는 중인 것들이에요. 뜻대로 안 되는 게 섞여 있어요.",
             13f, t.label3).apply { setPadding(dp(22), 0, dp(22), dp(8)) })
-        // (덱 구성·쿠키 사전은 정식 메뉴로 나갔다 — [deckSection])
         val g = group()
 
         val (rTest, _) = switchRow("시험 모드", "재화·입장권을 안 쓰고 진입까지만", Prefs.testMode) {
@@ -368,7 +295,7 @@ class SettingsActivity : ListActivity() {
      * 폰에서도 같은 걸 찍어 나란히 놓으면 좌표가 맞는지 바로 보인다.
      */
     /**
-     * 지금 게임 화면의 **한글**을 읽어 기록에 남긴다. (덱 이름 배치 기능을 위한 준비 점검)
+     * 지금 게임 화면의 **한글**을 읽어 기록에 남긴다. (한글 OCR 점검)
      *
      * ⚠️ 기본 인식기는 **라틴 전용이라 한글을 아예 못 읽는다.** 그래서 한글 인식기를 따로 붙였는데,
      *    게임 장식 폰트를 실제로 읽어 내는지는 **기기에서 봐야만** 안다 —
@@ -507,12 +434,6 @@ class SettingsActivity : ListActivity() {
         t.append("게임 앱: ").append(GameApp.pkg(this) ?: "못 찾음").append("\n")
         t.append("접근성 ").append(if (TapService.isReady) "켜짐" else "꺼짐")
             .append(" · 화면 읽기 ").append(if (CaptureService.instance != null) "켜짐" else "꺼짐").append("\n")
-        if (Prefs.deckDictSize > 0) {
-            // 사전은 이름 배치가 잘 되는지 판단하는 핵심 자료다 — 오독이 있으면 여기서 바로 보인다.
-            t.append("--- 쿠키 사전 ").append(Prefs.deckDictSize).append("마리 ---\n")
-            t.append(Prefs.deckDict.split("\n").filter { it.isNotBlank() }
-                .mapIndexed { i, n -> (i + 1).toString() + "." + n }.joinToString(" / ")).append("\n")
-        }
         t.append("--- 최근 기록 ---\n").append(Bot.recentText())
         return t.toString()
     }
@@ -640,15 +561,13 @@ class SettingsActivity : ListActivity() {
                 val v = btns[i - 1]
                 val at = picked.indexOf(i)
                 val on = at >= 0
-                // 번호 / 이름 / 몇 번째 — 세 줄까지. 이름을 안 붙였으면 예전처럼 번호만 뜬다.
-                val nm = Boss.name(i)
+                // 번호 / 몇 번째 — 두 줄까지.
                 v.text = i.toString() +
-                    (if (nm.isEmpty()) "" else "\n" + nm) +
                     (if (on) "\n" + (at + 1) + "번째" else "")
                 v.setTextColor(if (on) t.border else t.label3)
                 v.background = t.chunky(if (on) t.gold else t.cell, dpf(14f), dp(2), dp(3))
             }
-            line.text = if (picked.isEmpty()) "고른 조합이 없어요" else picked.joinToString(" → ") { Boss.shortLabel(it) }
+            line.text = if (picked.isEmpty()) "고른 조합이 없어요" else picked.joinToString(" → ") + "번 덱"
             val off = (1..Boss.PRESETS).filter { it !in picked }.joinToString("·")
             note.text = when {
                 picked.isEmpty() -> "하나 이상 골라야 저장돼요"

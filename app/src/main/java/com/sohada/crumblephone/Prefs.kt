@@ -41,48 +41,6 @@ object Prefs {
         get() = labUnlocked && (sp?.getBoolean("testMode", false) ?: false)
         set(v) { sp?.edit()?.putBoolean("testMode", v)?.apply() }
 
-    /**
-     * 쿠키 **사전** — 편성 목록 순서대로의 이름 목록(줄바꿈으로 구분).
-     *
-     * 목록에는 이름이 안 적혀 있어서(실측: `Lv.61`·`편성중`·`3/7` 뿐), 어느 칸이 어느 쿠키인지
-     * 한 번은 읽어 둬야 이름으로 배치할 수 있다. `Deck.buildDict` 가 채운다.
-     *
-     * 73마리쯤이면 2KB 남짓이라 SharedPreferences 로 충분하다.
-     */
-    var deckDict: String
-        get() = sp?.getString("deckDict", "") ?: ""
-        set(v) { sp?.edit()?.putString("deckDict", v)?.apply() }
-
-    /** 사전에 들어 있는 쿠키 수. 0 이면 아직 안 만든 것. */
-    val deckDictSize: Int
-        get() = deckDict.split("\n").count { it.isNotBlank() }
-
-    /**
-     * 덱 1~5번에 넣을 **쿠키 이름들**(한 줄에 하나). 봇이 편성 화면에서 찾아 넣는다.
-     *
-     * 이름이 조금 틀려도 된다 — 찾을 때 편집거리로 너그럽게 본다(`Deck.findIndex`).
-     */
-    fun deckNames(n: Int): String = sp?.getString("deck$n", "") ?: ""
-
-    fun setDeckNames(n: Int, v: String) { sp?.edit()?.putString("deck$n", v)?.apply() }
-
-    /** 덱 n 에 적어 둔 쿠키 수. */
-    fun deckCount(n: Int): Int = deckNames(n).split("\n").count { it.isNotBlank() }
-
-    /**
-     * **화면에서 못 알아본** 쿠키의 순번들(쉼표로 구분). `Deck.checkDict` 가 채운다.
-     * 사전 화면에서 그 줄에 표시를 달아, 어떤 쿠키가 지금 못 쓰이는지 **눈으로 보이게** 한다.
-     * 비어 있으면 '아직 점검 안 함'.
-     */
-    var deckUnseen: String
-        get() = sp?.getString("deckUnseen", "") ?: ""
-        set(v) { sp?.edit()?.putString("deckUnseen", v)?.apply() }
-
-    /** 점검을 한 번이라도 돌렸나. */
-    var deckChecked: Boolean
-        get() = sp?.getBoolean("deckChecked", false) ?: false
-        set(v) { sp?.edit()?.putBoolean("deckChecked", v)?.apply() }
-
     /** 아레나를 몇 판까지 할지. 재화가 먼저 떨어지면 거기서 스스로 끝난다. */
     var arenaFights: Int
         get() = sp?.getInt("arenaFights", 10) ?: 10
@@ -94,16 +52,6 @@ object Prefs {
      * **화면 읽기는 백라이트가 아니라 프레임버퍼를 읽으므로 봇에는 아무 영향이 없다.**
      * (검은 판을 덮어씌우는 방식은 안 된다 — 그건 캡처에 같이 찍혀 게임을 못 읽는다.)
      */
-    /**
-     * 편성 화면의 1~5번 탭 위에 **조합 이름표**를 덧그릴까.
-     *
-     * 기본은 켜짐이다. 이름을 하나도 안 붙였으면 어차피 아무것도 안 뜨므로
-     * (그리고 그때는 화면을 읽지도 않으므로) 켜 둬도 손해가 없다.
-     */
-    var showNameTags: Boolean
-        get() = sp?.getBoolean("showNameTags", true) ?: true
-        set(v) { sp?.edit()?.putBoolean("showNameTags", v)?.apply() }
-
     var dimScreen: Boolean
         get() = sp?.getBoolean("dimScreen", false) ?: false
         set(v) { sp?.edit()?.putBoolean("dimScreen", v)?.apply() }
@@ -190,26 +138,4 @@ object Prefs {
     var bossOrder: String
         get() = sp?.getString("bossOrder", "1,2,3,4,5") ?: "1,2,3,4,5"
         set(v) { sp?.edit()?.putString("bossOrder", v)?.apply() }
-
-    /**
-     * 쿠키 조합 1~5 에 붙인 **짧은 이름**.
-     *
-     * 사람은 조합을 번호로 기억하지 않는다 — 보스에 맞춰 짜 놓고 "물가", "독" 처럼 부른다.
-     * 그런데 봇은 "쿠키 조합 2번" 이라고만 말해서, 그게 내가 짜 둔 어느 덱인지 매번 헷갈렸다.
-     *
-     * 안 붙였으면 빈 문자열이고, 그러면 화면에는 예전처럼 번호만 나온다.
-     * 칸마다 따로 저장한다 — 한 줄에 쉼표로 몰아 넣으면 이름에 쉼표를 못 쓴다.
-     * 읽는 곳은 [Boss.name] 하나로 모은다(순서를 [Boss.order] 하나로 모은 것과 같은 이유다).
-     */
-    // 3글자. 이름표가 앉을 자리는 탭 한 칸 너비(설계 117px)뿐이라 그 이상은 어차피 잘린다.
-    // 사장님 지적: "최대 3글자로 잡아야 될 듯?"
-    const val PRESET_NAME_MAX = 3
-
-    // 읽는 쪽에서도 자른다 — 글자 수를 줄이기 전에 저장해 둔 긴 이름이 그대로 남지 않게.
-    fun presetName(n: Int): String =
-        sp?.getString("presetName" + n, "")?.trim()?.take(PRESET_NAME_MAX) ?: ""
-
-    fun setPresetName(n: Int, v: String) {
-        sp?.edit()?.putString("presetName" + n, v.trim().take(PRESET_NAME_MAX))?.apply()
-    }
 }

@@ -56,23 +56,11 @@
             android:exported="false"
             android:label="설정" />
 
-        <!-- 쿠키 사전 보기·고치기 (설정 → 점검) -->
-        <activity
-            android:name=".DeckDictActivity"
-            android:exported="false"
-            android:label="쿠키 사전" />
-
         <!-- 일일 던전 던전별 컨트롤 — 방향키 + 시간표 (설정 → 일일 던전 컨트롤) -->
         <activity
             android:name=".DailyPlanActivity"
             android:exported="false"
             android:label="던전별 컨트롤" />
-
-        <!-- 덱 1~5 구성 (설정 → 게임) -->
-        <activity
-            android:name=".DeckSetupActivity"
-            android:exported="false"
-            android:label="덱 구성" />
 
         <!-- 첫 실행 안내 (켤 것을 하나씩만 보여 준다) -->
         <activity
