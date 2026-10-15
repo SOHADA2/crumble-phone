@@ -500,8 +500,9 @@ object Daily {
             } else mainSeen = 0
             if (fellOut) {
                 mainSeen = 0
-                backIns++
-                if (backIns > 2 || !returnToDungeon(idx, mySig)) {
+                // ⚠️ 시간 초과 결과의 [✕] 는 원래 목록으로 나간다(PC 실측 10-15) — 평소 흐름이라 **연달아 못 돌아갔을 때만** 센다.
+                if (returnToDungeon(idx, mySig)) backIns = 0
+                else if (++backIns >= 2) {
                     Bot.log("던전 " + idx + ": 던전 화면으로 못 돌아가 이 던전은 넘어갑니다")
                     break
                 }
@@ -561,7 +562,7 @@ object Daily {
                     Runner.sleep(400)
                 }
                 defeatOpen = !closed
-                if (!closed) Bot.log("  결과 화면이 안 닫혀요 - 잠시 뒤 다시 봅니다")
+                if (!closed && Runner.shot()?.let { Screen.atDailyList(it) } != true) Bot.log("  결과 화면이 안 닫혀요 - 잠시 뒤 다시 봅니다")
                 if (counted && lossStreak >= 3 && lossStreak % 3 == 0) {
                     Bot.log("  (연달아 " + lossStreak + "번 못 깼어요 - 계속 도전합니다. 컨트롤을 조정해 보세요)")
                 }
