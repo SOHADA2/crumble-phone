@@ -211,7 +211,7 @@ object Daily {
             dWins = 0; dLosses = 0; gaveUp = false
             while (Runner.running) {
                 if (!Runner.awaitGame()) break
-                fought += runKeys(idx, name)
+                fought += runKeys(idx, name, sig)
                 if (!Runner.running) break
                 if (gaveUp) break        // 연달아 졌다 — [SKIP] 으로 횟수를 더 받아 봐야 또 진다
                 if (!Prefs.adFree || adUsed >= AD_MAX) break
@@ -438,7 +438,39 @@ object Daily {
     //    있도록" → 넘기지 않는다. 끝없이 매달리지 않는 장치는 던전당 15분 상한(hardStop) 하나다.
     private fun lossTag(): String = (if (gaveUp) "·연속 패배" else "") + (if (dLosses > 0) "(패 " + dLosses + ")" else "")
 
-    private fun runKeys(idx: Int, name: String): Int {
+    /**
+     * 던전 판 도중 목록·메인으로 빠졌을 때 **같은 던전**으로 돌아간다. 돌아왔으면 true.
+     * 목록을 맨 위로 정리하면 순서가 경험치·코인·반죽·연구석·룬결정으로 고정이라 idx 번째 배너를 누르고,
+     * 지문이 이 던전과 같은지 확인한다(다르면 뒤로 나와 false).
+     */
+    private fun returnToDungeon(idx: Int, mySig: IntArray): Boolean {
+        Bot.log("  던전 화면에서 빠져나왔어요 - 같은 던전(" + nameOf(idx) + ")으로 바로 돌아갑니다")
+        Runner.set("일일 던전 " + idx + "번째", "던전으로 돌아가는 중")
+        var b = Runner.shot() ?: return false
+        if (!Screen.atDailyList(b)) {
+            if (!enter()) return false
+            b = Runner.shot() ?: return false
+            if (!Screen.atDailyList(b)) return false
+        }
+        scrollListTop()
+        b = Runner.shot() ?: return false
+        val rows = Screen.findDailyBanners(b)
+        if (rows.size < idx) { Bot.log("  목록에서 " + idx + "번째 던전이 안 보여요"); return false }
+        Runner.tap(intArrayOf(700, rows[idx - 1]), 2200)
+        for (w in 1..5) {
+            val e = Runner.shot()
+            if (e != null && Screen.atDailyEntry(e)) {
+                if (Screen.dailySigMatch(mySig, Screen.dailySig(e))) { Bot.log("  같은 던전으로 돌아왔어요 - 이어서 도전합니다"); return true }
+                Bot.log("  다른 던전이 열렸어요 - 목록으로 나옵니다"); backToList(); return false
+            }
+            Runner.sleep(700)
+        }
+        return false
+    }
+
+    private fun runKeys(idx: Int, name: String, mySig: IntArray): Int {
+        var mainSeen = 0           // 판 도중 메인을 연속으로 본 장 수
+        var backIns = 0            // 같은 던전으로 되돌아간 횟수
         var fought = 0
         var idle = 0
         var lossStreak = 0
@@ -459,6 +491,24 @@ object Daily {
             && System.currentTimeMillis() < hardStop && Runner.running) {
             val s = Runner.shot()
             if (s == null) { Runner.sleep(900); continue }
+            // ★ 목록(또는 메인 세 장 연속)으로 빠졌으면 기다리지 말고 같은 던전으로 돌아간다(PC 2026-10-15 와 같이).
+            //   예전엔 180초를 '전투 중' 으로 기다린 뒤 이 던전을 넘겨, 남은 열쇠를 버리고 '갑자기 끊긴' 것처럼 보였다.
+            var fellOut = Screen.atDailyList(s)
+            if (!fellOut && !Screen.atDailyEntry(s)) {
+                mainSeen = if (Screen.atMain(s)) mainSeen + 1 else 0
+                if (mainSeen >= 3) fellOut = true
+            } else mainSeen = 0
+            if (fellOut) {
+                mainSeen = 0
+                backIns++
+                if (backIns > 2 || !returnToDungeon(idx, mySig)) {
+                    Bot.log("던전 " + idx + ": 던전 화면으로 못 돌아가 이 던전은 넘어갑니다")
+                    break
+                }
+                resultSeen = 0; staticSince = 0L; lastSig = null; defeatOpen = false
+                deadline = System.currentTimeMillis() + stallMs
+                continue
+            }
             if (Screen.isDailyKeyPopup(s)) {
                 Bot.log("던전 " + idx + ": 입장 열쇠가 부족합니다 - 이 던전은 넘어갑니다")
                 Runner.tap(intArrayOf(720, 430), 1500)   // 판 바깥을 눌러 닫는다
@@ -472,7 +522,7 @@ object Daily {
                 resultSeen++
                 if (resultSeen >= 2) { isResult = true; why = "결과 화면(시간 초과 등)" }
             } else if (!isDefeat) resultSeen = 0
-            if (!isDefeat && !isResult && !Screen.atDailyEntry(s)) {
+            if (!isDefeat && !isResult && !Screen.atDailyEntry(s) && !Screen.atDailyList(s)) {
                 val sig = Screen.screenSig(s)
                 if (Screen.sameScreen(lastSig, sig)) {
                     if (staticSince == 0L) staticSince = System.currentTimeMillis()
@@ -493,12 +543,21 @@ object Daily {
                 }
                 val pt = Screen.defeatClose(s) ?: Screen.TOBOL_CLOSE
                 Runner.tap(pt, 1500)
+                // ★ 2026-10-15 (PC 와 같이): 결과 화면 [✕] 와 진입 화면 [뒤로] 가 **같은 자리**다(PC 실측 712,3024).
+                //   예전엔 4번째 장에 결과가 '아직 보이면' 한 번 더 눌렀는데, 사라지는 중인 결과 화면을 보고 누르면
+                //   그 탭이 진입 화면의 [뒤로] 에 떨어져 **목록으로 나갔다**('갑자기 끊김'). → 세 장 연속일 때만 한 번,
+                //   진입 화면·목록이 한 번이라도 보이면 절대 다시 안 누른다.
                 var closed = false
-                for (k in 1..8) {
+                var stillRun = 0
+                var retapped = false
+                for (k in 1..12) {
                     if (!Runner.running) break
                     val n = Runner.shot()
                     if (n != null && Screen.atDailyEntry(n)) { closed = true; break }
-                    if (k == 4 && n != null && (Screen.isDailyDefeat(n) || Screen.isDailyResult(n))) Runner.tap(pt, 1500)   // 한 번 더
+                    if (n != null && Screen.atDailyList(n)) break       // 이미 목록 — 위의 '빠져나옴' 이 되돌아간다
+                    val still = n != null && (Screen.isDailyDefeat(n) || Screen.isDailyResult(n))
+                    stillRun = if (still) stillRun + 1 else 0
+                    if (stillRun >= 3 && !retapped) { retapped = true; stillRun = 0; Runner.tap(pt, 1500) }
                     Runner.sleep(400)
                 }
                 defeatOpen = !closed
