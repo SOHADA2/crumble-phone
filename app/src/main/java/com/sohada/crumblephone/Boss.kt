@@ -1,8 +1,5 @@
 package com.sohada.crumblephone
 
-import android.content.Context
-import kotlin.concurrent.thread
-
 /**
  * 보스 도전 — PC 봇 `boss.ps1` 을 그대로 옮긴 것.
  *
@@ -11,16 +8,16 @@ import kotlin.concurrent.thread
  *
  * **왜 퀘스트에서 떼어냈나** — 보스는 '퀘스트를 받는 일'이 아니라 별개의 콘텐츠다.
  * 퀘스트를 돌렸을 뿐인데 보스전이 시작되면 사용자가 무슨 일이 벌어지는지 알 수 없다.
- * 지금은 [보스전]을 눌렀을 때만 보스를 소환한다.
+ * 지금은 [스테이지 돌파](`Chores.start(ctx, stage = true)`)에서만 보스를 소환한다.
+ * (예전 [보스전] 버튼과 그 전용 루프는 2026-10-15 에 뺐다 — 순서·도전 함수만 여기 남았다)
  *
  * ### 승패 판정 — 상단 빨간 배너 하나만 본다
  * 배너가 남아 있으면 아직 못 깬 것, 사라졌으면 이겨서 스테이지가 밀린 것이다.
  * ⚠️ **전투 중에도 배너는 사라진다.** PC 봇이 이걸로 세 번 틀렸다(29회 '클리어'했다는데 실제는 1-5).
- *    그래서 소환하고 [WAIT_SEC] 를 다 기다린 뒤에만 본다.
+ *    그래서 소환하고 전투가 끝날 만큼(`Chores.BOSS_WAIT_SEC`) 다 기다린 뒤에만 본다.
  */
 object Boss {
 
-    private const val WAIT_SEC = 35L      // 소환 후 전투가 끝날 때까지 (실측: 전투 ~30초)
     internal const val PRESETS = 5        // 게임에 있는 쿠키 조합 칸 수(1~5)
 
     /**
@@ -30,7 +27,7 @@ object Boss {
      * 빈 조합으로도 한 번씩 싸우느라 **한 바퀴에 35초씩 그냥 버렸다.**
      * 이제 ⚙ 에서 고른 것만, 고른 차례대로 돈다(예: `2,3,4` → 1·5 는 아예 안 쓴다).
      *
-     * ⚠️ **읽는 곳을 여기 하나로 모은다.** 보스로 가는 길은 두 개다([Boss] 버튼, 퀘스트 순환) —
+     * ⚠️ **읽는 곳을 여기 하나로 모은다.** 보스로 가는 길은 두 개다(퀘스트 순환, [스테이지 돌파]) —
      *    한쪽만 고쳐 놓고 잊는 사고가 이 프로젝트에서 이미 여러 번 났다.
      * 설정이 비었거나 깨졌으면(빈 칸·글자·범위 밖·중복) 걸러 내고, 남은 게 없으면 예전처럼 1~5 다.
      */
@@ -51,85 +48,13 @@ object Boss {
     /** 사람이 읽는 순서 표시 — `2 → 3 → 4번 덱`. */
     fun orderLabel(): String = order().joinToString(" → ") + "번 덱"
 
-    /** 알약 한 줄용 — `2·3·4번 덱`. */
-    fun orderPanel(): String = order().joinToString("·") + "번 덱"
-
-    /** 좁은 자리(설정 목록 오른쪽 값)용 — `2·3·4번 덱`. */
+    /** 좁은 자리(알약 한 줄·설정 목록 오른쪽 값)용 — `2·3·4번 덱`. */
     fun orderShort(): String = order().joinToString("·") + "번 덱"
-
-    fun start(ctx: Context) {
-        if (!Runner.guard()) return
-        Runner.running = true; Runner.task = "보스전"
-        thread(name = "boss") {
-            try {
-                if (!Runner.bringGameToFront(ctx)) { Runner.set("시작 못 함", "게임을 찾지 못했어요"); return@thread }
-                val (ok, why) = Runner.resetToMain()
-                if (!ok) { Runner.failByReason(why); return@thread }
-                loop()
-            }
-            catch (e: Exception) { Runner.set("오류", e.message ?: "알 수 없음") }
-            finally { Runner.running = false; Runner.task = "" }
-        }
-    }
-
-    private fun loop() {
-        // 막힌 보스가 없으면 아무것도 안 한다. 없는데 소환 자리를 누르면 엉뚱한 걸 누르게 된다.
-        val first = Runner.shot()
-        if (first == null) { Runner.set("화면을 못 읽었어요", "다시 시도해 주세요"); return }
-        if (!Screen.hasBossBanner(first)) {
-            Runner.set("도전할 보스가 없어요", "지금은 보스에 막혀 있지 않아요")
-            Runner.lastResult = "막힌 보스가 없었어요 (도전 안 함)"
-            Bot.log("상단 '보스 소환' 배너가 없습니다 - 도전할 보스가 없어요")
-            return
-        }
-
-        val order = order()
-        Bot.log("도전할 쿠키 조합 순서: " + orderLabel())
-        for ((i, n) in order.withIndex()) {
-            if (!Runner.awaitGame()) break
-            val step = (i + 1).toString() + "/" + order.size
-            if (!Runner.running) break
-            Runner.set("보스전 준비 중", "쿠키 조합 " + label(n) + " · " + step)
-            if (!challengeOnce(n)) {
-                // 소환 배너가 사라졌다 = 그 사이에 깼거나 화면이 바뀐 것. 기다릴 이유가 없다.
-                Runner.set("도전할 보스가 없어요", "소환 배너가 사라졌어요")
-                Runner.lastResult = "소환 배너가 사라져 중단했어요"
-                return
-            }
-
-            // 기다리는 동안 진행률을 채워 준다(멈춘 것처럼 보이지 않게).
-            var s = 0L
-            while (s < WAIT_SEC && Runner.running) {
-                Runner.status = "보스전 진행 중"
-                Runner.detail = "쿠키 조합 " + label(n) + " · " + step + " · " + (WAIT_SEC - s) + "초 남음"
-                Runner.setProgress(s.toInt(), WAIT_SEC.toInt())
-                Runner.sleep(3000); s += 3
-            }
-            if (!Runner.running) break
-
-            Runner.set("승패 확인 중", "쿠키 조합 " + label(n) + " · " + step)
-            val b = Runner.shot()
-            if (b != null && !Screen.hasBossBanner(b)) {
-                Runner.set("보스 클리어!", "쿠키 조합 " + label(n) + "으로 깼어요")
-                Runner.lastResult = "✔ 쿠키 조합 " + label(n) + "으로 클리어"
-                Bot.log("✔ 쿠키 조합 " + label(n) + "으로 보스 클리어 (스테이지 밀림)")
-                return
-            }
-            Bot.log("  조합 " + label(n) + " 실패 (보스 아직 안 깨짐) - 다음 조합")
-        }
-
-        if (Runner.running) {
-            Runner.set("보스를 못 깼어요", "쿠키 조합 " + orderLabel() + " 모두 도전했어요")
-            Runner.lastResult = "✗ 쿠키 조합 " + orderLabel() + " 모두 실패"
-        } else {
-            Runner.set("멈췄어요", "보스전을 중간에 멈췄어요")
-        }
-    }
 
     /**
      * 보스 한 번 도전 — **팝업 치우기 → 조합 변경 → 소환 → (지연) → 우측 돌진**.
      *
-     * [보스전] 버튼과 **퀘스트(`Chores`)가 같은 함수를 쓴다.** 보스에 가는 길이 두 곳에 생기면
+     * 퀘스트 순환과 [스테이지 돌파]가 **같은 함수(`Chores` 안)를 쓴다.** 보스에 가는 길이 두 곳에 생기면
      * 한쪽만 고쳐 놓고 잊는다 — PC 봇도 두 경로(배너·탐색 실패)가 같은 함수를 부른다.
      */
     internal fun challengeOnce(n: Int, loose: Boolean = false): Boolean {

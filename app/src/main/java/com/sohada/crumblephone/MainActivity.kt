@@ -240,7 +240,6 @@ class MainActivity : ListActivity() {
         rowBoss = row("스테이지 돌파", value = Boss.orderShort(), subtitle = "퀘스트 없이 스테이지만 · 지면 보스 덱 바꿔 도전") {
             withCapture { Chores.start(applicationContext, stage = true) }
         }
-        val rBoss = rowBoss
         val rTobol = row("토벌전", subtitle = "멈출 때까지 계속 도전 · 최고 점수 기록") {
             withCapture { Runner.startTobol(applicationContext) }
         }
@@ -254,7 +253,7 @@ class MainActivity : ListActivity() {
             withCapture { Chores.startRewardsOnly(applicationContext) }
         }
         runRows.addView(rQuest); runRows.addView(separator())
-        runRows.addView(rBoss); runRows.addView(separator())
+        runRows.addView(rowBoss); runRows.addView(separator())
         runRows.addView(rTobol); runRows.addView(separator())
         runRows.addView(rDaily); runRows.addView(separator())
         runRows.addView(rArena); runRows.addView(separator())

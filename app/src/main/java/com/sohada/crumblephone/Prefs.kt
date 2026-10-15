@@ -65,11 +65,6 @@ object Prefs {
         set(v) { sp?.edit()?.putString("gamePackage", v)?.apply() }
 
     /**
-     * 오븐 '자동 열기'의 **1회에 여는 개수**. 게임 쪽 설정값을 여기에 그대로 적어 둔다.
-     * 봇이 이 값을 바꾸지는 않는다 — 한 싸이클이 얼마나 큰지 알아야 상한을 제대로 잡을 수 있어서다.
-     * 오븐 레벨에 따라 고를 수 있는 값이 달라서 사용자가 직접 맞춘다.
-     */
-    /**
      * **광고 제거를 가지고 있나.** 켜면 일일 던전에서 `[▶ SKIP]` 을 눌러 도전 횟수를 더 받는다.
      *
      * ⚠️ 기본은 **꺼짐**이다. 광고 제거가 없는데 켜면 **진짜 광고가 재생된다** —
@@ -81,6 +76,11 @@ object Prefs {
         set(v) { sp?.edit()?.putBoolean("adFree", v)?.apply() }
 
     val OVEN_CHOICES = intArrayOf(5, 10, 20, 30, 50)
+    /**
+     * 오븐 '자동 열기'의 **1회에 여는 개수**. 게임 쪽 설정값을 여기에 그대로 적어 둔다.
+     * 봇이 이 값을 바꾸지는 않는다 — 한 싸이클이 얼마나 큰지 알아야 상한을 제대로 잡을 수 있어서다.
+     * 오븐 레벨에 따라 고를 수 있는 값이 달라서 사용자가 직접 맞춘다.
+     */
     var ovenPerRun: Int
         get() = sp?.getInt("ovenPerRun", 20) ?: 20
         set(v) { sp?.edit()?.putInt("ovenPerRun", v)?.apply() }
@@ -101,15 +101,13 @@ object Prefs {
     val BOSS_DELAY_CHOICES = intArrayOf(500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000)
 
     /**
-     * 경험치 던전 '아래로 돌진' — **보스와 따로 둔다.** 방향도 목적도 달라 값이 겹칠 이유가 없다.
-     * 0 = 안 함(기본).
+     * 옛 경험치 던전 '아래로 돌진' 시간·지연(ms). 이제 화면에서 고르지 않는다(고르는 칸은 2026-10-15 에 뺐다) —
+     * 아래 `dailyPlan` 으로 옛 설정을 옮겨 올 때([DailyPlan.load])만 읽는다. **지우지 말 것.**
      */
-    val DAILY_CHARGE_CHOICES = intArrayOf(0, 500, 1000, 1500, 2000, 2500, 3000, 4000, 5000)
     var dailyChargeMs: Int
         get() = sp?.getInt("dailyChargeMs", 0) ?: 0
         set(v) { sp?.edit()?.putInt("dailyChargeMs", v)?.apply() }
 
-    val DAILY_DELAY_CHOICES = intArrayOf(500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000)
     var dailyDelayMs: Int
         get() = sp?.getInt("dailyDelayMs", 2000) ?: 2000
         set(v) { sp?.edit()?.putInt("dailyDelayMs", v)?.apply() }

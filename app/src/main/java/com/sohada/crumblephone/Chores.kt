@@ -100,7 +100,7 @@ object Chores {
      */
     private var stageOnly = false
 
-    fun start(ctx: Context, maxQuests: Int = 0, stage: Boolean = false) {
+    fun start(ctx: Context, stage: Boolean = false) {
         if (!Runner.guard()) return
         stageOnly = stage
         Runner.running = true; Runner.task = if (stage) "스테이지 돌파" else "퀘스트"
@@ -117,7 +117,7 @@ object Chores {
                 val (ok, why) = Runner.resetToMain()
                 if (why == "stop") return@thread
                 if (!ok) Bot.log("시작 화면으로 못 갔어요 - 그대로 시작합니다(바퀴를 돌며 스스로 정리합니다)")
-                loop(maxQuests)
+                loop()
             }
             catch (e: Exception) { Runner.set("오류", e.message ?: "알 수 없음") }
             finally { Runner.running = false; Runner.task = "" }
@@ -147,7 +147,7 @@ object Chores {
     //  본 고리
     // ══════════════════════════════════════════════════════════
 
-    private fun loop(maxQuests: Int) {
+    private fun loop() {
         var quests = 0            // 받아 낸 퀘스트 수
         var handled = 0           // 뽑기·상자처럼 직접 해 준 횟수
         // 정산 창에 '어떤 걸 했는지' 를 적으려고 이번 실행분만 따로 센다(PC 관제창과 같은 내역).
@@ -186,7 +186,6 @@ object Chores {
         while (Runner.running) {
             // 사장님이 딴 앱을 쓰는 동안에는 아무것도 누르지 않고 기다린다(돌아오면 이어서).
             if (!Runner.awaitGame()) break
-            if (maxQuests > 0 && quests >= maxQuests) { Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요"); break }
 
             val b = Runner.shot()
             if (b == null) { Runner.set("화면을 못 읽었어요", "다시 시도 중"); Runner.sleep(5000); continue }

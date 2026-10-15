@@ -33,7 +33,6 @@ import android.graphics.drawable.RippleDrawable
 class Theme(val dark: Boolean = true) {
 
     val bg        = Color.parseColor("#1C1517")   // 화면 바탕 (판이 도드라지게 한 단계 낮췄다)
-    val bgDeep    = Color.parseColor("#120D0F")
     val cell      = Color.parseColor("#2E272C")   // 카드/셀 — **알약과 같은 판 색**
     val fill      = Color.parseColor("#241E22")   // 기록처럼 한 단계 안쪽
     val separator = Color.parseColor("#3A3238")
@@ -100,8 +99,4 @@ class Theme(val dark: Boolean = true) {
         RippleDrawable(ColorStateList.valueOf(rippleColor),
             android.graphics.drawable.ColorDrawable(base),
             android.graphics.drawable.ColorDrawable(Color.WHITE))
-
-    /** 홀로 서 있는 버튼용 — 리플이 둥근 모서리를 넘지 않게 마스크도 같은 모양으로 준다. */
-    fun rippleRound(base: Int, radiusPx: Float): Drawable =
-        RippleDrawable(ColorStateList.valueOf(rippleColor), round(base, radiusPx), round(Color.WHITE, radiusPx))
 }

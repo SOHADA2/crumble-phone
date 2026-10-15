@@ -2801,3 +2801,13 @@ PC 실측: 결과 [✕] 한 번에 매번 목록. 되돌아가기를 '2번까지
 - 같이 뺀 것: 매니페스트 액티비티 2개, 설정의 '쿠키 조합' 묶음(덱 구성·사전 만들기/점검/보기)과 '조합 이름표 보이기' 스위치, 진단의 사전 출력, `Prefs` 의 `deckDict`·`deckNames`·`deckUnseen`·`deckChecked`·`showNameTags`·`presetName`, `Screen` 의 편성 격자·카드 지문·상세 화면 판정(`atDeckEdit`·`findStarRows`·`cardThumb` 등). 옛 SharedPreferences 값은 그냥 남아도 무해(아무도 안 읽음).
 - **덱(프리셋)은 이제 번호로만 보인다**: `Boss.label(n)` = `N번 덱`, `orderLabel()` = `2 → 3 → 4번 덱`, `orderPanel()`/`orderShort()` = `2·3·4번 덱`.
 - **그대로 남은 것**: 보스 조합 순서(`Prefs.bossOrder`·`Boss.order()`·설정 '보스 조합 순서'), 번호로 프리셋 바꾸기(`Boss.switchPreset`·`atCookieRoster`), 한글 OCR(`Ocr.readKorean`, 실험실 글자 점검이 씀).
+
+## 안 쓰는 코드 정리 (2026-10-15)
+사장님 승인으로 부르는 곳이 0개인 코드를 뺐다(동작 변화 없음, `dev.ps1 compile` 통과).
+- **Boss.kt**: `Boss.start()`·`loop()`·`WAIT_SEC` — 버튼이 [스테이지 돌파](`Chores.start(ctx, stage = true)`)로 바뀐 뒤 아무도 안 불렀다. `orderPanel()` 은 `orderShort()` 와 본문이 같아 하나로 합침(오버레이 알약도 `orderShort()`). 남은 것: `order`/`label`/`orderShort`/`orderLabel`/`challengeOnce`/`switchForNextFight`/`switchPreset`.
+- **실험실 '글자 읽기 점검'**(`SettingsActivity.textTest`) + `Ocr.korean`·`Ocr.readKorean`·`Ocr.crop` + 한글 ML Kit 의존성(`play-services-mlkit-text-recognition-korean`). 숫자/전투력 OCR(라틴 인식기)은 그대로.
+- **Chores.start 의 `maxQuests`** — 아무도 안 넘겨 늘 0 이었다(죽은 분기 포함).
+- **Screen.kt 상수/함수**: `TOBOL_ENTRY`·`DAILY_CONT_CHK`·`DAILY_PREV`·`DAILY_SWEEP`/`_MAX`/`_GO`·`DOT_CHALLENGE`·`DCHARGE_FROM`/`_TO`·`isQuestDone`·`dailyContChecked`. 소탕·이전 던전·도전 닷 실측 좌표는 주석으로 남겨 뒀다(다시 재지 말 것).
+- **Prefs.kt**: `DAILY_CHARGE_CHOICES`·`DAILY_DELAY_CHOICES`. ⚠️ `dailyChargeMs`/`dailyDelayMs` 는 `DailyPlan` 옮겨 오기가 읽으므로 **남긴다**.
+- 기타: `SettingsActivity.secLabel`, `Theme.bgDeep`·`rippleRound`, `MainActivity` 의 `rBoss` 별칭(→ `rowBoss`).
+- 엇갈린 KDoc 바로잡음(`tapTest`, `ovenPerRun`, `delayLabel`/`chargeLabel`) + [보스전]·덱 이름 시절 낡은 주석 손봄.

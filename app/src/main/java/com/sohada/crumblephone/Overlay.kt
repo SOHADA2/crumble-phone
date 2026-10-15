@@ -309,7 +309,7 @@ object Overlay {
             }
             contentBtns.add(b2)
             pnl.addView(b2)
-            // [보스전] 바로 아래에 **어느 조합으로 도전할지**를 한 줄 붙인다.
+            // [스테이지 돌파] 바로 아래에 **어느 조합으로 도전할지**를 한 줄 붙인다.
             // 게임을 보는 중에는 설정 화면까지 들어가지 않는다 — 여기서 바로 확인돼야 한다.
             // 폭을 버튼과 같은 168dp 로 못박는다(패널이 WRAP_CONTENT 라, 안 박으면 이 줄이 패널을 늘린다).
             if (name == "스테이지 돌파") {
@@ -544,8 +544,8 @@ object Overlay {
             else if (Runner.stopping) Color.parseColor("#F0921E")   // 멈추는 중 = 주황
             else Color.parseColor("#8A7565"))
         applyBrightness()
-        // 설정에서 조합 이름·순서를 바꾸면 다음 tick 에 그대로 따라온다(따로 알릴 필요가 없다).
-        bossLine?.text = "보스 조합  " + Boss.orderPanel()
+        // 설정에서 조합 순서를 바꾸면 다음 tick 에 그대로 따라온다(따로 알릴 필요가 없다).
+        bossLine?.text = "보스 조합  " + Boss.orderShort()
         // 돌고 있을 때만 [멈추기] 를 보여 준다. 쉬는 중에 눌러 봐야 할 일이 없다.
         stopBtn?.visibility = if (Runner.running) View.VISIBLE else View.GONE
 
