@@ -177,7 +177,7 @@ object Screen {
     fun gameIsUp(b: Bitmap): Boolean =
         atMain(b) || atTobolLobby(b) || isBattleOver(b) || isConfirmDialog(b) || hasCloseButton(b)
 
-    val OVEN_CLEANUP = intArrayOf(990, 2812)         // '자동 열기 결과'의 오른쪽 [정리하기]
+    val OVEN_CLEANUP = intArrayOf(990, 2812)         // '자동 정리' 창 오른쪽 [정리하기] — 2026-10-16 부터 **누르지 않는다**(정리는 사람이)
 
     // 그 창의 **넓은 청록 패널** 두 줄. 가운데 안내문 판과 버튼 바로 위 띠다.
     // 실측(폰 1440x3120): x 100~1340 중 청록 비율 y2450 = 86~90% · y2730 = 95%.
@@ -1187,30 +1187,6 @@ object Screen {
         if (!(tr < 40 && tg in 101..159 && tb in 121..179)) return "none"
         if (Color.blue(h) < 120 && Color.red(v) < 160) return "result"
         return "open"
-    }
-
-    val OVEN_TIDY_STOP = intArrayOf(430, 2790)       // 30개 '자동 정리' 창의 왼쪽 [그만두기] (정리 안 함 · 안전한 쪽)
-    private val OVEN_TIDY_GO = intArrayOf(1010, 2790) // 같은 창 오른쪽 [정리하기] — 판정에만 쓰고 **절대 누르지 않는다**
-
-    /**
-     * 오븐이 30개 꽉 차 뜨는 '자동 정리' 창인가 — 왼쪽 [그만두기] 청록 + 오른쪽 [정리하기] 주황.
-     * PC oven.ps1 Test-FullTidy 와 같은 점·같은 식(좌표는 PC 스크린샷 기준 추정치).
-     */
-    fun isOvenFullTidy(b: Bitmap): Boolean {
-        fun avg(cx: Int, cy: Int): IntArray {
-            var r = 0; var g = 0; var bl = 0; var k = 0
-            var x = cx - 40
-            while (x <= cx + 40) {
-                var y = cy - 15
-                while (y <= cy + 15) { val c = px(b, x, y); r += Color.red(c); g += Color.green(c); bl += Color.blue(c); k++; y += 10 }
-                x += 10
-            }
-            return intArrayOf(r / k, g / k, bl / k)
-        }
-        val l = avg(OVEN_TIDY_STOP[0], OVEN_TIDY_STOP[1]); val rr = avg(OVEN_TIDY_GO[0], OVEN_TIDY_GO[1])
-        val tealLeft = l[1] > l[0] * 1.3 && l[2] > l[0] * 1.3
-        val orangeRight = rr[0] > 120 && rr[0] > rr[2] * 1.8 && rr[1] > rr[2]
-        return tealLeft && orangeRight
     }
 
     /**

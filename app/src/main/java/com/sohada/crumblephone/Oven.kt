@@ -29,11 +29,20 @@ object Oven {
      */
     private fun perRun() = Prefs.ovenPerRun.coerceIn(1, 50)
 
+    /**
+     * ★ 2026-10-16: 봇은 **정리하지 않는다**(사장님 결정). 장비 프리셋이 생긴 뒤로 [정리 하기] 와
+     * '자동 정리' 의 [정리하기] 는 전투력 높은 순으로 장착해 버려서 손으로 고른 옵션을 망친다.
+     * 결과 패널은 ✕ 로 닫고, 장비가 쌓여 더 못 뽑으면 이 깃발을 세워 사람에게 넘긴다.
+     */
+    @Volatile var needTidy = false
+        private set
+
     /** 퀘스트를 채웠으면 true. 시작조차 못 했으면 false. */
     fun run(count: Int = 15): Boolean {
+        needTidy = false
         // 오븐이 꽉 차면 '자동 정리' 확인창이 뜬다. 그게 떠 있으면 Auto 시작이 막힌다.
         if (!clearDialog()) {
-            Bot.log("  오븐: 확인창을 못 치웠어요 - 오븐은 건너뜁니다")
+            Bot.log(if (needTidy) "  오븐: 장비가 꽉 찼어요 - 정리는 직접 해 주세요" else "  오븐: 확인창을 못 치웠어요 - 오븐은 건너뜁니다")
             return false
         }
 
@@ -48,7 +57,7 @@ object Oven {
         //   '자동 열기 결과' → (이전 잔여물) [정리 하기]만 되고 Auto 는 여전히 꺼짐 → 한 번 더 시도
         for (attempt in 1..2) {
             if (started || !Runner.running) break
-            if (!clearDialog()) break
+            if (!clearDialog()) { if (needTidy) return false; break }
             Runner.shot()?.let { if (Screen.isOvenPopup(it)) Runner.tap(Screen.OUTSIDE, 1500) }
 
             Runner.set("오븐에서 장비 뽑는 중", "시작 " + attempt + "/2")
@@ -57,12 +66,11 @@ object Oven {
             //   좌표가 같아서 눈 감고 누르면 [시작]/[정리 하기] 로 의미가 정반대일 수 있다.
             var kind = Runner.shot()?.let { Screen.ovenPanelKind(it) } ?: "none"
             if (kind == "result") {
-                Bot.log("  오븐: 지난 '자동 열기 결과'가 남아 있어요 - 먼저 정리하고 다시 엽니다")
-                Runner.tap(Screen.OVEN_GO, 2000)      // [정리 하기]
-                clearDialog()
-                clearPopups(3, 1500)
-                Runner.tap(Screen.OVEN_AUTO, 1500)
-                kind = Runner.shot()?.let { Screen.ovenPanelKind(it) } ?: "none"
+                // 지난 결과가 남아 있으면 Auto 를 새로 못 연다. 정리는 사람이 한다 → ✕ 로 닫고 넘긴다.
+                Bot.log("  오븐: 지난 장비가 남아 있어 새로 뽑을 수 없어요 - 정리는 직접 해 주세요")
+                Runner.tap(Screen.OVEN_PANEL_X, 1500)
+                needTidy = true
+                return false
             }
             if (kind != "open") { Bot.log("  오븐: '자동 열기' 패널이 안 열렸어요 (판정 " + kind + ")"); continue }
             Runner.tap(Screen.OVEN_GO, 1500)          // [시작]
@@ -109,10 +117,10 @@ object Oven {
                 // 장비가 꽉 차면 '정리하기' 창이 뜨고 그때부터 아무것도 안 뽑힌다(장비 30개쯤).
                 // 여기서 안 풀어 주면 남은 시간 내내 헛돈다.
                 if (Screen.isOvenCleanupDialog(cur)) {
-                    Bot.log("  오븐: '정리하기' 창 - 오른쪽을 누릅니다(장비가 꽉 찼어요)")
-                    Runner.tap(Screen.OVEN_CLEANUP, 2500)
-                    lastMove = System.currentTimeMillis()
-                    continue
+                    Bot.log("  오븐: '자동 정리' 창 (장비가 꽉 찼어요) - [그만두기], 정리는 직접 해 주세요")
+                    Runner.tap(Screen.DLG_SAFE, 2000)
+                    needTidy = true
+                    break
                 }
 
                 // ★ 싸이클이 끝나면 게임이 '자동 열기 결과' 패널을 스스로 띄운다 — 가장 확실한 종료 신호다.
@@ -184,10 +192,10 @@ object Oven {
             }
 
             if (kind == "result") {
-                // Auto 가 한 싸이클을 마치면 게임이 스스로 이 패널을 띄운다. [정리 하기]가 마무리다.
-                Bot.log("  오븐: '자동 열기 결과' - [정리 하기]로 마무리")
-                Runner.tap(Screen.OVEN_GO, 2000)
-                clearDialog()                        // '전투력 오르는 것만 착용하고 나머지 판매' 확인창
+                // [정리 하기] 는 누르지 않는다(위 needTidy 주석). ✕ 로 닫기만 — Auto 가 아직 돌고 있었다면
+                // '1회 개수' 만큼 뽑거나 30개가 차면 게임이 알아서 멈춘다.
+                Bot.log("  오븐: '자동 열기 결과' - 정리하지 않고 ✕ 로 닫습니다 (장비는 오븐에 쌓여 있어요)")
+                Runner.tap(Screen.OVEN_PANEL_X, 1500)
                 clearPopups(2, 1000)
                 return
             }
@@ -214,25 +222,19 @@ object Oven {
     /**
      * 확인창이 떠 있으면 **왼쪽(안전한 쪽)** 으로 닫는다. 치웠으면 true.
      *
-     * ⚠️ **오른쪽(주황)을 누르는 곳은 이 파일의 여기 한 곳뿐이다.** 확인창은 전투 종료·게임 종료·
-     *    크리스탈 새로고침이 **전부 같은 배치**라, 잘못 누르면 전투 강제 종료 / 게임 종료 /
-     *    크리스탈 300 소모다. 그래서 문을 세 겹으로 잠갔다:
-     *      ① `isConfirmDialog` — 청록/주황 배치가 맞고
-     *      ② `isOvenCleanupDialog` — 가로로 거의 꽉 찬 청록 판이 **두 줄** 있고
-     *         (위험한 확인창은 가운데 작은 모달이라 이게 없다)
-     *      ③ **오븐이 도는 중일 때만** — 이 파일 밖에서는 절대 오른쪽을 누르지 않는다
-     *    좌표 `(990,2812)` 도 실기 화면에서 잰 값이다(PC 쪽 값은 추정치였다).
-     *
-     *    안 누르면 장비 30개쯤에서 창이 떠 오븐이 막히고, 남은 시간 내내 헛돈다.
+     * ★ 2026-10-16 부터 이 파일은 **오른쪽(주황)을 한 번도 누르지 않는다.** 오븐 '자동 정리' 창도
+     *   왼쪽 [그만두기] 로 닫고 needTidy 를 세운다 — 정리는 사람이 한다(장비 프리셋 때문).
+     *   판정(`isOvenCleanupDialog`)은 '자동 정리' 창인지 알아보려고 그대로 쓴다.
      */
     private fun clearDialog(): Boolean {
         for (k in 1..4) {
             val s = Runner.shot() ?: return false
             if (Screen.isOvenCleanupDialog(s)) {
-                // 오븐이 꽉 찼다. 이건 오른쪽을 눌러야 풀린다 — 아래 주석 참고.
-                Bot.log("  오븐: '정리하기' 창 - 오른쪽을 누릅니다(장비가 꽉 찼어요)")
-                Runner.tap(Screen.OVEN_CLEANUP, 2500)
-                continue
+                // 오븐이 꽉 찼다. 예전엔 오른쪽 [정리하기] 를 눌렀지만 이제 정리는 사람이 한다 → 왼쪽 [그만두기].
+                Bot.log("  오븐: '자동 정리' 창 (장비가 꽉 찼어요) - [그만두기], 정리는 직접 해 주세요")
+                Runner.tap(Screen.DLG_SAFE, 2000)
+                needTidy = true
+                return false
             }
             if (!Screen.isConfirmDialog(s)) return true
             Bot.log("  오븐: 확인창 - 왼쪽(안전한 쪽)으로 닫습니다")

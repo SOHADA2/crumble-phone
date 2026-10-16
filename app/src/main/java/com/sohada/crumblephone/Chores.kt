@@ -226,7 +226,7 @@ object Chores {
                     Runner.set("오븐 장비 넘기는 중", "정리는 안 해요 · 장비는 오븐에 쌓여요")
                     Runner.tap(Screen.OUTSIDE, 1000); continue
                 }
-                val tidy = Screen.isOvenFullTidy(b)
+                val tidy = Screen.isOvenCleanupDialog(b)
                 if (tidy || Screen.ovenPanelKind(b) != "none") {
                     val now = System.currentTimeMillis()
                     if (ovenOverSince == 0L) {
@@ -239,7 +239,7 @@ object Chores {
                     }
                     // 1분 넘게 그대로면 자리를 비운 것 — 스테이지가 멈추지 않게 **닫기만** 한다.
                     //   [시작]/[정리 하기] 자리(OVEN_GO) 는 절대 누르지 않는다. 정리 창은 왼쪽이 안전한 쪽.
-                    if (tidy) { Bot.log("  오븐 '자동 정리' 창 - [그만두기] (정리 안 함)"); Runner.tap(Screen.OVEN_TIDY_STOP, 2000) }
+                    if (tidy) { Bot.log("  오븐 '자동 정리' 창 - [그만두기] (정리 안 함)"); Runner.tap(Screen.DLG_SAFE, 2000) }
                     else { Bot.log("  오븐 Auto 창 - ✕ 로 닫기만 합니다"); Runner.tap(Screen.OVEN_PANEL_X, 2000) }
                     ovenOverSince = 0L; continue
                 }
@@ -758,7 +758,17 @@ object Chores {
             }
             ovenTried = true
             Bot.log("  화면이 안 바뀜 -> 오븐 처리 (띠 " + fmt(before) + " -> " + fmt(now) + ")")
-            if (!Oven.run()) return PROBE_NONE
+            if (!Oven.run()) {
+                // 오븐에 장비가 쌓여 **사람이 정리해야** 더 뽑을 수 있다(봇은 정리하지 않는다 · 2026-10-16).
+                //   2분 쉼으로는 매번 열어 보며 헛손질하니 10분 쉬고, 정리해 주면 같은 퀘스트에서 다시 시도한다.
+                if (Oven.needTidy) {
+                    ovenColdUntil = System.currentTimeMillis() + 10 * 60_000L
+                    ovenTried = false
+                    Bot.log("  오븐 정리가 필요해요 - 10분 동안 오븐은 쉽니다 (정리는 직접)")
+                    Runner.set("오븐 정리가 필요해요", "직접 정리해 주시면 이어서 뽑아요")
+                }
+                return PROBE_NONE
+            }
             // 돌리고 나서 **정말 오븐 퀘스트였는지 결과로 확인**한다.
             // 띠가 그대로면 헛돌린 것이므로 잠깐 쉬고, 끝냈으면 쉬는 시간을 푼다.
             // (띠가 가려졌으면 -0.6 밑이라 판단하지 않는다 — 바깥 고리가 그 가림막을 떠안는다)
