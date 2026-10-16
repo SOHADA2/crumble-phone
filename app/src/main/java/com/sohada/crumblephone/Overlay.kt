@@ -48,7 +48,11 @@ object Overlay {
     private var shownText = ""
     private var panel: LinearLayout? = null
     private var appCtx: Context? = null
-    private val contentBtns = ArrayList<TextView>()
+    private val contentBtns = ArrayList<View>()
+    private var stripView: View? = null      // 알약 왼쪽 콘텐츠 색 띠
+    private var titleView: TextView? = null  // 첫 줄(무엇이 · 요약)
+    private var textsBox: LinearLayout? = null
+    private var shownTitle = ""
     private var bossLine: TextView? = null
 
     /**
@@ -93,23 +97,40 @@ object Overlay {
     private fun dp(ctx: Context, v: Int) = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), ctx.resources.displayMetrics).toInt()
 
+    // ── 시안 B 색(2026-10-16) — 관제 화면 `Theme` 과 같은 값. 알약은 Context 만 있어 여기 따로 둔다. ──
+    private val C_PANEL = Color.parseColor("#EE231A18")   // 어두운 갈색 반투명(게임이 살짝 비친다)
+    private val C_EDGE = Color.parseColor("#6B4F42")
+    private val C_ROW = Color.parseColor("#382A27")
+    private val C_ROW_EDGE = Color.parseColor("#4A3A35")
+    private val C_TITLE = Color.parseColor("#F2E4D5")
+    private val C_CREAM = Color.parseColor("#E8D9C8")
+    private val C_SUB = Color.parseColor("#BCA491")
+    private val C_MUTED = Color.parseColor("#8C7266")
+    private val C_GOLD = Color.parseColor("#FFC94A")
+    private val C_ORANGE = Color.parseColor("#F58F0A")
+    private val C_RED = Color.parseColor("#E0584F")
+    private val C_DOT_IDLE = Color.parseColor("#6B5A52")
+    private val C_BTN_EDGE = Color.parseColor("#8A6A52")
+
+    private fun round(color: Int, r: Float, stroke: Int = 0, strokeColor: Int = 0) = GradientDrawable().apply {
+        setColor(color); cornerRadius = r
+        if (stroke > 0) setStroke(stroke, strokeColor)
+    }
+
     /** 패널 맨 아래 한 줄에 들어가는 작은 버튼. 셋이 자리를 똑같이 나눠 갖는다. */
-    private fun smallBtn(ctx: Context, label: String, color: String, onTap: () -> Unit) =
+    private fun smallBtn(ctx: Context, label: String, color: Int, onTap: () -> Unit) =
         TextView(ctx).apply {
             text = label
-            setTextColor(Color.parseColor(color))
+            setTextColor(color)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             isSingleLine = true          // 좁아도 꺾이지 않게
             gravity = Gravity.CENTER
             setPadding(dp(ctx, 4), dp(ctx, 7), dp(ctx, 4), dp(ctx, 7))
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#26FFFFFF"))
-                cornerRadius = dp(ctx, 2).toFloat()
-            }
+            background = round(Color.parseColor("#2A2422"), dp(ctx, 8).toFloat(), Math.max(1, dp(ctx, 1)), Color.parseColor("#3A302D"))
             isClickable = true
             setOnClickListener { onTap() }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                .apply { leftMargin = dp(ctx, 3); rightMargin = dp(ctx, 3) }
+                .apply { leftMargin = dp(ctx, 2); rightMargin = dp(ctx, 2) }
         }
 
     /** 관제 화면에서 부르는 '띄워 줘'. 사용자가 숨겨 뒀더라도 다시 띄운다. */
@@ -121,51 +142,26 @@ object Overlay {
         appCtx = ctx.applicationContext
         dpf = ctx.resources.displayMetrics.density
         val w = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        // (Theme 은 관제 화면용이다. 알약은 게임 UI 를 직접 본떠 색을 여기서 쓴다.)
+        val sans = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
 
-        // 게임의 **'스테이지 바' 판**을 그대로 본떴다(사용자 요청).
-        // 실측: 어두운 판 (44,42,47)~(62,50,54) · 외곽선은 거의 검정 (0,0,12).
-        // 게임 UI 는 테두리가 **얇은 색선이 아니라 두꺼운 검정**이라 만화처럼 보인다.
-        val bg = GradientDrawable().apply {
-            setColor(Color.parseColor("#F02E272C"))
-            // 사각형(사장님 요청 2026-09-11). 0 으로 두면 2dp 테두리 모서리가 거칠어 2dp 만 남긴다.
-            cornerRadius = dp(ctx, 2).toFloat()
-            setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
-        }
-        val pill = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            background = bg
+        // ── 알약 — 시안 B(2026-10-16): 어두운 갈색 반투명 + 둥근 모서리 + 얇은 갈색 테두리.
+        //    도는 동안엔 왼쪽에 **콘텐츠 색 띠**가 붙는다(관제 화면 줄과 같은 말).
+        //    띠는 네모로 두고 알약이 clipToOutline 으로 둥글게 잘라 낸다(모서리 밖으로 안 삐져나오게).
+        val pr = dp(ctx, 14).toFloat()
+        val pill = FrameLayout(ctx).apply {
+            background = round(C_PANEL, pr)
+            foreground = round(Color.TRANSPARENT, pr, Math.max(1, dp(ctx, 1)), C_EDGE)
+            clipToOutline = true
             elevation = dp(ctx, 6).toFloat()
-            setPadding(dp(ctx, 10), dp(ctx, 6), dp(ctx, 8), dp(ctx, 6))
         }
-        // 게임의 스테이지 바처럼 — 검은 홈 위에 금색 막대가 차오른다.
-        // 실측 단면: 검정 외곽선 → (255,217,44) → (249,193,20) → (254,173,4) → (106,68,6) → 검정.
-        val fillView = View(ctx).apply {
-            background = GradientDrawable().apply {
-                colors = intArrayOf(
-                    Color.parseColor("#FFD92C"), Color.parseColor("#F9C114"),
-                    Color.parseColor("#FEAD04"), Color.parseColor("#8A5605"))
-                orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                cornerRadius = dp(ctx, 1).toFloat()
-            }
-            pivotX = 0f
-            scaleX = 0f
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+        val strip = View(ctx).apply { visibility = View.GONE }
+        val inner = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(ctx, 13), dp(ctx, 8), dp(ctx, 10), dp(ctx, 8))
         }
-        val track = FrameLayout(ctx).apply {
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#15100F"))
-                cornerRadius = dp(ctx, 2).toFloat()
-                setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
-            }
-            addView(fillView)
-            visibility = View.GONE
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(ctx, 9)).apply {
-                leftMargin = dp(ctx, 2); rightMargin = dp(ctx, 2); bottomMargin = dp(ctx, 5)
-            }
-        }
+        pill.addView(inner)
+        pill.addView(strip, FrameLayout.LayoutParams(dp(ctx, 4), FrameLayout.LayoutParams.MATCH_PARENT))
+
         val row = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -175,20 +171,23 @@ object Overlay {
             orientation = LinearLayout.VERTICAL
         }
         val dot = View(ctx).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL; setColor(Color.parseColor("#7CC24A"))
-                setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
-            }
-            layoutParams = LinearLayout.LayoutParams(dp(ctx, 8), dp(ctx, 8)).apply {
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(C_DOT_IDLE) }
+            layoutParams = LinearLayout.LayoutParams(dp(ctx, 7), dp(ctx, 7)).apply {
                 rightMargin = dp(ctx, 7)
             }
         }
+        // 첫 줄: 무엇이 도는지(콘텐츠 색) + 요약(금색, 예: 21판 · 293.92G). 쉬는 중이면 '쉬는 중'.
+        val ttl = TextView(ctx).apply {
+            text = "쉬는 중"; setTextColor(C_CREAM)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            isSingleLine = true
+            includeFontPadding = false
+        }
+        // 둘째 줄: 지금 하는 일. 길면 아래 `flow()` 가 왼쪽으로 흘려 보낸다(자르지 않는다).
         val txt = TextView(ctx).apply {
-            // 게임의 '스테이지 104-19' 글자와 같은 밝은 금색(실측 (248,240,97)).
-            text = "쉬는 중"; setTextColor(Color.parseColor("#F8E861"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
-            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-            // 자르지 않는다. 넘치면 아래 `flow()` 가 왼쪽으로 흘려 보낸다.
+            setTextColor(C_SUB)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
             isSingleLine = true
             includeFontPadding = false
         }
@@ -200,95 +199,93 @@ object Overlay {
             clipChildren = true
             addView(txt, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+            visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(dp(ctx, 120), LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = dp(ctx, 4); leftMargin = dp(ctx, 14) }
         }
-        // [멈추기] 는 **늘 보인다.** 예전엔 알약을 탭해야 나왔는데, 그러면 있는 줄도 모른다.
-        // 게다가 그 탭에 밝기 깨우기까지 얹혀 있어서 한 동작이 두 가지 일을 했다.
-        // 이제 버튼은 버튼대로, 나머지 영역은 '깨우기 + 드래그' 로 나눈다.
+        // [멈추기] 는 도는 동안 **늘 보인다.** 예전엔 알약을 탭해야 나왔는데, 그러면 있는 줄도 모른다.
+        // 나머지 영역은 '펼치기 + 깨우기 + 드래그' 로 나눈다.
         val stop = TextView(ctx).apply {
-            text = "멈추기"
-            setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-            // 게임 버튼처럼 두툼하게 — 짙은 외곽선 + 위가 밝은 그라데이션.
-            background = GradientDrawable().apply {
-                colors = intArrayOf(Color.parseColor("#F06A58"), Color.parseColor("#E8503C"))
-                orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                cornerRadius = dp(ctx, 2).toFloat()
-                setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
-            }
-            setPadding(dp(ctx, 11), dp(ctx, 4), dp(ctx, 11), dp(ctx, 4))
-            // 글자가 아무리 길어도 이 버튼은 절대 줄어들지 않는다.
-            minWidth = dp(ctx, 52)
+            text = "■ 멈추기"
+            setTextColor(C_CREAM)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            typeface = sans
+            background = round(Color.TRANSPARENT, dp(ctx, 8).toFloat(), Math.max(1, dp(ctx, 1)), C_BTN_EDGE)
+            setPadding(dp(ctx, 9), dp(ctx, 4), dp(ctx, 9), dp(ctx, 4))
             gravity = Gravity.CENTER
             visibility = View.GONE
             isClickable = true
             setOnClickListener { Runner.stop() }
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { leftMargin = dp(ctx, 9) }
-            // 남는 자리를 글자에게 뺏기지 않게 한다.
-            (layoutParams as LinearLayout.LayoutParams).weight = 0f
+            ).apply { leftMargin = dp(ctx, 10) }
         }
-        // 펼침 화살표. 눌러서 콘텐츠 버튼들을 여닫는다.
-        // ⚠️ 스스로 clickable 이어야 한다 — 안 그러면 알약의 드래그 리스너가 탭을 먼저 먹는다.
+        // 펼침 표시. 열고 닫는 건 알약 전체가 받는다 → 여기는 '지금 열렸나' 를 알리는 표시일 뿐이다.
+        // ⚠️ clickable 로 두면 자기 자리 탭을 가로채 알약 전체 판정과 어긋난다.
         val arw = TextView(ctx).apply {
             text = "▾"
-            setTextColor(Color.parseColor("#F8E861"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setPadding(dp(ctx, 8), dp(ctx, 2), dp(ctx, 4), dp(ctx, 2))
-            // ⚠️ 예전엔 이 화살표만 눌러서 열었는데 **손가락보다 작아 잘 안 눌렸다**(사장님 지적).
-            //    이제 열고 닫는 건 알약 전체가 받는다 → 여기는 '지금 열렸나' 를 알리는 표시일 뿐이다.
-            //    clickable 로 두면 자기 자리 탭을 가로채 알약 전체 판정과 어긋난다.
+            setTextColor(C_MUTED)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(dp(ctx, 8), 0, dp(ctx, 2), 0)
             isClickable = false
         }
-        row.addView(dot); row.addView(host); row.addView(stop); row.addView(arw)
-        pill.addView(track); pill.addView(row)
+        val titleBox = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(dot); addView(ttl)
+        }
+        val texts = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(titleBox); addView(host)
+        }
+        row.addView(texts); row.addView(stop); row.addView(arw)
+        // 진행률 막대 — 얇은 주황(관제 화면과 같은 막대). 분모가 있을 때만 보인다.
+        val fillView = View(ctx).apply {
+            background = round(C_ORANGE, dp(ctx, 2).toFloat())
+            pivotX = 0f
+            scaleX = 0f
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+        }
+        val track = FrameLayout(ctx).apply {
+            background = round(Color.parseColor("#3A2E2B"), dp(ctx, 2).toFloat())
+            addView(fillView)
+            visibility = View.GONE
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(ctx, 4)).apply { topMargin = dp(ctx, 7) }
+        }
+        inner.addView(row); inner.addView(track)
 
         // ── 펼침 패널: 여기서 바로 콘텐츠를 시작할 수 있다 ──
         // 게임을 보는 중에 관제 화면으로 나갔다 오지 않아도 되게.
+        // 시안 B: 큰 그라데이션 버튼 대신 **콘텐츠 색 띠 + 아이콘 줄**(관제 화면 목록과 같은 말).
         val pnl = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#F02E272C"))
-                cornerRadius = dp(ctx, 2).toFloat()
-                setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
-            }
+            background = round(Color.parseColor("#F2231A18"), pr, Math.max(1, dp(ctx, 1)), C_EDGE)
             elevation = dp(ctx, 6).toFloat()
-            setPadding(dp(ctx, 10), dp(ctx, 10), dp(ctx, 10), dp(ctx, 10))
+            setPadding(dp(ctx, 9), dp(ctx, 9), dp(ctx, 9), dp(ctx, 9))
             visibility = View.GONE
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(ctx, 8) }
+            // 폭을 못박는다 — WRAP_CONTENT 면 '보스 조합' 같은 긴 값이 패널을 늘린다.
+            layoutParams = LinearLayout.LayoutParams(dp(ctx, 232), LinearLayout.LayoutParams.WRAP_CONTENT)
+                .apply { topMargin = dp(ctx, 8) }
         }
         contentBtns.clear()
-        val items = listOf<Pair<String, (Context) -> Unit>>(
-            "퀘스트" to { c -> Chores.start(c) },
-            "스테이지 돌파" to { c -> Chores.start(c, stage = true) },
-            "토벌전" to { c -> Runner.startTobol(c) },
-            "일일 던전" to { c -> Daily.start(c) },
-            "아레나" to { c -> Arena.start(c) },
-            "일일 보상" to { c -> Chores.startRewardsOnly(c) }
+        val items = listOf<Pair<Tint.C, (Context) -> Unit>>(
+            Tint.QUEST to { c -> Chores.start(c) },
+            Tint.STAGE to { c -> Chores.start(c, stage = true) },
+            Tint.TOBOL to { c -> Runner.startTobol(c) },
+            Tint.DAILY to { c -> Daily.start(c) },
+            Tint.ARENA to { c -> Arena.start(c) },
+            Tint.REWARD to { c -> Chores.startRewardsOnly(c) }
         )
-        for ((name, go) in items) {
-            val b2 = TextView(ctx).apply {
-                text = name
-                // 게임의 '자동 소환 예약' 알약처럼 — 어두운 판 + 검은 외곽선 + 금색 글자.
-                setTextColor(Color.parseColor("#F8E861"))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-                gravity = Gravity.CENTER
-                background = GradientDrawable().apply {
-                    colors = intArrayOf(Color.parseColor("#4A4048"), Color.parseColor("#332C32"))
-                    orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                    cornerRadius = dp(ctx, 2).toFloat()
-                    setStroke(dp(ctx, 2), Color.parseColor("#0B0609"))
-                }
-                setPadding(dp(ctx, 12), dp(ctx, 7), dp(ctx, 12), dp(ctx, 7))
-                // 아래 [설정][숨기기][끄기] 세 버튼이 이 폭을 나눠 쓴다.
-                // 112dp 였을 때 한 칸이 37dp 라 '⚙ 설정' 이 두 줄로 꺾였다(사장님 지적).
-                minWidth = dp(ctx, 168)
-                isSingleLine = true
+        val rr = dp(ctx, 10).toFloat()
+        for ((tc, go) in items) {
+            val item = FrameLayout(ctx).apply {
+                background = android.graphics.drawable.RippleDrawable(
+                    android.content.res.ColorStateList.valueOf(Color.parseColor("#22FFE9C9")),
+                    round(C_ROW, rr), round(Color.WHITE, rr))
+                foreground = round(Color.TRANSPARENT, rr, Math.max(1, dp(ctx, 1)), C_ROW_EDGE)
+                clipToOutline = true
                 isClickable = true
                 setOnClickListener {
                     val c = appCtx ?: return@setOnClickListener
@@ -305,26 +302,40 @@ object Overlay {
                 }
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { bottomMargin = dp(ctx, 7) }
+                ).apply { bottomMargin = dp(ctx, 6) }
             }
-            contentBtns.add(b2)
-            pnl.addView(b2)
-            // [스테이지 돌파] 바로 아래에 **어느 조합으로 도전할지**를 한 줄 붙인다.
+            val line = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(ctx, 13), dp(ctx, 8), dp(ctx, 11), dp(ctx, 8))
+                addView(IconView(ctx, tc.icon, tc.color),
+                    LinearLayout.LayoutParams(dp(ctx, 16), dp(ctx, 16)).apply { rightMargin = dp(ctx, 10) })
+                addView(TextView(ctx).apply {
+                    text = tc.name
+                    setTextColor(C_TITLE)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                    isSingleLine = true
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                })
+            }
+            // [스테이지 돌파] 줄 오른쪽에 **어느 조합으로 도전할지**를 붙인다.
             // 게임을 보는 중에는 설정 화면까지 들어가지 않는다 — 여기서 바로 확인돼야 한다.
-            // 폭을 버튼과 같은 168dp 로 못박는다(패널이 WRAP_CONTENT 라, 안 박으면 이 줄이 패널을 늘린다).
-            if (name == "스테이지 돌파") {
+            if (tc === Tint.STAGE) {
                 bossLine = TextView(ctx).apply {
-                    setTextColor(Color.parseColor("#C8B79F"))
+                    setTextColor(C_MUTED)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-                    maxLines = 2
+                    isSingleLine = true
                     ellipsize = android.text.TextUtils.TruncateAt.END
-                    setPadding(dp(ctx, 3), 0, dp(ctx, 3), dp(ctx, 7))
-                    layoutParams = LinearLayout.LayoutParams(
-                        dp(ctx, 168), LinearLayout.LayoutParams.WRAP_CONTENT
-                    )
+                    maxWidth = dp(ctx, 90)
                 }
-                pnl.addView(bossLine)
+                line.addView(bossLine)
             }
+            item.addView(line)
+            item.addView(View(ctx).apply { setBackgroundColor(tc.color) },
+                FrameLayout.LayoutParams(dp(ctx, 4), FrameLayout.LayoutParams.MATCH_PARENT))
+            contentBtns.add(item)
+            pnl.addView(item)
         }
         // ── 맨 아래 한 줄 ── 게임을 보는 중에도 손이 가는 것들.
         //
@@ -337,18 +348,18 @@ object Overlay {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(ctx, 8) }
+            ).apply { topMargin = dp(ctx, 2) }
 
             // 설정 — 오븐 개수·아레나 판수처럼 게임을 보다가 고치고 싶어지는 값들이 있다.
-            addView(smallBtn(ctx, "설정", "#C8B79F") {
+            addView(smallBtn(ctx, "설정", C_SUB) {
                 val c = appCtx ?: return@smallBtn
                 closePanel()
                 c.startActivity(android.content.Intent(c, SettingsActivity::class.java)
                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
             })
-            addView(smallBtn(ctx, "숨기기", "#C8B79F") { dismissed = true; hide() })
+            addView(smallBtn(ctx, "숨기기", C_SUB) { dismissed = true; hide() })
             // 끄기 — 다 하고 나서 '이제 그만' 할 자리가 알약에 없으면 앱을 찾아 들어가야 했다.
-            addView(smallBtn(ctx, "끄기", "#E8503C") {
+            addView(smallBtn(ctx, "앱 끄기", C_RED) {
                 val c = appCtx ?: return@smallBtn
                 closePanel()
                 Runner.stop()
@@ -358,7 +369,10 @@ object Overlay {
             })
         })
 
-        box.addView(pill); box.addView(pnl)
+        box.addView(pill, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        box.addView(pnl)
+        stripView = strip; titleView = ttl; textsBox = texts
 
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -417,7 +431,7 @@ object Overlay {
         arrow = arw; panel = pnl; scrollHost = host
         barTrack = track; barFill = fillView
         maxTextW = Math.max(dp(ctx, 120),
-            ctx.resources.displayMetrics.widthPixels - dp(ctx, 168))
+            ctx.resources.displayMetrics.widthPixels - dp(ctx, 190))
         shownText = ""
         tick()
     }
@@ -429,6 +443,7 @@ object Overlay {
         arrow = null; panel = null; contentBtns.clear()
         ticker?.cancel(); ticker = null; scrollHost = null; shownText = ""
         barTrack = null; barFill = null
+        stripView = null; titleView = null; textsBox = null; shownTitle = ""
     }
 
     /**
@@ -524,28 +539,64 @@ object Overlay {
      */
     private fun tick() {
         if (label == null) return
-        // 무엇이 도는지(퀘스트·토벌전…)를 맨 앞에 둔다. 게임을 보는 중에는 이게 제일 궁금하다.
-        val s = if (Runner.running) {
-            val pct = Runner.progress
-            // "퀘스트 · 퀘스트 기다리는 중" 처럼 같은 말이 겹치면 앞을 뺀다(알약은 자리가 귀하다).
-            (if (Runner.task.isNotEmpty() && !Runner.status.startsWith(Runner.task)) Runner.task + " · " else "") +
-                Runner.status +
-                (if (pct >= 0) " " + pct + "%" else "") +
+        val running = Runner.running
+        val stopping = Runner.stopping
+        if (running && Runner.task.isNotEmpty()) Runner.lastTask = Runner.task
+        val tc = if (running || stopping) Tint.of(Runner.task) else null
+
+        // ── 첫 줄: 무엇이 도는지(콘텐츠 색, 굵게) + 요약(금색) ──
+        // 토벌전은 '21판 · 293.92G' 처럼 판 수와 이번 점수, 나머지는 진행률이 있으면 그 %.
+        val pct = Runner.progress
+        val name = when {
+            running -> if (Runner.task.isEmpty()) "봇" else Runner.task
+            stopping -> "멈추는 중"
+            else -> "쉬는 중"
+        }
+        val summary = if (!running) "" else if (Runner.task == "토벌전" && Runner.tobolAttempts > 0)
+            Runner.tobolAttempts.toString() + "판" +
+                (if (Runner.lastScore > 0) " · " + Runner.fmtShort(Runner.lastScore) else "")
+        else if (pct >= 0) "$pct%" else ""
+        val key = name + "|" + summary + "|" + (tc?.color ?: 0)
+        if (key != shownTitle) {
+            shownTitle = key
+            val sb = android.text.SpannableStringBuilder(name)
+            sb.setSpan(android.text.style.ForegroundColorSpan(if (running && tc != null) tc.color else C_CREAM),
+                0, name.length, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            if (summary.isNotEmpty()) {
+                val st = sb.length + 2
+                sb.append("  ").append(summary)
+                sb.setSpan(android.text.style.ForegroundColorSpan(C_GOLD), st, sb.length,
+                    android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            titleView?.text = sb
+        }
+        stripView?.visibility = if (tc != null) View.VISIBLE else View.GONE
+        if (tc != null) stripView?.setBackgroundColor(tc.color)
+
+        // ── 둘째 줄: 지금 하는 일 ── 쉬는 중엔 숨긴다(첫 줄이 다 말한다).
+        // "토벌전 · 토벌전 3회차" 처럼 같은 말이 겹치면 앞을 뺀다(알약은 자리가 귀하다).
+        val s = if (running) {
+            val st = Runner.status
+            (if (Runner.task.isNotEmpty() && st.startsWith(Runner.task)) st.substring(Runner.task.length).trimStart(' ', '·') else st)
+                .ifEmpty { st } +
                 (if (Runner.detail.isNotEmpty()) " · " + Runner.detail else "")
-        } else if (Runner.stopping) "멈추는 중 · 하던 동작을 마치는 중" else "쉬는 중"
+        } else if (stopping) "하던 동작을 마치는 중" else ""
         // **몇 초째인지 붙인다.** 대부분의 상태는 1~2초면 바뀌므로, 8초를 넘겼다는 건
         // '늦은 것' 이 아니라 **아직 그 일을 하고 있다**는 뜻이다(오븐·보스전처럼).
         // 멈춘 건지 오래 걸리는 건지가 이 숫자 하나로 갈린다.
-        val age = if (Runner.running && Runner.statusAt > 0)
+        val age = if (running && Runner.statusAt > 0)
             (System.currentTimeMillis() - Runner.statusAt) / 1000 else 0
-        flow(if (age >= 8) "$s · ${age}초째" else s)
+        scrollHost?.visibility = if (s.isEmpty()) View.GONE else View.VISIBLE
+        if (s.isNotEmpty()) flow(if (age >= 8) "$s · ${age}초째" else s)
         (dotView?.background as? GradientDrawable)?.setColor(
-            if (Runner.running) Color.parseColor("#7CC24A")
-            else if (Runner.stopping) Color.parseColor("#F0921E")   // 멈추는 중 = 주황
-            else Color.parseColor("#8A7565"))
+            if (running) C_ORANGE
+            else if (stopping) C_SUB
+            else C_DOT_IDLE)
+        barTrack?.visibility = if (running && pct >= 0) View.VISIBLE else View.GONE
+        if (running && pct >= 0) barFill?.animate()?.scaleX(pct / 100f)?.setDuration(280)?.start()
         applyBrightness()
         // 설정에서 조합 순서를 바꾸면 다음 tick 에 그대로 따라온다(따로 알릴 필요가 없다).
-        bossLine?.text = "보스 조합  " + Boss.orderShort()
+        bossLine?.text = Boss.orderShort()
         // 돌고 있을 때만 [멈추기] 를 보여 준다. 쉬는 중에 눌러 봐야 할 일이 없다.
         stopBtn?.visibility = if (Runner.running) View.VISIBLE else View.GONE
 

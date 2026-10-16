@@ -49,6 +49,9 @@ object Runner {
     @Volatile var progress = -1
     @Volatile var lastScore = 0L           // 이번 판 점수
     @Volatile var bestScore = 0L           // 이번 세션 최고 점수
+    @Volatile var tobolAttempts = 0        // 이번에 돌린 판 수(관제 화면·알약이 그대로 보여 준다)
+    /** 마지막으로 돌았던 콘텐츠 — 쉬는 중 카드의 '지난 결과' 띠 색을 정한다. */
+    @Volatile var lastTask = ""
 
     /**
      * ★ 내 최고 기록 — 게임이 토벌전 로비 '개인 랭킹' 칸에 적어 두는 **내 시즌 최고 점수**.
@@ -400,7 +403,7 @@ object Runner {
      */
     fun startTobol(ctx: Context, maxAttempts: Int = if (Prefs.testMode) 0 else -1) {
         if (!guard()) return
-        running = true; task = "토벌전"; lastScore = 0L; bestScore = 0L
+        running = true; task = "토벌전"; lastScore = 0L; bestScore = 0L; tobolAttempts = 0
         // 내 기록은 **이번 돌림 기준**으로 다시 잡는다(시작값이 있어야 '경신' 을 가릴 수 있다).
         myRecord = 0L; myRecordStart = 0L
         thread(name = "tobol") {
@@ -511,7 +514,7 @@ object Runner {
      * 게임 실측: 최종 점수 `308,335,332,958` = 표지판 `308.33G` · `내 최고 기록 337.27G` · `2T 380G`.
      * T·G·M·K 에 소수 둘째 자리까지 **버림**(게임이 308.335 를 308.33 으로 적는다). 예전엔 `3,083.4억` 이라 게임과 견주기 어려웠다.
      */
-    private fun fmtShort(n: Long): String {
+    fun fmtShort(n: Long): String {
         val units = arrayOf(1_000_000_000_000L to "T", 1_000_000_000L to "G", 1_000_000L to "M", 1_000L to "K")
         for ((u, sfx) in units) {
             if (n >= u) {
@@ -611,7 +614,7 @@ object Runner {
             // 로비에 있는 김에 내 최고 기록을 읽는다 — 방금 찍은 장을 그대로 쓰므로 캡처가 안 늘어난다.
             // (판마다 다시 읽으니 넘어서는 순간 '경신' 이 바로 뜬다.)
             lobbyShot?.let { updateMyRecord(it) }
-            attempts++
+            attempts++; tobolAttempts = attempts
             set("토벌전 " + attempts + "회차", "도전하는 중")
             tap(Screen.TOBOL_CHALLENGE, 3000)
 

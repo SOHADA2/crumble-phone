@@ -49,23 +49,24 @@ open class ListActivity : AppCompatActivity() {
     // ── iOS 묶음 목록 조각들 ──────────────────────────────────
 
     /** 구역 이름. 목록 위에 작게 붙는 회색 글씨. */
-    protected fun sectionHeader(title: String) = text(title, 14f, t.gold, medium).apply {
-        setPadding(dp(22), dp(26), dp(20), dp(8))
-        letterSpacing = 0.06f
+    protected fun sectionHeader(title: String) = text(title, 12f, t.label3, Typeface.DEFAULT_BOLD).apply {
+        // 시안 B: 구역 이름은 작고 흐린 갈색(PC 설정창 카드 제목과 같은 자리).
+        setPadding(dp(22), dp(20), dp(20), dp(8))
+        letterSpacing = 0.04f
     }
 
     /** 셀들을 담는 둥근 카드. 모서리 클리핑은 여기서 한 번만 한다. */
     protected fun group(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        // 게임 패널처럼 두툼한 테두리를 두른다.
-        background = t.card(dpf(18f), Math.max(1, dp(3)))
+        // 시안 B: 둥근 카드 + 얇은 테두리(예전의 두꺼운 검은 테두리는 뺐다).
+        background = t.card(dpf(14f), Math.max(1, dp(1)))
         clipToOutline = true
         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
             leftMargin = dp(16); rightMargin = dp(16)
         }
     }
 
-    /** 셀 사이 선. 게임 패널의 홈처럼 살짝 굵게 판다. */
+    /** 셀 사이 선. */
     protected fun separator(): View = View(this).apply {
         setBackgroundColor(t.separator)
         layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, Math.max(1, dp(1))).apply {
@@ -83,32 +84,45 @@ open class ListActivity : AppCompatActivity() {
         subtitle: String = "",
         chevron: Boolean = true,
         tint: Int? = null,
+        strip: Int? = null,
         onClick: () -> Unit
     ): LinearLayout {
         // 부제가 있으면 제목 아래 한 줄 더. 콘텐츠 줄이 무슨 일을 하는지 한눈에 보이게 한다.
         val lbl: View = if (subtitle.isEmpty()) {
-            text(title, 17f, tint ?: t.label).apply {
+            text(title, 15f, tint ?: t.label).apply {
                 layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
             }
         } else {
             LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                addView(text(title, 17f, tint ?: t.label))
-                addView(text(subtitle, 13f, t.label2).apply { setPadding(0, dp(2), 0, 0) })
+                addView(text(title, 15f, tint ?: t.label))
+                addView(text(subtitle, 12f, t.label3).apply { setPadding(0, dp(2), 0, 0) })
                 layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
             }
         }
-        val v = text(value, 17f, t.label2).apply { tag = "value" }
+        // 값은 **금색 값 칩**(시안 B). 비어 있으면 칩째 숨긴다 — 빈 칩이 남으면 고장처럼 보인다.
+        val v = text(value, 12f, t.gold).apply {
+            tag = "value"
+            background = t.box(t.bg, dpf(8f), Math.max(1, dp(1)), t.borderDim)
+            setPadding(dp(10), dp(4), dp(10), dp(4))
+            visibility = if (value.isEmpty()) View.GONE else View.VISIBLE
+            layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(8) }
+        }
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = t.ripple(t.cell)
-            minimumHeight = dp(50)
-            setPadding(dp(16), dp(12), dp(16), dp(12))
+            minimumHeight = dp(54)
+            setPadding(dp(16), dp(12), dp(14), dp(12))
+            // 콘텐츠와 이어진 값(아레나 판수 등)은 이름 앞에 그 콘텐츠 색 짧은 띠를 붙인다.
+            if (strip != null) addView(View(this@ListActivity).apply {
+                background = t.round(strip, dpf(2f))
+                layoutParams = LinearLayout.LayoutParams(dp(4), dp(16)).apply { rightMargin = dp(9) }
+            })
             addView(lbl)
             addView(v)
-            if (chevron) addView(text("›", 24f, t.borderDim, medium).apply {
-                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(6) }
+            if (chevron) addView(text("›", 20f, t.dotIdle, medium).apply {
+                layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(8) }
             })
             isClickable = true
             setOnClickListener { onClick() }
@@ -118,21 +132,26 @@ open class ListActivity : AppCompatActivity() {
     /** 켜고 끄는 줄. 오른쪽 끝에 스위치가 붙는다(꺾쇠 대신). */
     protected fun switchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit): Pair<LinearLayout, Switch> {
         val sw = Switch(this).apply {
+            // 시안 B 스위치: 켜짐 = 주황 홈 + 흰 손잡이, 꺼짐 = 갈색 홈 + 크림 손잡이.
+            val st = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+            thumbTintList = android.content.res.ColorStateList(st, intArrayOf(android.graphics.Color.WHITE, t.label2))
+            trackTintList = android.content.res.ColorStateList(st, intArrayOf(t.orange, t.borderDim))
+            trackTintMode = android.graphics.PorterDuff.Mode.SRC_IN
             isChecked = checked
             setOnCheckedChangeListener { _, v -> onChange(v) }
         }
         val lbl = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(text(title, 17f, t.label))
-            addView(text(subtitle, 13f, t.label2).apply { setPadding(0, dp(2), 0, 0) })
+            addView(text(title, 15f, t.label))
+            addView(text(subtitle, 12f, t.label3).apply { setPadding(0, dp(2), 0, 0) })
             layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
         }
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = t.ripple(t.cell)
-            minimumHeight = dp(50)
-            setPadding(dp(16), dp(12), dp(16), dp(12))
+            minimumHeight = dp(54)
+            setPadding(dp(16), dp(12), dp(14), dp(12))
             addView(lbl); addView(sw)
             isClickable = true
             setOnClickListener { sw.toggle() }
@@ -141,7 +160,12 @@ open class ListActivity : AppCompatActivity() {
     }
 
     protected fun LinearLayout.setValue(s: String, color: Int) {
-        (findViewWithTag<TextView>("value"))?.let { it.text = s; it.setTextColor(color) }
+        // 값 칩은 늘 금색 — 다만 '필요'·'못 찾음' 처럼 주의할 값(주황/빨강)은 그 색을 그대로 쓴다.
+        (findViewWithTag<TextView>("value"))?.let {
+            it.text = s
+            it.setTextColor(if (color == t.label2) t.gold else color)
+            it.visibility = if (s.isEmpty()) View.GONE else View.VISIBLE
+        }
     }
 
     /**
@@ -158,7 +182,7 @@ open class ListActivity : AppCompatActivity() {
         d.window?.setBackgroundDrawable(android.graphics.drawable.GradientDrawable().apply {
             setColor(t.cell)
             cornerRadius = dpf(16f)
-            setStroke(dp(2), t.border)
+            setStroke(Math.max(1, dp(1)), t.border)
         })
         // 제목은 시스템이 만든 뷰라 id 로 찾는다(플랫폼마다 없을 수 있어 널 안전하게).
         val tid = resources.getIdentifier("alertTitle", "id", "android")

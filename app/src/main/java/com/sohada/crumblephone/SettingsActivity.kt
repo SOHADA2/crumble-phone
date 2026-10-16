@@ -34,7 +34,6 @@ class SettingsActivity : ListActivity() {
     private lateinit var rowCharge: LinearLayout
     private lateinit var rowDPlan: LinearLayout
     private lateinit var rowDelay: LinearLayout
-    private lateinit var rowBossOrder: LinearLayout
     private lateinit var rowGame: LinearLayout
     private lateinit var rowUpdate: LinearLayout
     private val ui = Handler(Looper.getMainLooper())
@@ -55,26 +54,26 @@ class SettingsActivity : ListActivity() {
             setPadding(0, dp(8), 0, dp(36))
         }
 
-        // 제목 줄 — 왼쪽에 돌아가기, 그 옆에 큰 제목. 뒤로가기 버튼이 눈에 보여야 헤매지 않는다.
+        // 제목 줄 — 왼쪽에 돌아가기, 그 옆에 제목과 한 줄 설명. 뒤로가기 버튼이 눈에 보여야 헤매지 않는다.
         root.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(text("‹", 26f, t.label, medium).apply {
+            setPadding(dp(16), dp(10), dp(16), dp(4))
+            addView(text("‹", 22f, t.label2).apply {
                 gravity = Gravity.CENTER
-                background = t.chunky(t.cell, dpf(21f), dp(2), dp(3))
+                setPadding(0, 0, 0, dp(3))
+                background = t.rippleOver(t.box(t.cell, dpf(12f), Math.max(1, dp(1)), t.separator), dpf(12f))
                 isClickable = true
                 setOnClickListener { finish() }
-                layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply {
-                    leftMargin = dp(18); topMargin = dp(12)
-                }
+                layoutParams = LinearLayout.LayoutParams(dp(40), dp(40)).apply { rightMargin = dp(12) }
             })
-            addView(text("설정", 30f, t.gold, Typeface.DEFAULT_BOLD).apply {
-                setPadding(dp(14), dp(12), dp(20), 0)
-                setOnClickListener { onTitleTap() }   // 일곱 번 → 실험실
+            addView(LinearLayout(this@SettingsActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(text("설정", 20f, t.title, Typeface.DEFAULT_BOLD).apply {
+                    setOnClickListener { onTitleTap() }   // 일곱 번 → 실험실
+                })
+                addView(text("바꾼 값은 바로 저장돼요", 12f, t.label3))
             })
-        })
-        root.addView(text("바꾼 값은 바로 저장돼요.", 14f, t.label2).apply {
-            setPadding(dp(76), dp(2), dp(20), 0)
         })
 
         // ── 게임 ──
@@ -85,45 +84,14 @@ class SettingsActivity : ListActivity() {
         gGame.addView(row("게임 켜기", subtitle = "봇 없이 게임만 열어요") { launchGame() })
         root.addView(gGame)
 
-        // ── 자동 실행 ──
-        root.addView(sectionHeader("자동 실행"))
-        val gRun = group()
-        rowArena = row("아레나 판수", value = Prefs.arenaFights.toString() + "판",
-            subtitle = "재화가 먼저 떨어지면 거기서 끝나요") { cycle(Prefs.ARENA_CHOICES, true) }
-        // 오븐은 레벨마다 한 번에 여는 개수가 달라서, 게임 쪽 값을 여기에 맞춰 둬야
-        // 봇이 '한 싸이클'이 얼마나 큰지 알고 상한을 제대로 잡는다.
-        rowOven = row("오븐 1회 개수", value = Prefs.ovenPerRun.toString() + "개",
-            subtitle = "게임의 '자동 열기 → 1회에 여는 개수'와 같게") { cycle(Prefs.OVEN_CHOICES, false) }
-        // 보스는 조합을 바꿔 가며 도전하는데, 다섯 칸을 다 짜 두는 사람은 드물다.
-        // 안 짜 둔 칸으로도 한 번씩 싸우면 한 바퀴에 35초씩 그냥 버린다 → 쓸 것만 고르게 한다.
-        rowBossOrder = row("보스 조합 순서", value = Boss.orderShort(),
-            subtitle = "고른 조합만, 고른 차례대로 도전해요") { pickBossOrder() }
-        rowDelay = row("돌진 시작 지연", value = delayLabel(),
-            subtitle = "보스 소환 직후엔 아직 조이스틱이 안 먹어요") { cycleDelay() }
-        rowCharge = row("보스전 돌진 시간", value = chargeLabel(),
-            subtitle = "보스가 나오면 오른쪽으로 밀어붙여요 · 달려들면 잘 잡히는 보스가 많아요") { cycleCharge() }
-        // 예전 두 줄('던전 돌진 시작 지연'·'경험치 던전 돌진 시간')을 던전별 타임라인 하나로 바꿨다(2026-10-01).
-        rowDPlan = row("일일 던전 컨트롤", value = DailyPlan.summary(),
-            subtitle = "던전마다 몇 초에 어느 방향으로 움직일지 방향키로 정해요 · 보스전 돌진과는 별개") {
-            startActivity(Intent(this, DailyPlanActivity::class.java))
-        }
+        // ── 봇 동작 ── 켜고 끄는 것(PC 설정창 '봇 동작' 카드와 같은 자리)
+        root.addView(sectionHeader("봇 동작"))
+        val gBot = group()
         val (rAd, _) = switchRow("광고 제거 있음",
             "일일 던전에서 [SKIP]으로 횟수를 더 받아요", Prefs.adFree) { Prefs.adFree = it }
-        gRun.addView(rAd); gRun.addView(separator())
-        gRun.addView(rowArena); gRun.addView(separator())
-        gRun.addView(rowOven); gRun.addView(separator())
-        gRun.addView(rowBossOrder); gRun.addView(separator())
-        gRun.addView(rowDelay); gRun.addView(separator())
-        gRun.addView(rowCharge); gRun.addView(separator())
-        gRun.addView(rowDPlan)
-        root.addView(gRun)
-        // (덱 구성·쿠키 사전·덱 이름은 2026-10-15 에 통째로 뺐다 — 쓸모가 없다는 사장님 판단)
-
-        // ── 화면 ──
-        root.addView(sectionHeader("화면"))
-        val gScr = group()
+        gBot.addView(rAd); gBot.addView(separator())
         val (rDim, _) = switchRow("화면 어둡게",
-            "봇이 도는 동안만. 알약을 탭하면 15초 밝아져요", Prefs.dimScreen) {
+            "봇이 도는 동안만 · 알약을 탭하면 15초 밝아져요", Prefs.dimScreen) {
             Prefs.dimScreen = it
             if (it && !Overlay.canDraw(this)) {
                 android.app.AlertDialog.Builder(this)
@@ -134,8 +102,39 @@ class SettingsActivity : ListActivity() {
                     .show()
             }
         }
-        gScr.addView(rDim)
-        root.addView(gScr)
+        gBot.addView(rDim)
+        root.addView(gBot)
+
+        // ── 쿠키 조합 ── 창을 따로 띄우지 않고 여기서 바로 고른다(시안 B · PC 설정창과 같은 칩).
+        root.addView(sectionHeader("쿠키 조합"))
+        root.addView(bossOrderCard())
+
+        // ── 자동 실행 ──
+        root.addView(sectionHeader("자동 실행"))
+        val gRun = group()
+        rowArena = row("아레나 판수", value = Prefs.arenaFights.toString() + "판",
+            subtitle = "재화가 먼저 떨어지면 거기서 끝나요", strip = Tint.ARENA.color) { cycle(Prefs.ARENA_CHOICES, true) }
+        // 오븐은 레벨마다 한 번에 여는 개수가 달라서, 게임 쪽 값을 여기에 맞춰 둬야
+        // 봇이 '한 싸이클'이 얼마나 큰지 알고 상한을 제대로 잡는다.
+        rowOven = row("오븐 1회 개수", value = Prefs.ovenPerRun.toString() + "개",
+            subtitle = "게임의 '자동 열기 → 1회에 여는 개수'와 같게") { cycle(Prefs.OVEN_CHOICES, false) }
+        rowDelay = row("돌진 시작 지연", value = delayLabel(),
+            subtitle = "보스 소환 직후엔 아직 조이스틱이 안 먹어요", strip = Tint.STAGE.color) { cycleDelay() }
+        rowCharge = row("보스전 돌진 시간", value = chargeLabel(),
+            subtitle = "보스가 나오면 오른쪽으로 밀어붙여요 · 달려들면 잘 잡히는 보스가 많아요", strip = Tint.STAGE.color) { cycleCharge() }
+        // 예전 두 줄('던전 돌진 시작 지연'·'경험치 던전 돌진 시간')을 던전별 타임라인 하나로 바꿨다(2026-10-01).
+        rowDPlan = row("일일 던전 컨트롤", value = DailyPlan.summary(),
+            subtitle = "던전마다 몇 초에 어느 방향으로 움직일지 방향키로 정해요 · 보스전 돌진과는 별개",
+            strip = Tint.DAILY.color) {
+            startActivity(Intent(this, DailyPlanActivity::class.java))
+        }
+        gRun.addView(rowArena); gRun.addView(separator())
+        gRun.addView(rowOven); gRun.addView(separator())
+        gRun.addView(rowDelay); gRun.addView(separator())
+        gRun.addView(rowCharge); gRun.addView(separator())
+        gRun.addView(rowDPlan)
+        root.addView(gRun)
+        // (덱 구성·쿠키 사전·덱 이름은 2026-10-15 에 통째로 뺐다 — 쓸모가 없다는 사장님 판단)
 
         // ── 점검 ──
         root.addView(sectionHeader("점검"))
@@ -492,99 +491,96 @@ class SettingsActivity : ListActivity() {
     }
 
     /**
-     * 보스에 쓸 **쿠키 조합과 그 순서**를 고른다.
+     * 보스에 쓸 **쿠키 조합과 그 순서**를 고르는 카드 — 1~5 칩을 누른 차례가 곧 도전 차례다.
      *
-     * 순서가 중요하므로 목록에서 체크만 하는 방식으로는 안 된다 —
-     * **누른 차례가 곧 도전 차례**다(1 → 2 → 3 처럼 번호 아래에 몇 번째인지 적힌다).
-     * 이미 고른 것을 다시 누르면 빠지고 뒤 번호가 당겨진다.
+     * 예전엔 창(AlertDialog)을 띄웠는데, 시안 B(2026-10-16)에서 PC 설정창처럼 **화면에 바로** 둔다.
+     * 고른 칩은 콘텐츠 색(스테이지 돌파 주황) 테두리 + 오른쪽 위 금색 **순서 배지**.
+     * 이미 고른 것을 다시 누르면 빠지고 뒤 번호가 당겨진다. 누를 때마다 바로 저장한다.
+     * 마지막 하나는 못 뺀다(하나도 없으면 보스를 아예 못 친다).
      */
-    private fun pickBossOrder() {
+    private fun bossOrderCard(): LinearLayout {
         val picked = Boss.order().toMutableList()
-        val btns = ArrayList<TextView>()
+        val tint = Tint.STAGE.color
+        val chips = ArrayList<Pair<android.widget.FrameLayout, TextView>>()
+        val nums = ArrayList<TextView>()
+        val line = text("", 12f, t.label2).apply { setPadding(0, dp(10), 0, 0) }
 
-        val line = text("", 20f, t.gold, medium).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, dp(14), 0, dp(2))
+        fun save() {
+            Prefs.bossOrder = picked.joinToString(",")
+            Bot.log("보스 조합 순서를 " + Boss.orderLabel() + " 로 바꿨어요")
         }
-        val note = text("", 13f, t.label2).apply {
-            gravity = Gravity.CENTER
-            setPadding(dp(8), 0, dp(8), dp(4))
-        }
-
         fun refresh() {
             for (i in 1..Boss.PRESETS) {
-                val v = btns[i - 1]
+                val (chip, badge) = chips[i - 1]
                 val at = picked.indexOf(i)
                 val on = at >= 0
-                // 번호 / 몇 번째 — 두 줄까지.
-                v.text = i.toString() +
-                    (if (on) "\n" + (at + 1) + "번째" else "")
-                v.setTextColor(if (on) t.border else t.label3)
-                v.background = t.chunky(if (on) t.gold else t.cell, dpf(14f), dp(2), dp(3))
+                chip.background = t.rippleOver(t.box(if (on) t.track else t.bg, dpf(10f),
+                    Math.max(1, dpf(1.4f).toInt()), if (on) tint else t.separator), dpf(10f))
+                nums[i - 1].setTextColor(if (on) t.title else t.label3)
+                badge.visibility = if (on) View.VISIBLE else View.GONE
+                badge.text = (at + 1).toString()
             }
-            line.text = if (picked.isEmpty()) "고른 조합이 없어요" else picked.joinToString(" → ") + "번 덱"
-            val off = (1..Boss.PRESETS).filter { it !in picked }.joinToString("·")
-            note.text = when {
-                picked.isEmpty() -> "하나 이상 골라야 저장돼요"
-                off.isEmpty()    -> "다섯 조합을 모두 씁니다"
-                else             -> "안 고른 조합(" + off + ")은 아예 도전하지 않아요"
-            }
+            line.text = "도전 순서:  " + picked.joinToString(" → ") { it.toString() + "번 덱" }
         }
 
-        val rowBtns = LinearLayout(this).apply {
+        val all = text("1~5 전부", 11f, t.label2).apply {
+            background = t.rippleOver(t.outline(dpf(8f), Math.max(1, dp(1)), t.borderDim), dpf(8f))
+            setPadding(dp(10), dp(4), dp(10), dp(4))
+            isClickable = true
+            setOnClickListener { picked.clear(); for (i in 1..Boss.PRESETS) picked.add(i); save(); refresh() }
+        }
+        val head = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(dp(8), dp(8), dp(8), dp(8))
+            gravity = Gravity.CENTER_VERTICAL
+            addView(View(this@SettingsActivity).apply {
+                background = t.round(tint, dpf(2f))
+                layoutParams = LinearLayout.LayoutParams(dp(4), dp(16)).apply { rightMargin = dp(9) }
+            })
+            addView(LinearLayout(this@SettingsActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(text("보스 조합 순서", 15f, t.label))
+                addView(text("고른 조합만, 누른 차례대로 도전해요", 12f, t.label3).apply { setPadding(0, dp(2), 0, 0) })
+                layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            })
+            addView(all)
+        }
+        val rowChips = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(12), 0, 0)
         }
         for (i in 1..Boss.PRESETS) {
-            val v = text("", 15f, t.label, medium).apply {
+            val num = text(i.toString(), 15f, t.label3, Typeface.DEFAULT_BOLD).apply { gravity = Gravity.CENTER }
+            val badge = text("", 10f, t.ink, Typeface.DEFAULT_BOLD).apply {
                 gravity = Gravity.CENTER
-                minimumHeight = dp(56)
-                isClickable = true
-                // ⚠️ 폭을 60dp 로 못박았더니 **다섯 번째가 창 밖으로 잘렸다**(실측).
-                //    다섯이 창 폭을 똑같이 나눠 갖게 한다.
-                layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply {
-                    leftMargin = dp(3); rightMargin = dp(3)
-                }
-                setOnClickListener {
-                    if (!picked.remove(i)) picked.add(i)   // 이미 있으면 빼고, 없으면 뒤에 붙인다
-                    refresh()
+                includeFontPadding = false
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(t.gold)
                 }
             }
-            btns.add(v); rowBtns.addView(v)
-        }
-
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(4), dp(12), dp(4))
-            addView(rowBtns); addView(line); addView(note)
+            val chip = android.widget.FrameLayout(this).apply {
+                addView(num, android.widget.FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                addView(badge, android.widget.FrameLayout.LayoutParams(dp(16), dp(16)).apply {
+                    gravity = Gravity.END or Gravity.TOP; topMargin = dp(4); rightMargin = dp(4)
+                })
+                isClickable = true
+                setOnClickListener {
+                    if (picked.contains(i)) {
+                        if (picked.size == 1) {
+                            Toast.makeText(this@SettingsActivity, "조합을 하나 이상 골라 주세요", Toast.LENGTH_SHORT).show()
+                            return@setOnClickListener
+                        }
+                        picked.remove(i)
+                    } else picked.add(i)
+                    save(); refresh()
+                }
+                layoutParams = LinearLayout.LayoutParams(0, dp(46), 1f).apply { leftMargin = dp(3); rightMargin = dp(3) }
+            }
+            chips.add(chip to badge); nums.add(num); rowChips.addView(chip)
         }
         refresh()
-
-        val d = android.app.AlertDialog.Builder(this)
-            .setTitle("보스 조합 순서")
-            .setView(box)
-            .setPositiveButton("저장", null)
-            .setNegativeButton("취소", null)
-            .setNeutralButton("1~5 전부", null)
-            .create()
-        d.setOnShowListener {
-            styleDialog(d)
-            // 기본 동작(누르면 무조건 닫힘)을 덮어쓴다 — 하나도 안 골랐을 땐 닫지 않고 알려 준다.
-            d.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
-                if (picked.isEmpty()) {
-                    Toast.makeText(this, "조합을 하나 이상 골라 주세요", Toast.LENGTH_SHORT).show()
-                } else {
-                    Prefs.bossOrder = picked.joinToString(",")
-                    rowBossOrder.setValue(Boss.orderShort(), t.label2)
-                    Bot.log("보스 조합 순서를 " + Boss.orderLabel() + " 로 바꿨어요")
-                    d.dismiss()
-                }
-            }
-            d.getButton(android.content.DialogInterface.BUTTON_NEUTRAL).setOnClickListener {
-                picked.clear(); for (i in 1..Boss.PRESETS) picked.add(i); refresh()
-            }
+        return group().apply {
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            addView(head); addView(rowChips); addView(line)
         }
-        d.show()
     }
 }
