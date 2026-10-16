@@ -197,6 +197,7 @@ object Chores {
         var autoTries = 0         // 게임이 소환한 보스전에서 진 뒤 바꿔 쓴 조합 수(Boss.order 순번)
         var autoNoticed = false
         var bulkTries = 0         // '한번에 클리어'를 몇 번 눌러 봤는지(안 먹으면 그만 두려고)
+        var ovenOverSince = 0L    // 스테이지 돌파: 오븐 패널·정리 창이 처음 보인 시각(1분은 사람이 만지게 둔다)
         var loggedFirst = false   // 시작 화면 판정값을 한 번만 남기려고
         tapsProven = false        // 증거는 실행마다 새로 모은다
         gachaSwitchTried = false
@@ -213,6 +214,36 @@ object Chores {
                 loggedFirst = true
                 Bot.log("시작 화면: " + Screen.debugLine(b))
                 Bot.log("  기준점: " + Screen.landmarks(b))
+            }
+
+            // ── 스테이지 돌파: 사람이 돌리는 오븐의 창은 **정리하지 않는다** (2026-10-16 · PC 와 같음) ──
+            //   장비 프리셋이 생긴 뒤로 [정리 하기] 는 전투력 높은 순으로 장착해 버려서, 원하는 옵션을
+            //   손으로 끼우려는 사람에겐 망치는 버튼이다. 비교 팝업만 바깥을 눌러 넘기고(장비는 오븐에 쌓인다)
+            //   장착·판매·정리는 절대 안 누른다. 비교 팝업은 배경을 어둡게 해 아래 '절전' 에 걸릴 수 있어 먼저 본다.
+            if (stageOnly) {
+                if (Screen.isOvenPopup(b)) {
+                    ovenOverSince = 0L
+                    Runner.set("오븐 장비 넘기는 중", "정리는 안 해요 · 장비는 오븐에 쌓여요")
+                    Runner.tap(Screen.OUTSIDE, 1000); continue
+                }
+                val tidy = Screen.isOvenFullTidy(b)
+                if (tidy || Screen.ovenPanelKind(b) != "none") {
+                    val now = System.currentTimeMillis()
+                    if (ovenOverSince == 0L) {
+                        ovenOverSince = now
+                        Bot.log(if (tidy) "오븐 '자동 정리' 창 - 정리하지 않습니다 (1분 뒤 [그만두기])" else "오븐 Auto 창 - 손대지 않습니다 (1분 뒤 ✕ 로 닫기만)")
+                    }
+                    if (now - ovenOverSince < 60_000L) {
+                        Runner.set("오븐 창이 열려 있어요", "정리는 직접 해 주세요")
+                        Runner.sleep(4000); continue
+                    }
+                    // 1분 넘게 그대로면 자리를 비운 것 — 스테이지가 멈추지 않게 **닫기만** 한다.
+                    //   [시작]/[정리 하기] 자리(OVEN_GO) 는 절대 누르지 않는다. 정리 창은 왼쪽이 안전한 쪽.
+                    if (tidy) { Bot.log("  오븐 '자동 정리' 창 - [그만두기] (정리 안 함)"); Runner.tap(Screen.OVEN_TIDY_STOP, 2000) }
+                    else { Bot.log("  오븐 Auto 창 - ✕ 로 닫기만 합니다"); Runner.tap(Screen.OVEN_PANEL_X, 2000) }
+                    ovenOverSince = 0L; continue
+                }
+                ovenOverSince = 0L
             }
 
             // ── 화면이 '평평'하면 절전이거나 공지 팝업이 독을 덮은 것이다 ──

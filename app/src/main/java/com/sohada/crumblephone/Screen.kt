@@ -1189,6 +1189,30 @@ object Screen {
         return "open"
     }
 
+    val OVEN_TIDY_STOP = intArrayOf(430, 2790)       // 30개 '자동 정리' 창의 왼쪽 [그만두기] (정리 안 함 · 안전한 쪽)
+    private val OVEN_TIDY_GO = intArrayOf(1010, 2790) // 같은 창 오른쪽 [정리하기] — 판정에만 쓰고 **절대 누르지 않는다**
+
+    /**
+     * 오븐이 30개 꽉 차 뜨는 '자동 정리' 창인가 — 왼쪽 [그만두기] 청록 + 오른쪽 [정리하기] 주황.
+     * PC oven.ps1 Test-FullTidy 와 같은 점·같은 식(좌표는 PC 스크린샷 기준 추정치).
+     */
+    fun isOvenFullTidy(b: Bitmap): Boolean {
+        fun avg(cx: Int, cy: Int): IntArray {
+            var r = 0; var g = 0; var bl = 0; var k = 0
+            var x = cx - 40
+            while (x <= cx + 40) {
+                var y = cy - 15
+                while (y <= cy + 15) { val c = px(b, x, y); r += Color.red(c); g += Color.green(c); bl += Color.blue(c); k++; y += 10 }
+                x += 10
+            }
+            return intArrayOf(r / k, g / k, bl / k)
+        }
+        val l = avg(OVEN_TIDY_STOP[0], OVEN_TIDY_STOP[1]); val rr = avg(OVEN_TIDY_GO[0], OVEN_TIDY_GO[1])
+        val tealLeft = l[1] > l[0] * 1.3 && l[2] > l[0] * 1.3
+        val orangeRight = rr[0] > 120 && rr[0] > rr[2] * 1.8 && rr[1] > rr[2]
+        return tealLeft && orangeRight
+    }
+
     /**
      * 장착/판매 비교 팝업이 떠 있나? '장착' 버튼 자리가 청록이면 참.
      * 절대값을 쓰면 게임이 화면을 어둡게 만들 때 깨진다 — 청록은 G·B 가 R 보다 훨씬 크다는 비율로 본다.
