@@ -90,6 +90,14 @@ object Runner {
      */
     @Volatile var myRecord = 0L            // 지금 게임에 적힌 내 최고 기록
     @Volatile var myRecordStart = 0L       // 돌리기 시작할 때의 기록(이걸 넘으면 '경신')
+    /**
+     * ★ 개인 랭킹 등수(2026-10-16 · PC 와 같이). 사장님: *"5등이었다가 4등으로 올라갔다면 그런 것들을 표시."*
+     * 로비 '개인 랭킹' 줄 왼쪽의 `5th`(PC 실측 x95~150 · y1331~1378). 꼬리(st·nd·rd·th)가 붙은 숫자만 받는다.
+     */
+    @Volatile var myRank = 0
+    @Volatile var myRankStart = 0
+    /** 등수가 바뀐 판에 붙일 꼬리(정산 판별 기록) — 루프가 읽고 비운다. */
+    @Volatile var rankMoveNote = ""
 
     /** 화면 한 장.
      *  ⚠️ 다음에 shot() 을 부르면 앞 장은 **recycle 된다**(한 장이 18MB 라 들고 있을 수 없다).
@@ -432,6 +440,7 @@ object Runner {
     fun startTobol(ctx: Context, maxAttempts: Int = if (Prefs.testMode) 0 else -1) {
         if (!guard()) return
         running = true; task = "토벌전"; lastScore = 0L; bestScore = 0L; tobolAttempts = 0
+        myRank = 0; myRankStart = 0; rankMoveNote = ""
         // 내 기록은 **이번 돌림 기준**으로 다시 잡는다(시작값이 있어야 '경신' 을 가릴 수 있다).
         myRecord = 0L; myRecordStart = 0L
         thread(name = "tobol") {
@@ -576,7 +585,26 @@ object Runner {
      * 숫자만 뽑으면 `20206` 이 되고, `58G 96M` 은 `5896`(실제의 1/10)이 된다.
      * ⚠️ 받은 그 자리에서 읽을 것 — 다음 `shot()` 이 이 장을 recycle 한다.
      */
+    private val RANK_RE = Regex("(\\d{1,4})\\s*(st|nd|rd|th)")
+
+    private fun updateMyRank(b: Bitmap) {
+        for (dy in intArrayOf(0, -40, 40)) {
+            val t = Ocr.readText(b, 30, 1315 + dy, 150, 75) ?: continue
+            val m = RANK_RE.find(t) ?: continue
+            val v = m.groupValues[1].toIntOrNull() ?: continue
+            if (v < 1) continue
+            if (myRankStart == 0) { myRankStart = v; Bot.log("내 등수: " + v + "등") }
+            else if (myRank > 0 && v != myRank) {
+                Bot.log("등수 " + myRank + "등 → " + v + "등")
+                rankMoveNote = "  " + (if (v < myRank) "↑" else "↓") + " " + myRank + "등→" + v + "등"
+            }
+            myRank = v
+            return
+        }
+    }
+
     private fun updateMyRecord(b: Bitmap) {
+        updateMyRank(b)
         // 랭킹 줄 위에 무엇이 붙느냐에 따라 칸이 아래위로 밀릴 수 있다(토벌 탭 줄이 시즌마다
         // 밀려 로비 판정이 통째로 죽은 적이 있다). 그래서 못 읽으면 y 를 ±40 만 훑어 본다.
         var v: Long? = null
@@ -647,6 +675,8 @@ object Runner {
             // 로비에 있는 김에 내 최고 기록을 읽는다 — 방금 찍은 장을 그대로 쓰므로 캡처가 안 늘어난다.
             // (판마다 다시 읽으니 넘어서는 순간 '경신' 이 바로 뜬다.)
             lobbyShot?.let { updateMyRecord(it) }
+            if (rankMoveNote.isNotEmpty() && tbRows.isNotEmpty()) { tbRows[tbRows.size - 1] = tbRows.last() + rankMoveNote }
+            rankMoveNote = ""
             attempts++; tobolAttempts = attempts
             set("토벌전 " + attempts + "회차", "도전하는 중")
             tap(Screen.TOBOL_CHALLENGE, 3000)
@@ -715,6 +745,12 @@ object Runner {
             val avg = if (tbRead > 0) fmtShort((tbSum / tbRead).toLong()) else "-"
             L.add(attempts.toString() + "판 · 최고 " + (if (bestScore > 0) fmtShort(bestScore) else "-") + " · 평균 " + avg)
             if (tbRead < attempts) L.add("  (점수를 못 읽은 판 " + (attempts - tbRead) + "개)")
+            if (myRank > 0) {
+                val d = myRankStart - myRank
+                L.add(if (d > 0) "등수 " + myRankStart + "등 → " + myRank + "등  ▲ " + d + "계단"
+                      else if (d < 0) "등수 " + myRankStart + "등 → " + myRank + "등  ▼ " + (-d) + "계단"
+                      else "등수 " + myRank + "등 (그대로)")
+            }
             if (myRecord > 0) {
                 val rs = if (recStart > 0) recStart else myRecordStart
                 L.add("내 기록 " + fmtShort(myRecord) +

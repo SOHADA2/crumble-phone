@@ -81,6 +81,9 @@ class MainActivity : ListActivity() {
     private lateinit var lblRec: TextView
     private lateinit var lblRecNote: TextView
     private lateinit var recFill: View
+    private lateinit var lblRank: TextView
+    private lateinit var lblRankNote: TextView
+    private lateinit var rankRow: LinearLayout
     private lateinit var lblStatus: TextView
     private lateinit var lblDetail: TextView
     private lateinit var track: FrameLayout
@@ -386,6 +389,16 @@ class MainActivity : ListActivity() {
                 addView(recFill)
                 layoutParams = lp(MATCH_PARENT, dp(6)).apply { topMargin = dp(8) }
             })
+            // 개인 랭킹 등수(2026-10-16) — 시작 때보다 오르면 금색 '▲ N계단'.
+            lblRank = text("", 12f, t.label).apply { layoutParams = lp(0, WRAP_CONTENT, 1f) }
+            lblRankNote = text("", 12f, t.label2)
+            rankRow = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                visibility = View.GONE
+                setPadding(0, dp(8), 0, 0)
+                addView(lblRank); addView(lblRankNote)
+            }
+            addView(rankRow)
             layoutParams = lp(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(14) }
         }
         tobolBox.addView(recBox)
@@ -559,7 +572,17 @@ class MainActivity : ListActivity() {
             lblTbBest.text = if (Runner.bestScore > 0) Runner.fmtShort(Runner.bestScore) else "-"
             lblTbN.text = Runner.tobolAttempts.toString() + "판"
             val rec = Runner.myRecord
-            recBox.visibility = if (rec > 0) View.VISIBLE else View.GONE
+            recBox.visibility = if (rec > 0 || Runner.myRank > 0) View.VISIBLE else View.GONE
+            val rk = Runner.myRank
+            rankRow.visibility = if (rk > 0) View.VISIBLE else View.GONE
+            if (rk > 0) {
+                lblRank.text = "개인 랭킹 " + rk + "등"
+                val d = Runner.myRankStart - rk
+                lblRankNote.text = if (d > 0) Runner.myRankStart.toString() + "등 → " + rk + "등  ▲ " + d + "계단"
+                                   else if (d < 0) Runner.myRankStart.toString() + "등 → " + rk + "등  ▼ " + (-d) + "계단"
+                                   else "시작 때와 같음"
+                lblRankNote.setTextColor(if (d > 0) t.gold else t.label2)
+            }
             if (rec > 0) {
                 lblRec.text = "내 기록 " + Runner.fmtShort(rec)
                 val start = if (Runner.myRecordStart > 0) Runner.myRecordStart else rec
