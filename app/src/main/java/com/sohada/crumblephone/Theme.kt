@@ -148,6 +148,26 @@ object Tint {
     }
 }
 
+/**
+ * 칸 왼쪽(또는 위)에 붙는 **콘텐츠 색 띠**. 칸의 크기를 **따라가기만** 하고 스스로는 크기를 요구하지 않는다.
+ *
+ * ⚠️ 2026-10-16 사고: 띠를 평범한 `View` + `FrameLayout.LayoutParams(4dp, MATCH_PARENT)` 로 넣었다.
+ *    FrameLayout 은 높이가 WRAP 인데 부모가 '최대 N px 까지(AT_MOST)' 로 잴 때, MATCH_PARENT 인 자식을
+ *    먼저 그 N 으로 재고 **그 높이를 자기 높이에 그대로 반영한다.** 평범한 View 는 AT_MOST N 이면 N 을 고른다 →
+ *    띠가 붙은 칸이 **남은 화면 높이 전부**로 늘어났다. 게임 위 알약이 화면만 해졌고(봇이 돌 때 띠가 켜진다),
+ *    펼침 패널은 첫 줄(퀘스트)이 화면을 다 먹어 **나머지 옵션이 하나도 안 보였다.**
+ *    (관제 화면은 ScrollView 안이라 높이를 '제한 없음' 으로 재서 이 사고가 안 났다 — 그래서 알약만 터졌다.)
+ *    → 높이가 정확히(EXACTLY) 주어질 때만 그 높이를 받고, 아니면 0 을 고른다. FrameLayout 은 둘째 바퀴에
+ *      MATCH_PARENT 자식을 자기 높이로 다시 재 주므로 띠는 결국 칸 높이에 딱 맞는다.
+ */
+class StripView(ctx: Context, color: Int) : View(ctx) {
+    init { setBackgroundColor(color) }
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        fun pick(spec: Int) = if (MeasureSpec.getMode(spec) == MeasureSpec.EXACTLY) MeasureSpec.getSize(spec) else 0
+        setMeasuredDimension(pick(widthMeasureSpec), pick(heightMeasureSpec))
+    }
+}
+
 /** 벡터 경로 아이콘 한 개. 이모지는 기기마다 그림이 달라 쓰지 않는다. */
 class IconView(ctx: Context, data: String, color: Int) : View(ctx) {
     // 경로 글자가 잘못돼도 앱이 죽지 않게 — 아이콘만 빈칸이 된다.

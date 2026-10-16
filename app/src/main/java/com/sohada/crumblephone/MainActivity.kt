@@ -280,6 +280,14 @@ class MainActivity : ListActivity() {
     private fun stat(name: String, valueView: TextView, weight: Float) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         addView(text(name, 12f, t.label3))
+        // 큰 숫자(293.92G 같은)는 칸이 좁거나 시스템 글자 크기가 크면 **잘리거나 두 줄로 꺾였다.**
+        // 한 줄로 두고 칸 너비에 맞춰 글자를 줄인다(커질 때는 원래 크기까지만).
+        // ⚠️ isSingleLine 이 아니라 maxLines=1 — singleLine 은 '가로로 끝없이' 재서 자동 맞춤이 안 먹는다.
+        val m = resources.displayMetrics
+        val max = (valueView.textSize / (m.density * resources.configuration.fontScale)).toInt().coerceAtLeast(12)
+        valueView.maxLines = 1
+        valueView.setAutoSizeTextTypeUniformWithConfiguration(10, max, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+        valueView.layoutParams = lp(MATCH_PARENT, WRAP_CONTENT)
         addView(valueView)
         layoutParams = lp(0, WRAP_CONTENT, weight)
     }
@@ -474,7 +482,7 @@ class MainActivity : ListActivity() {
             })
             addView(v)
         })
-        frame.addView(View(this).apply { setBackgroundColor(c.color) },
+        frame.addView(StripView(this, c.color),   // 스크롤 밖으로 옮기면 평범한 View 는 화면만 해진다(StripView 설명)
             FrameLayout.LayoutParams(dp(5), MATCH_PARENT).apply { gravity = Gravity.START })
         return ContentRow(c, frame, sub, subtitle, v, bgIdle, bgRun)
     }

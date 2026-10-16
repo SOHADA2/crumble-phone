@@ -154,7 +154,7 @@ object Overlay {
             clipToOutline = true
             elevation = dp(ctx, 6).toFloat()
         }
-        val strip = View(ctx).apply { visibility = View.GONE }
+        val strip = StripView(ctx, C_ORANGE).apply { visibility = View.GONE }   // ⚠️ 평범한 View 면 알약이 화면만 해진다(StripView 설명)
         val inner = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(ctx, 13), dp(ctx, 8), dp(ctx, 10), dp(ctx, 8))
@@ -332,7 +332,7 @@ object Overlay {
                 line.addView(bossLine)
             }
             item.addView(line)
-            item.addView(View(ctx).apply { setBackgroundColor(tc.color) },
+            item.addView(StripView(ctx, tc.color),   // ⚠️ 평범한 View 면 이 줄이 화면을 다 먹는다
                 FrameLayout.LayoutParams(dp(ctx, 4), FrameLayout.LayoutParams.MATCH_PARENT))
             contentBtns.add(item)
             pnl.addView(item)
