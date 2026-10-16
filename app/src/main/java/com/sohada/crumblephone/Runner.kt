@@ -506,11 +506,37 @@ object Runner {
         }
     }
 
-    /** 큰 점수를 눈이 따라갈 수 있게 접는다. `13,128,203,112` → `131.3억` (PC 봇 `FmtShort` 와 같은 규칙). */
-    private fun fmtShort(n: Long): String = when {
-        n >= 100_000_000L -> String.format("%.1f억", n / 100_000_000.0)
-        n >= 10_000L      -> String.format("%,d만", n / 10_000L)
-        else              -> Ocr.comma(n)
+    /**
+     * 큰 점수를 **게임과 같은 단위**로 접는다(2026-10-16 · PC `FmtShort` 와 같은 규칙).
+     * 게임 실측: 최종 점수 `308,335,332,958` = 표지판 `308.33G` · `내 최고 기록 337.27G` · `2T 380G`.
+     * T·G·M·K 에 소수 둘째 자리까지 **버림**(게임이 308.335 를 308.33 으로 적는다). 예전엔 `3,083.4억` 이라 게임과 견주기 어려웠다.
+     */
+    private fun fmtShort(n: Long): String {
+        val units = arrayOf(1_000_000_000_000L to "T", 1_000_000_000L to "G", 1_000_000L to "M", 1_000L to "K")
+        for ((u, sfx) in units) {
+            if (n >= u) {
+                val h = n / (u / 100)                       // 소수 둘째 자리까지 버림(정수 계산 — 실수로 하면 308.33 이 308.32 가 된다)
+                val frac = (h % 100).toString().padStart(2, '0').trimEnd('0')
+                return (h / 100).toString() + (if (frac.isEmpty()) "" else ".$frac") + sfx
+            }
+        }
+        return Ocr.comma(n)
+    }
+
+    private val SCORE_RE = Regex("\\d{1,3}(,\\d{3})+")
+
+    /**
+     * BATTLE OVER 최종 점수 한 장 읽기 (2026-10-16 · PC 와 같이).
+     * ★ **앞자리가 잘리고 있었다** — 옛 칸 (330,1380,830,150) 은 9자리 시절 실측(x400~1070)이라, 점수가 12자리
+     *   (`308,335,332,958` · PC 실측 x≈240~1196)가 되자 앞의 `30` 이 칸 밖으로 나가 `8,335,332,958` 로 읽혔다.
+     *   → 칸을 화면 폭 거의 전부(100~1340)로.
+     * ★ 숫자만 이어 붙이지 않고 **쉼표 묶음**(1~3자리 + ,ddd…)이 맞는 것만 받는다 — 묶음이 깨진 글은 한 글자를 잘못 읽은 것이다.
+     */
+    private fun readScoreOnce(b: Bitmap): Long? {
+        val t = (Ocr.readText(b, 100, 1380, 1240, 150) ?: return null).replace(Regex("[\\s.]"), ",")
+        val m = SCORE_RE.find(t) ?: return null
+        val v = m.value.replace(",", "").toLongOrNull() ?: return null
+        return if (v >= 1000L) v else null
     }
 
     /**
@@ -610,21 +636,25 @@ object Runner {
             if (!over) { Bot.log("전투 끝을 못 잡음 - 로비 복귀 시도"); closeResult(); continue }
             // 최종 점수 읽기(금색 큰 숫자). 막 떠서 안 잡힐 수 있으니 몇 번 다시 본다.
             set("토벌전 " + attempts + "회차", "점수 확인 중")
+            // 두 장이 **같은 값**일 때만 믿는다(한 장은 연출 중이거나 한 글자를 잘못 읽을 수 있다). 6장 안에 못 맞추면 마지막 값.
             var score: Long? = null
-            for (t in 1..5) {
+            var prev: Long? = null
+            for (t in 1..6) {
                 if (!running) break
                 val s2 = shot() ?: break
-                // 실측: 최종 점수 숫자는 x400~1070 · y1400~1506. 여유를 둬 넉넉히 자른다.
-                // (PC 봇의 340,1335,800,120 을 그대로 쓰면 숫자 아래쪽이 잘려 204,721 처럼 오독한다)
-                score = Ocr.readNumber(s2, 330, 1380, 830, 150, minDigits = 6)
-                if (score != null) break
-                sleep(700)
+                val v = readScoreOnce(s2)
+                if (v != null) {
+                    if (v == prev) { score = v; break }
+                    prev = v; score = v
+                }
+                sleep(500)
             }
+            // ⚠️ 못 읽은 판은 '이번' 을 비운다 — 앞 판 값이 남아 같은 점수가 두 번 찍히지 않게.
+            lastScore = score ?: 0L
             if (score != null) {
-                lastScore = score
                 if (score > bestScore) bestScore = score
-                Bot.log("이번 " + Ocr.comma(score) + " · 최고 " + Ocr.comma(bestScore))
-            }
+                Bot.log("이번 " + fmtShort(score) + " · 최고 " + fmtShort(bestScore) + "  (" + Ocr.comma(score) + ")")
+            } else Bot.log("이번 점수를 못 읽었어요")
             set("토벌전 " + attempts + "회차", "결과창 닫는 중")
             if (!closeResult()) { set("토벌전 끝", "결과창을 닫지 못했어요"); break }
             lastResult = tobolSummary(attempts)

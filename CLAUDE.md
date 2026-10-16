@@ -2811,3 +2811,8 @@ PC 실측: 결과 [✕] 한 번에 매번 목록. 되돌아가기를 '2번까지
 - **Prefs.kt**: `DAILY_CHARGE_CHOICES`·`DAILY_DELAY_CHOICES`. ⚠️ `dailyChargeMs`/`dailyDelayMs` 는 `DailyPlan` 옮겨 오기가 읽으므로 **남긴다**.
 - 기타: `SettingsActivity.secLabel`, `Theme.bgDeep`·`rippleRound`, `MainActivity` 의 `rBoss` 별칭(→ `rowBoss`).
 - 엇갈린 KDoc 바로잡음(`tapTest`, `ovenPerRun`, `delayLabel`/`chargeLabel`) + [보스전]·덱 이름 시절 낡은 주석 손봄.
+
+## 토벌전 점수 앞자리 잘림 + 게임 단위 표시 (2026-10-16 · PC 와 같이)
+최종 점수가 12자리(`308,335,332,958`, x≈240~1196)가 되면서 옛 칸 (330,1380,830,150) 이 앞자리를 잘랐다.
+→ `readScoreOnce`: 칸 (100,1380,1240,150) · `readText` 후 쉼표 묶음이 맞는 것만 · 두 장 같은 값이면 확정 · 못 읽은 판은 lastScore=0.
+`fmtShort` = T·G·M·K 소수 둘째 자리 버림(정수 계산, 게임 표지판 `308.33G` 와 같게). 로그에 원래 숫자 괄호. 실기 미확인.
