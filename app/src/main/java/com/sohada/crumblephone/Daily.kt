@@ -31,6 +31,18 @@ object Daily {
     private val NAMES = arrayOf("경험치", "코인", "반죽", "연구석", "룬결정")
     private fun nameOf(i: Int) = if (i in 1..NAMES.size) NAMES[i - 1] else "던전$i"
 
+    // ★ 정산 창(2026-10-16 · PC 와 같이) — 던전마다 판별 결과(승 22초 · 패배 …)를 모은다.
+    //   예전 결과는 '경험치 4판 · 코인 열쇠 없음' 한 줄이라 몇 번째 판에 졌는지가 안 보였다.
+    private val dlBlocks = ArrayList<String>()
+    private val dlFights = ArrayList<String>()
+    private fun closeBlock(name: String, state: String) {
+        dlBlocks.add(String.format("%-4s %s", name, state))
+        var i = 0
+        val items = dlFights.map { i++; i.toString() + " " + it }
+        for (k in items.indices step 4) dlBlocks.add("     " + items.subList(k, Math.min(k + 4, items.size)).joinToString(" · "))
+        dlFights.clear()
+    }
+
     // maxDungeons = 한 바퀴에 돌 던전 수. 실측상 일일 던전은 **5개**가 전부다.
     fun start(ctx: Context, maxDungeons: Int = if (Prefs.testMode) 0 else 5) {
         if (!Runner.guard()) return
@@ -46,6 +58,8 @@ object Daily {
     }
 
     private fun loop(maxDungeons: Int) {
+        dlBlocks.clear(); dlFights.clear()
+        val sumStart = System.currentTimeMillis()
         Runner.set("일일 던전 준비 중", "메인 화면으로 이동 중")
         val (ok, why) = Runner.resetToMain()
         if (!ok) { Runner.failByReason(why); return }
@@ -251,6 +265,7 @@ object Daily {
                 }
             }
             if (fought > 0) battled++
+            val blockState = if (fought > 0) fought.toString() + "판 (승 " + dWins + " · 패 " + dLosses + ")" + (if (gaveUp) " · 연달아 짐" else "") else "열쇠 없음"
             if (fought > 0) Bot.log("던전 " + idx + "(" + name + "): " + fought + "판 (승 " + dWins + " · 패 " + dLosses + ")" +
                 (if (gaveUp) " · 연달아 져서 넘어감" else ""))
             if (!Runner.running) break
@@ -266,6 +281,7 @@ object Daily {
             if (!Screen.atDailyEntry(b)) {
                 Bot.log("던전 " + idx + ": 화면이 안정되지 않아 수령을 건너뜁니다(안전)")
                 results.add(name + " 확인불가")
+                closeBlock(name, "확인불가 (화면이 안정되지 않음)")
                 // 그래도 다음 던전으로는 넘겨 순환은 이어간다(PC 와 같은 처리).
                 Runner.shot()?.let { if (Screen.atDailyEntry(it)) Runner.tap(Screen.DAILY_NEXT, 2200) }
                 d++
@@ -281,6 +297,7 @@ object Daily {
                 Bot.log("던전 " + idx + ": 받을 달성 보상이 없어요(빨간 점 없음) - 건너뜁니다")
                 results.add(name + " " + (if (fought > 0) fought.toString() + "판" + lossTag() else "열쇠 없음"))
                 Runner.lastResult = results.joinToString(" · ")
+                closeBlock(name, blockState)
                 Runner.shot()?.let {
                     if (Screen.atDailyEntry(it)) Runner.tap(Screen.DAILY_NEXT, 2000)
                 }
@@ -309,6 +326,7 @@ object Daily {
 
             results.add(name + " " + (if (fought > 0) fought.toString() + "판" + lossTag() else "열쇠 없음"))
             Runner.lastResult = results.joinToString(" · ")
+            closeBlock(name, blockState)
 
             // ── ▶ 다음 던전 ──
             // ⚠️ **던전 화면일 때만** 누른다. 목록 화면에서 이 자리는 배너 한가운데다.
@@ -327,6 +345,11 @@ object Daily {
         }
         if (Runner.running) Runner.set("일일 던전 끝", head) else Runner.set("멈췄어요", head)
         Runner.lastResult = if (results.isEmpty()) head else head + " — " + results.joinToString(" · ")
+        val L = ArrayList<String>()
+        L.add(head); L.add("")
+        if (dlFights.isNotEmpty()) closeBlock("(멈춤)", "하던 던전")
+        L.addAll(dlBlocks)
+        Runner.putSummary("일일 던전 정산", sumStart, L)
     }
 
     /**
@@ -539,6 +562,7 @@ object Daily {
                 var counted = false
                 if (!defeatOpen) {
                     dLosses++; lossStreak++; fightAt = 0L; counted = true
+                    dlFights.add(if (why.contains("패배")) "패배" else "패(시간 초과)")
                     Bot.log("  " + why + " (이 던전 연속 " + lossStreak + "번) - [✕] 로 닫고 다시 도전합니다")
                     Runner.set("일일 던전 " + idx + "번째", name + " · " + why + " " + dLosses + "번 · 다시 도전")
                 }
@@ -576,7 +600,7 @@ object Daily {
                 // ⚠️ 너무 빨리(8초 안에) 돌아왔으면 승리로 치지 않는다 — [도전하기] 가 안 먹혀 그대로 있던 것이다.
                 if (fightAt > 0L) {
                     val took = (System.currentTimeMillis() - fightAt) / 1000
-                    if (took >= 8) { dWins++; lossStreak = 0; Bot.log("  승리 (" + took + "초)") }
+                    if (took >= 8) { dWins++; lossStreak = 0; Bot.log("  승리 (" + took + "초)"); dlFights.add("승 " + took + "초") }
                     else { fought--; Bot.log("  도전이 시작되지 않은 것 같아요 - 다시 누릅니다") }
                     fightAt = 0L
                 }

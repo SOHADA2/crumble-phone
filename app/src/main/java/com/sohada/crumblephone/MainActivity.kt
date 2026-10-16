@@ -37,7 +37,7 @@ class MainActivity : ListActivity() {
      * (PC 관제창도 본문만 Consolas 로 바꿔 같은 문제를 풀었다).
      * 화면이 앞에 없을 때 띄우면 터지므로 `isFinishing` 을 본다.
      */
-    private fun showSummaryDialog(text: String) {
+    private fun showSummaryDialog(title: String, text: String) {
         if (text.isEmpty() || isFinishing) return
         val tv = TextView(this).apply {
             setText(text)
@@ -47,9 +47,11 @@ class MainActivity : ListActivity() {
             val pad = dp(20)
             setPadding(pad, dp(14), pad, dp(4))
         }
+        // 판별 기록이 몇십 줄이 될 수 있다(토벌전) → 스크롤.
+        val sv = ScrollView(this).apply { addView(tv) }
         val d = android.app.AlertDialog.Builder(this)
-            .setTitle("봇 정산")
-            .setView(tv)
+            .setTitle(title)
+            .setView(sv)
             .setPositiveButton("확인", null)
             .create()
         d.show()
@@ -584,7 +586,7 @@ class MainActivity : ListActivity() {
         // ★ 정산 창 — 돌다가 끝나면 '무엇을 얼마나 했나' 를 창으로 보여 준다 (2026-09-28).
         //   Chores 가 끝에서 lastSummary 를 채우고, 여기서 **한 번만** 꺼내 띄운다
         //   (takeSummary 가 읽으면서 지우므로 tick 이 계속 돌아도 다시 안 뜬다).
-        if (!Runner.running && Runner.lastSummary.isNotEmpty()) showSummaryDialog(Runner.takeSummary())
+        if (!Runner.running && Runner.lastSummary.isNotEmpty()) { val st = Runner.lastSummaryTitle; showSummaryDialog(st, Runner.takeSummary()) }
 
         // 진행률 — 진짜 분모가 있는 작업만 막대를 보여 준다(-1 이면 숨긴다).
         val p = Runner.progress

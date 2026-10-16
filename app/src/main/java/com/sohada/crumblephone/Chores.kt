@@ -153,6 +153,7 @@ object Chores {
         // 정산 창에 '어떤 걸 했는지' 를 적으려고 이번 실행분만 따로 센다(PC 관제창과 같은 내역).
         nGacha = 0; nBox = 0; nOven = 0; nBoss = 0
         runStartAt = System.currentTimeMillis()
+        sumFights.clear(); sumWins = 0; sumLoss = 0
         var offMain = 0           // 메인이 아닌 상태가 연속 몇 번인지
         var covered = 0           // 퀘스트 띠 가림이 연속 몇 번째인지
         var coverSig: IntArray? = null   // 직전에 잰 '덮은 것'의 지문(움직이는지 보려고)
@@ -176,6 +177,23 @@ object Chores {
         var fightStage: String? = null  // 지금 보스전의 스테이지 번호(OCR)
         var judgeStage: String? = null  // 끝난 보스전의 스테이지 — 평소 화면 번호와 비교해 승패를 가른다
         var judgeUntil = 0L
+        // ★ 정산 기록(2026-10-16 · PC 와 같이) — 시작 스테이지 → 지금 스테이지, 보스전마다 덱·승패.
+        var stageStart: String? = null
+        var stageNow: String? = null
+        var stageReadAt = 0L
+        var curFight: Array<Any?>? = null    // [시각, 덱, 스테이지, 게임소환?, 초]
+        var judgeByGame = false
+        fun closeFight(res: String) {
+            val f = curFight ?: return
+            curFight = null
+            if (res.startsWith("승")) sumWins++ else if (res.startsWith("패")) sumLoss++
+            val tf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.KOREA).format(java.util.Date(f[0] as Long))
+            val deck = f[1] as Int
+            val sec = f[4] as Long?
+            sumFights.add(String.format("%s  %-7s %-5s %-4s %s  %s", tf, (f[2] as String?) ?: "?",
+                if (deck > 0) deck.toString() + "번 덱" else "지금 덱", if (f[3] as Boolean) "자동" else "소환", res,
+                if (sec != null) "(" + sec + "초)" else ""))
+        }
         var autoTries = 0         // 게임이 소환한 보스전에서 진 뒤 바꿔 쓴 조합 수(Boss.order 순번)
         var autoNoticed = false
         var bulkTries = 0         // '한번에 클리어'를 몇 번 눌러 봤는지(안 먹으면 그만 두려고)
@@ -231,6 +249,7 @@ object Chores {
                     fightSince = now
                     fightStage = null; judgeStage = null
                     fightByGame = now >= bossWaitUntil
+                    curFight = arrayOf<Any?>(now, Boss.curDeck, null, fightByGame, null)
                     if (fightByGame) {
                         Bot.log("보스전 감지 (게임이 자동 소환) - 퀘스트는 잠시 두고 보스 먼저")
                         val chargeMs = Prefs.bossChargeMs
@@ -248,7 +267,7 @@ object Chores {
                     // 돌진이 끝난 뒤(다음 바퀴부터) 번호를 읽는다.
                     val r = Screen.fightStageRect(fightY)
                     fightStage = Screen.parseStage(Ocr.readText(b, r[0], r[1], r[2], r[3]))
-                    if (fightStage != null) Bot.log("  보스전 스테이지 " + fightStage)
+                    if (fightStage != null) { Bot.log("  보스전 스테이지 " + fightStage); curFight?.set(2, fightStage) }
                 }
                 val sec = (System.currentTimeMillis() - fightSince) / 1000
                 if (sec > 180) {
@@ -256,6 +275,7 @@ object Chores {
                     Bot.log("  보스 HP 바 판정이 3분째 이어짐 - 오판으로 보고 5분간 무시")
                     fightIgnoreUntil = System.currentTimeMillis() + 5 * 60_000L
                     fightSince = 0L
+                    curFight = null     // 오판이었으니 정산에 안 남긴다
                 } else {
                     Runner.status = "보스전 진행 중"
                     Runner.detail = sec.toString() + "초째"
@@ -263,8 +283,11 @@ object Chores {
                 }
             } else if (fightSince != 0L) {
                 Bot.log("  보스전 끝 (" + ((now - fightSince) / 1000) + "초)")
+                curFight?.set(4, (now - fightSince) / 1000)
                 fightSince = 0L
-                if (fightStage != null && fightByGame) { judgeStage = fightStage; judgeUntil = now + 40_000L }
+                // 승패는 정산에 적으려고 봇이 소환한 것도 판정한다. 덱 바꾸기는 게임이 소환한 것만(judgeByGame).
+                if (fightStage != null) { judgeStage = fightStage; judgeUntil = now + 40_000L; judgeByGame = fightByGame }
+                else closeFight("?")
             }
             // 끝난 보스전의 승패: 평소 화면의 스테이지 번호가 그대로면 진 것 → ⚙ 순서대로 다음 조합으로 바꿔 둔다.
             //   (다음 자동 소환이 바뀐 덱으로 싸운다. 보스전 중엔 편성 화면이 안 열려 끝난 뒤에 바꾼다.)
@@ -276,8 +299,13 @@ object Chores {
                     judgeStage = null
                     if (!Screen.sameStage(nowStage, was)) {
                         Bot.log("  보스 깼어요 (" + was + " → " + nowStage + ")")
-                        if (autoTries > 0 || autoNoticed) { Bot.log("  조합 순번을 처음부터 다시 셉니다"); autoTries = 0; autoNoticed = false }
+                        closeFight("승 → " + nowStage)
+                        stageNow = nowStage; if (stageStart == null) stageStart = was
+                        if (judgeByGame && (autoTries > 0 || autoNoticed)) { Bot.log("  조합 순번을 처음부터 다시 셉니다"); autoTries = 0; autoNoticed = false }
+                    } else if (!judgeByGame) {
+                        closeFight("패")
                     } else {
+                        closeFight("패")
                         val order = Boss.order()
                         if (autoTries >= order.size) {
                             if (!autoNoticed) {
@@ -296,7 +324,15 @@ object Chores {
                 } else if (now >= judgeUntil) {
                     Bot.log("  스테이지 번호를 못 읽어 이번 보스전 승패는 넘어갑니다")
                     judgeStage = null
+                    closeFight("?")
                 }
+            }
+            // 정산용 스테이지 번호 — 평소 화면에서 1분에 한 번만(못 읽으면 15초 뒤).
+            if (fightY < 0 && judgeStage == null && dock.ratio >= 0.1 && now >= stageReadAt) {
+                val r = Screen.MAIN_STAGE_RECT
+                val st = Screen.parseStage(Ocr.readText(b, r[0], r[1], r[2], r[3]))
+                stageReadAt = now + (if (st != null) 60_000L else 15_000L)
+                if (st != null) { if (stageStart == null) { stageStart = st; Bot.log("  시작 스테이지 " + st) }; stageNow = st }
             }
 
             // ── 내가 소환한 보스전이 도는 중이면 아무것도 누르지 않고 기다린다 ──
@@ -555,7 +591,8 @@ object Chores {
         else if (Runner.running) Runner.set("퀘스트 끝", "퀘스트 " + quests + "개를 받았어요")
         else Runner.set("멈췄어요", "퀘스트 " + quests + "개까지 받았어요")
         Runner.lastResult = "퀘스트 " + quests + "개 수령 · 대신 해 준 일 " + handled + "번"
-        Runner.lastSummary = buildSummary(quests, handled)
+        Runner.lastSummary = buildSummary(quests, handled, stageStart, stageNow)
+        Runner.lastSummaryTitle = if (stageOnly) "스테이지 돌파 정산" else "봇 정산"
     }
 
     /**
@@ -563,7 +600,11 @@ object Chores {
      * 폰은 `Runner.stop()` 이 협조적이라(플래그만 내리고 루프가 스스로 빠져나온다)
      * 멈춤을 눌러도 여기까지 반드시 도달한다 — PC 처럼 죽이지 않는다.
      */
-    private fun buildSummary(quests: Int, handled: Int): String {
+    private val sumFights = ArrayList<String>()
+    private var sumWins = 0
+    private var sumLoss = 0
+
+    private fun buildSummary(quests: Int, handled: Int, stageStart: String?, stageNow: String?): String {
         val sb = StringBuilder()
         if (runStartAt > 0L) {
             val ms = System.currentTimeMillis() - runStartAt
@@ -575,12 +616,20 @@ object Chores {
             sb.appendLine(f.format(java.util.Date(runStartAt)) + " ~ " + f.format(java.util.Date()) + " · " + dur)
             sb.appendLine()
         }
-        sb.appendLine(String.format("퀘스트 수령   %4d", quests))
-        sb.appendLine(String.format("대신 한 일    %4d   뽑기 %d · 상자 %d · 오븐 %d", handled, nGacha, nBox, nOven))
-        if (nBoss > 0) sb.appendLine(String.format("보스 도전     %4d", nBoss))
-        if (quests + handled + nBoss == 0) {
+        if (!stageOnly) {
+            sb.appendLine(String.format("퀘스트 수령   %4d", quests))
+            sb.appendLine(String.format("대신 한 일    %4d   뽑기 %d · 상자 %d · 오븐 %d", handled, nGacha, nBox, nOven))
             sb.appendLine()
-            sb.appendLine("이번에는 한 일이 없어요.")
+        }
+        sb.appendLine(if (stageStart == null) "스테이지   (못 읽음)"
+                      else if (stageNow != null && !Screen.sameStage(stageNow, stageStart)) "스테이지   $stageStart → $stageNow"
+                      else "스테이지   $stageStart (그대로)")
+        if (sumFights.isEmpty()) sb.appendLine("보스전     없음" + (if (nBoss > 0) " (소환 " + nBoss + "번)" else ""))
+        else {
+            sb.appendLine(String.format("보스전     %d번 · 승 %d · 패 %d", sumFights.size, sumWins, sumLoss))
+            sb.appendLine()
+            sb.appendLine("── 보스전 기록 ──")
+            for (l in sumFights) sb.appendLine(l)
         }
         return sb.toString().trimEnd()
     }

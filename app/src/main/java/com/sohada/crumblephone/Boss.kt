@@ -125,6 +125,9 @@ object Boss {
      * 게임이 소환한 보스전에서 진 뒤, 다음 자동 소환에 쓸 조합으로 바꿔 둔다. 바꿨으면 true.
      * 이미 다음 보스전이 시작됐으면(편성 화면이 안 열린다) 건드리지 않는다.
      */
+    /** 마지막으로 바꾼 조합(0 = 모름 = 켤 때 덱). 퀘스트·돌파 정산의 보스전 기록에 쓴다. */
+    @Volatile var curDeck = 0
+
     fun switchForNextFight(n: Int): Boolean {
         val s = Runner.shot() ?: return false
         if (Screen.isBossFight(s)) return false
@@ -144,6 +147,7 @@ object Boss {
         val opened = b != null && Screen.atCookieRoster(b)
         if (opened) {
             Runner.tap(Screen.PRESET_TABS[n - 1], 1500)
+            curDeck = n            // 정산 기록에 '몇 번 덱으로 싸웠나' 를 적는다
         } else {
             Bot.log("  편성 화면이 안 열렸어요 - 조합 " + n + " 변경을 건너뜁니다")
         }

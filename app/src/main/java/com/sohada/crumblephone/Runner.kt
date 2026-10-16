@@ -35,6 +35,34 @@ object Runner {
      * `lastResult` 는 카드에 남는 한 줄이고, 이건 '무엇을 얼마나 했나' 를 펼쳐 놓은 것이다.
      */
     @Volatile var lastSummary = ""
+    /** 정산 창 제목(콘텐츠마다 다르다 — 토벌전 정산 · 일일 던전 정산 …). */
+    @Volatile var lastSummaryTitle = "봇 정산"
+
+    /** `12:02 ~ 13:20 · 1시간 18분` — 정산 창 맨 윗줄. */
+    fun spanLine(startMs: Long): String {
+        if (startMs <= 0L) return ""
+        val ms = System.currentTimeMillis() - startMs
+        val min = ms / 60000
+        val dur = if (min >= 60) (min / 60).toString() + "시간 " + (min % 60) + "분"
+                  else if (min >= 1) min.toString() + "분"
+                  else (ms / 1000).toString() + "초"
+        val f = java.text.SimpleDateFormat("HH:mm", java.util.Locale.KOREA)
+        return f.format(java.util.Date(startMs)) + " ~ " + f.format(java.util.Date()) + " · " + dur
+    }
+
+    /**
+     * ★ 정산 창(2026-10-16 · PC 와 같이). 사장님: *"정산창이 너무 의미 없는 정보만 나와 있어.
+     *   토벌전은 첫 번째 시도 → 점수, 두 번째 시도 → … 쭉 나와야 정산의 의미가 있는 거지."*
+     * 폰은 [멈추기] 가 협조적이라 콘텐츠가 끝에서 한 번 부르면 된다(PC 는 강제 종료라 도는 동안 계속 쓴다).
+     */
+    fun putSummary(title: String, startMs: Long, body: List<String>) {
+        val sb = StringBuilder()
+        val span = spanLine(startMs)
+        if (span.isNotEmpty()) { sb.appendLine(span); sb.appendLine() }
+        for (l in body) sb.appendLine(l)
+        lastSummaryTitle = title
+        lastSummary = sb.toString().trimEnd()
+    }
     /** 정산 창을 **한 번만** 띄우려고, 읽어 가면서 지운다. */
     @Synchronized fun takeSummary(): String {
         val s = lastSummary
@@ -600,6 +628,11 @@ object Runner {
         }
 
         var attempts = 0
+        // 판별 기록(정산 창) — 판마다 한 줄. 조합별 합계만으로는 '몇 번째 판이 얼마였나' 가 안 보였다.
+        val tbRows = ArrayList<String>()
+        val tbStart = System.currentTimeMillis()
+        var tbSum = 0.0; var tbRead = 0
+        val recStart = myRecordStart
         // maxAttempts < 0 이면 상한 없음 — [멈추기] 를 누를 때까지 돈다.
         while (running && (maxAttempts < 0 || attempts < maxAttempts)) {
             if (!awaitGame()) break
@@ -658,6 +691,15 @@ object Runner {
                 if (score > bestScore) bestScore = score
                 Bot.log("이번 " + fmtShort(score) + " · 최고 " + fmtShort(bestScore) + "  (" + Ocr.comma(score) + ")")
             } else Bot.log("이번 점수를 못 읽었어요")
+            run {
+                var mark = ""
+                if (score != null && score == bestScore && attempts > 1) mark = "  ★"
+                val rs = if (recStart > 0) recStart else myRecordStart
+                if (score != null && rs > 0 && score > rs) mark = "  ▲ 기록 경신"
+                if (score != null) { tbSum += score.toDouble(); tbRead++ }
+                tbRows.add(if (score != null) String.format("%4d회  %9s%s", attempts, fmtShort(score), mark)
+                           else String.format("%4d회     못 읽음", attempts))
+            }
             set("토벌전 " + attempts + "회차", "결과창 닫는 중")
             if (!closeResult()) { set("토벌전 끝", "결과창을 닫지 못했어요"); break }
             lastResult = tobolSummary(attempts)
@@ -668,6 +710,20 @@ object Runner {
         //    최고 점수가 **끝나는 순간 사라져서**, 정작 끝난 뒤에는 점수를 볼 수가 없었다.
         //    (사장님: *"점수를 알려주기는 하는데 제대로 볼 수가 없더라고."*)
         lastResult = tobolSummary(attempts)
+        if (attempts > 0) {
+            val L = ArrayList<String>()
+            val avg = if (tbRead > 0) fmtShort((tbSum / tbRead).toLong()) else "-"
+            L.add(attempts.toString() + "판 · 최고 " + (if (bestScore > 0) fmtShort(bestScore) else "-") + " · 평균 " + avg)
+            if (tbRead < attempts) L.add("  (점수를 못 읽은 판 " + (attempts - tbRead) + "개)")
+            if (myRecord > 0) {
+                val rs = if (recStart > 0) recStart else myRecordStart
+                L.add("내 기록 " + fmtShort(myRecord) +
+                    (if (rs > 0 && myRecord > rs) "  ▲ 경신 (시작 " + fmtShort(rs) + ")"
+                     else if (bestScore in 1 until myRecord) "  (" + fmtShort(myRecord - bestScore) + " 모자람)" else ""))
+            }
+            L.add(""); L.add("── 판별 기록 ──"); L.addAll(tbRows)
+            putSummary("토벌전 정산", tbStart, L)
+        }
     }
 
     private fun closeResult(): Boolean {

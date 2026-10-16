@@ -54,6 +54,11 @@ object Arena {
 
         var fights = 0; var wins = 0; var losses = 0
         var startPts: Long? = null
+        // 정산 창(2026-10-16 · PC 와 같이) — 판마다 '승/패 · 점수 전→후 · 상대 전투력'.
+        val rows = ArrayList<String>()
+        val sumStart = System.currentTimeMillis()
+        var curStart: Long? = null; var curNow: Long? = null; var ptsNow: Long? = null
+        var endWhy = ""
 
         while (fights < maxFights && Runner.running) {
             if (!Runner.awaitGame()) break
@@ -69,14 +74,17 @@ object Arena {
 
             // 재화가 한 판 값보다 적으면 더 못 한다.
             val cur = readCur(b)
+            if (cur != null) { if (curStart == null) curStart = cur; curNow = cur }
             if (cur != null && cur < COST) {
                 Runner.set("아레나 끝", "재화가 모자라요 (" + cur + " < " + COST + ")")
+                endWhy = "재화 부족"
                 break
             }
             if (startPts == null) startPts = readPts(b)
 
             // ── 나보다 약한 상대 찾기 ──
             var chosen = false
+            var oppPick: Long? = null
             for (i in 1..SCAN) {
                 if (!Runner.running) break
                 Runner.set("아레나", "상대 물색 중 (" + i + "/" + SCAN + ")")
@@ -90,7 +98,7 @@ object Arena {
                 val opp = readOpp(s)
                 when {
                     opp == null -> Bot.log("  상대 전투력을 못 읽음 (" + i + ") - 넘김")
-                    opp <= mine -> { Bot.log("  상대 " + Ocr.comma(opp) + " ≤ 나 " + Ocr.comma(mine) + " → 도전"); chosen = true }
+                    opp <= mine -> { Bot.log("  상대 " + Ocr.comma(opp) + " ≤ 나 " + Ocr.comma(mine) + " → 도전"); chosen = true; oppPick = opp }
                     else -> Bot.log("  상대 " + Ocr.comma(opp) + " > 나 " + Ocr.comma(mine) + " → 다음 상대")
                 }
                 if (chosen) break
@@ -109,7 +117,7 @@ object Arena {
                 Runner.setProgress(t, 20)
                 Runner.sleep(1000)
             }
-            if (!waitLobby()) { Bot.log("  결과 뒤 로비로 못 돌아옴 - 종료"); break }
+            if (!waitLobby()) { Bot.log("  결과 뒤 로비로 못 돌아옴 - 종료"); endWhy = "결과 뒤 로비로 못 돌아옴"; break }
 
             // ── 승패는 점수 변화로 가른다 ──
             // 오르면 승·내리면 패(무승부 없음). ±1~2 는 OCR 노이즈라 무시하고,
@@ -133,11 +141,29 @@ object Arena {
             }
             Bot.log("  " + fights + "판 완료 · " + res + " (" + before + "→" + after + ") · 누적 " + wins + "승 " + losses + "패")
             Runner.lastResult = "아레나 " + fights + "판 · " + wins + "승 " + losses + "패"
+            if (after != null) ptsNow = after
+            val ptTxt = if (before != null && after != null) {
+                val dd = after - before
+                before.toString() + " → " + after + " (" + (if (dd >= 0) "+$dd" else "$dd") + ")"
+            } else "점수 못 읽음"
+            val oppTxt = if (oppPick != null) "상대 " + Runner.fmtShort(oppPick!!) else "상대 (다 셈 · 그냥 도전)"
+            rows.add(String.format("%3d판  %-4s %s   %s", fights, res, ptTxt, oppTxt))
         }
 
         val tail = "" + fights + "판 · " + wins + "승 " + losses + "패"
         if (Runner.running) Runner.set("아레나 끝", tail) else Runner.set("멈췄어요", tail)
         Runner.lastResult = "아레나 " + tail
+        val L = ArrayList<String>()
+        if (endWhy.isEmpty() && fights >= maxFights) endWhy = "정한 판 수(" + maxFights + ") 다 함"
+        if (endWhy.isNotEmpty()) { L.add("끝난 이유: " + endWhy); L.add("") }
+        L.add(tail)
+        val p0 = startPts
+        val p1 = ptsNow
+        if (p0 != null && p1 != null) { val dd = p1 - p0; L.add("점수   " + p0 + " → " + p1 + "  (" + (if (dd >= 0) "+$dd" else "$dd") + ")") }
+        if (curStart != null) L.add("재화   " + curStart + " → " + (curNow ?: curStart) + "  (1판 " + COST + ")")
+        L.add("")
+        if (rows.isEmpty()) L.add("아직 싸운 판이 없어요.") else { L.add("── 판별 기록 ──"); L.addAll(rows) }
+        Runner.putSummary("아레나 정산", sumStart, L)
     }
 
     /**
