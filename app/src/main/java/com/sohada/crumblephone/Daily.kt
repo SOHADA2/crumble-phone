@@ -491,12 +491,15 @@ object Daily {
         return false
     }
 
+    private const val MAX_LOSS_STREAK = 5   // 연달아 이만큼 지면 이 던전은 넘어간다(2026-10-16 사장님 결정)
+
     private fun runKeys(idx: Int, name: String, mySig: IntArray): Int {
         var mainSeen = 0           // 판 도중 메인을 연속으로 본 장 수
         var backIns = 0            // 같은 던전으로 되돌아간 횟수
         var fought = 0
         var idle = 0
         var lossStreak = 0
+        var streakOut = false      // 연달아 져서 이 던전을 넘겼나(아래 시간 상한 로그와 겹치지 않게)
         var fightAt = 0L           // 마지막으로 [도전하기] 를 누른 시각(돌아왔을 때 승리로 칠지 가른다)
         var defeatOpen = false     // 이미 센 패배 화면이 아직 떠 있나(✕ 가 한 번에 안 닫혀도 두 번 세지 않게)
         var resultSeen = 0         // 결과 막을 연속으로 본 장 수 — 두 장째에 누른다
@@ -587,8 +590,17 @@ object Daily {
                 }
                 defeatOpen = !closed
                 if (!closed && Runner.shot()?.let { Screen.atDailyList(it) } != true) Bot.log("  결과 화면이 안 닫혀요 - 잠시 뒤 다시 봅니다")
-                if (counted && lossStreak >= 3 && lossStreak % 3 == 0) {
-                    Bot.log("  (연달아 " + lossStreak + "번 못 깼어요 - 계속 도전합니다. 컨트롤을 조정해 보세요)")
+                // ★ 2026-10-16 (PC 와 같이): **연달아 MAX_LOSS_STREAK 번 지면 다음 던전으로**(사장님 결정).
+                //   진 판은 입장권이 돌아와 기회가 안 줄어서, 못 깨는 던전이면 15분 상한까지 지기만 했다.
+                if (counted && lossStreak >= MAX_LOSS_STREAK) {
+                    Bot.log("던전 " + idx + ": 연달아 " + lossStreak + "번 졌어요 - 이 던전은 넘어갑니다 (컨트롤을 조정해 보세요)")
+                    // 시간 초과 결과의 ✕ 는 목록으로 나간다 — 같은 던전으로 돌아가 있어야 보상 수령·▶ 다음 던전이 된다.
+                    if (Runner.shot()?.let { Screen.atDailyList(it) } == true) returnToDungeon(idx, mySig)
+                    streakOut = true
+                    break
+                }
+                if (counted && lossStreak >= 3) {
+                    Bot.log("  (연달아 " + lossStreak + "번 못 깼어요 - " + MAX_LOSS_STREAK + "번이면 다음 던전으로 넘어갑니다)")
                 }
                 deadline = System.currentTimeMillis() + stallMs   // 진전 있음 → 시계 다시
                 continue
@@ -635,7 +647,8 @@ object Daily {
         // 조용히 넘어가지 않게 — 왜 끝났는지 남긴다.
         if (Runner.running) {
             val now = System.currentTimeMillis()
-            if (now >= hardStop) Bot.log("던전 " + idx + ": 전체 상한(15분) 도달 - 남은 기회가 있어도 넘어갑니다")
+            if (streakOut) Unit
+            else if (now >= hardStop) Bot.log("던전 " + idx + ": 전체 상한(15분) 도달 - 남은 기회가 있어도 넘어갑니다")
             else if (now >= deadline) Bot.log("던전 " + idx + ": " + (stallMs / 1000) + "초 동안 진전이 없어 넘어갑니다")
         }
         return fought
