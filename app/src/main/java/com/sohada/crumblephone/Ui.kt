@@ -91,6 +91,7 @@ open class ListActivity : AppCompatActivity() {
         val lbl: View = if (subtitle.isEmpty()) {
             text(title, 15f, tint ?: t.label).apply {
                 layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+                minWidth = dp(96)   // 값이 아무리 길어도 제목은 세로로 꺾이지 않게
             }
         } else {
             LinearLayout(this).apply {
@@ -98,6 +99,7 @@ open class ListActivity : AppCompatActivity() {
                 addView(text(title, 15f, tint ?: t.label))
                 addView(text(subtitle, 12f, t.label3).apply { setPadding(0, dp(2), 0, 0) })
                 layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+                minimumWidth = dp(96)
             }
         }
         // 값은 **금색 값 칩**(시안 B). 비어 있으면 칩째 숨긴다 — 빈 칩이 남으면 고장처럼 보인다.
@@ -105,6 +107,12 @@ open class ListActivity : AppCompatActivity() {
             tag = "value"
             background = t.box(t.bg, dpf(8f), Math.max(1, dp(1)), t.borderDim)
             setPadding(dp(10), dp(4), dp(10), dp(4))
+            // ⚠️ 2026-10-16: 값이 길면(일일 던전 컨트롤 요약·게임 앱 이름) 칩이 줄 너비를 다 가져가
+            //    제목 칸이 0 에 가깝게 눌려 **글자가 한 자씩 세로로 꺾였다.** 칩은 줄의 절반까지만,
+            //    한 줄로 두고 넘치면 끝을 '…' 로 줄인다(전체 값은 눌러서 들어간 화면에서 본다).
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            maxWidth = (resources.displayMetrics.widthPixels * 0.45f).toInt()
             visibility = if (value.isEmpty()) View.GONE else View.VISIBLE
             layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(8) }
         }

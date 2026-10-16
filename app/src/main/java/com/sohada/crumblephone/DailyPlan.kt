@@ -149,6 +149,12 @@ object DailyPlan {
     fun save(name: String, text: String) = Prefs.setDailyPlan(name, text.trim())
 
     /** 설정 줄에 띄우는 짧은 요약 — 어느 던전에 몇 개가 들어 있나. */
+    /** 설정 줄의 값 칩용 짧은 요약 — 컨트롤이 든 던전만(예: '경험치 3 · 연구석 2'), 없으면 '없음'. */
+    fun shortSummary(): String {
+        val on = DUNGEONS.mapNotNull { d -> parse(load(d)).steps.size.takeIf { it > 0 }?.let { "$d $it" } }
+        return if (on.isEmpty()) "없음" else on.joinToString(" · ")
+    }
+
     fun summary(): String = DUNGEONS.joinToString(" · ") {
         val n = parse(load(it)).steps.size
         if (n > 0) "$it $n" else "$it -"

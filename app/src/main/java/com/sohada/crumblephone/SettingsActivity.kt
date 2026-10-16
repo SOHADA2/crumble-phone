@@ -123,7 +123,7 @@ class SettingsActivity : ListActivity() {
         rowCharge = row("보스전 돌진 시간", value = chargeLabel(),
             subtitle = "보스가 나오면 오른쪽으로 밀어붙여요 · 달려들면 잘 잡히는 보스가 많아요", strip = Tint.STAGE.color) { cycleCharge() }
         // 예전 두 줄('던전 돌진 시작 지연'·'경험치 던전 돌진 시간')을 던전별 타임라인 하나로 바꿨다(2026-10-01).
-        rowDPlan = row("일일 던전 컨트롤", value = DailyPlan.summary(),
+        rowDPlan = row("일일 던전 컨트롤", value = DailyPlan.shortSummary(),
             subtitle = "던전마다 몇 초에 어느 방향으로 움직일지 방향키로 정해요 · 보스전 돌진과는 별개",
             strip = Tint.DAILY.color) {
             startActivity(Intent(this, DailyPlanActivity::class.java))
@@ -248,7 +248,7 @@ class SettingsActivity : ListActivity() {
         super.onResume()
         Overlay.onAppForeground(true)
         // 던전별 컨트롤 화면에서 돌아오면 동작 수 요약을 다시 그린다
-        if (::rowDPlan.isInitialized) rowDPlan.setValue(DailyPlan.summary(), t.label2)
+        if (::rowDPlan.isInitialized) rowDPlan.setValue(DailyPlan.shortSummary(), t.label2)
     }
 
     override fun onPause() {
