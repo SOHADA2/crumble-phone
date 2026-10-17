@@ -21,7 +21,7 @@ import kotlin.concurrent.thread
  */
 object Arena {
 
-    private const val COST = 6            // 1판당 아레나 재화 (PC 실측: 도전 버튼 '258/6')
+    private const val COST = 1            // 1판당 아레나 재화 1개 (도전 버튼 '258/6' 의 6 은 하루 지급량 — 사장님 확인 2026-10-17)
     private const val SCAN = 8            // 상대를 몇 명까지 넘겨 볼지
 
     /** 조건 한 줄 설명(로그·정산 머리) — PC `Format-ArenaRule` 과 같은 글. */

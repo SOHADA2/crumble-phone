@@ -131,7 +131,7 @@ class SettingsActivity : ListActivity() {
             Prefs.arenaFallback = it; arenaRuleCheck()
         }
         rowArSpend = row("아레나 재화 사용량", value = Prefs.arenaSpendLabel(),
-            subtitle = "이만큼 쓰면 끝나요 (1판 6개 · 넘기지 않아요)", strip = Tint.ARENA.color) {
+            subtitle = "이만큼 쓰면 끝나요 (1판 1개 · 넘기지 않아요)", strip = Tint.ARENA.color) {
             val c = Prefs.ARENA_SPEND_CHOICES
             val i = c.indexOf(Prefs.arenaSpend)
             Prefs.arenaSpend = c[(if (i < 0) 0 else i + 1) % c.size]
