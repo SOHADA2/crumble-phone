@@ -46,6 +46,26 @@ object Prefs {
         get() = sp?.getInt("arenaFights", 10) ?: 10
         set(v) { sp?.edit()?.putInt("arenaFights", v)?.apply() }
 
+    /**
+     * 아레나 도전 조건(2026-10-17 · PC 와 같음) — **여러 개를 같이** 켠다. 하나라도 맞으면 도전.
+     * 기본값은 예전 동작 그대로(낮으면 도전 · 다 넘기면 지금 상대). 크리스탈 새로고침은 어떤 조합이든 안 한다.
+     */
+    var arenaLower: Boolean
+        get() = sp?.getBoolean("arenaLower", true) ?: true
+        set(v) { sp?.edit()?.putBoolean("arenaLower", v)?.apply() }
+    var arenaHigher: Boolean
+        get() = sp?.getBoolean("arenaHigher", false) ?: false
+        set(v) { sp?.edit()?.putBoolean("arenaHigher", v)?.apply() }
+    /** 나보다 높아도 이 % 안쪽이면 도전(arenaHigher 가 켜졌을 때만). */
+    var arenaMargin: Int
+        get() = sp?.getInt("arenaMargin", 10) ?: 10
+        set(v) { sp?.edit()?.putInt("arenaMargin", v)?.apply() }
+    val ARENA_MARGIN_CHOICES = intArrayOf(5, 10, 15, 20, 30, 50, 100)
+    /** 다 넘겨서 더 못 넘기면(다음은 크리스탈 새로고침) 지금 상대와 도전. 끄면 아레나를 멈춘다. */
+    var arenaFallback: Boolean
+        get() = sp?.getBoolean("arenaFallback", true) ?: true
+        set(v) { sp?.edit()?.putBoolean("arenaFallback", v)?.apply() }
+
 
     /**
      * 봇이 도는 동안 화면을 아주 어둡게 할지.

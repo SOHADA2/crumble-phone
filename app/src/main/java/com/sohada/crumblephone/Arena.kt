@@ -4,11 +4,15 @@ import android.content.Context
 import kotlin.concurrent.thread
 
 /**
- * 아레나 — PC 봇 `arena.ps1` 을 옮겼다. **나보다 약한 상대만 골라 싸운다.**
+ * 아레나 — PC 봇 `arena.ps1` 을 옮겼다. **⚙ 에서 고른 조건(여러 개 같이)에 맞는 상대만 골라 싸운다.**
  *
- * 흐름: 로비에서 내 전투력·상대 전투력을 읽고 → 상대가 세면 [다음 상대] 로 넘기고
- *       → 약한 상대를 만나면 [도전하기] → 전투 → 결과·승급 화면을 탭으로 넘겨 로비 복귀 → 반복.
- *       상대를 8명 넘겨도 못 찾으면 지금 상대와 그냥 도전한다(크리스탈은 절대 안 쓴다).
+ * 흐름: 로비에서 내 전투력·상대 전투력을 읽고 → 조건에 안 맞으면 [다음 상대] 로 넘기고
+ *       → 맞는 상대를 만나면 [도전하기] → 전투 → 결과·승급 화면을 탭으로 넘겨 로비 복귀 → 반복.
+ *       다 넘겨도 없으면 '더 넘길 수 없으면 지금 상대' 를 켰을 때만 지금 상대와, 아니면 멈춘다.
+ *       크리스탈 새로고침은 어떤 조합이든 절대 안 쓴다(그 창이 뜨면 취소).
+ *
+ * 조건(Prefs · 2026-10-17 · PC `Get-ArenaRule` 과 같다): 낮은 상대 · 높아도 N% 안쪽 · 못 넘기면 지금 상대.
+ * 고른 것 중 **하나라도** 맞으면 도전. 판마다 다시 읽는다.
  *
  * ⚠️ **아레나 재화를 쓴다**(1판 3). 재화가 모자라면 스스로 끝낸다.
  *    진입만 시험하고 싶으면 `maxFights = 0` 으로 부르면 된다.
@@ -19,6 +23,22 @@ object Arena {
 
     private const val COST = 3            // 1판당 아레나 재화
     private const val SCAN = 8            // 상대를 몇 명까지 넘겨 볼지
+
+    /** 조건 한 줄 설명(로그·정산 머리) — PC `Format-ArenaRule` 과 같은 글. */
+    private fun ruleText(): String {
+        val p = ArrayList<String>()
+        if (Prefs.arenaLower) p.add("나보다 낮으면")
+        if (Prefs.arenaHigher) p.add("" + Prefs.arenaMargin + "% 높은 데까지")
+        if (Prefs.arenaFallback) p.add("못 넘기면 지금 상대")
+        return if (p.isEmpty()) "(고른 조건 없음)" else p.joinToString(" · ")
+    }
+    /** 상대가 조건에 맞으면 그 이유, 아니면 null — PC `Test-ArenaPick` 과 같다. */
+    private fun pickWhy(opp: Long, me: Long): String? {
+        if (Prefs.arenaLower && opp <= me) return "나보다 낮음"
+        if (Prefs.arenaHigher && opp > me && opp <= me * (1.0 + Prefs.arenaMargin / 100.0))
+            return String.format("%.1f%% 높지만 %d%% 안쪽", 100.0 * (opp - me) / me, Prefs.arenaMargin)
+        return null
+    }
 
     fun start(ctx: Context, maxFights: Int = if (Prefs.testMode) 0 else Prefs.arenaFights) {
         if (!Runner.guard()) return
@@ -59,6 +79,8 @@ object Arena {
         val sumStart = System.currentTimeMillis()
         var curStart: Long? = null; var curNow: Long? = null; var ptsNow: Long? = null
         var endWhy = ""
+        var blind = 0                     // 상대 전투력을 한 바퀴 내내 못 읽은 횟수(연속)
+        Bot.log("  도전 조건: " + ruleText())
 
         while (fights < maxFights && Runner.running) {
             if (!Runner.awaitGame()) break
@@ -82,30 +104,57 @@ object Arena {
             }
             if (startPts == null) startPts = readPts(b)
 
-            // ── 나보다 약한 상대 찾기 ──
+            // ── 조건에 맞는 상대 찾기 ──
+            if (!Prefs.arenaLower && !Prefs.arenaHigher && !Prefs.arenaFallback) {
+                Bot.log("  도전 조건이 하나도 없어요 - 멈춥니다 (⚙ 설정 → 아레나 도전 조건)")
+                endWhy = "도전 조건을 하나도 안 골랐어요"
+                break
+            }
             var chosen = false
             var oppPick: Long? = null
+            var lastOpp: Long? = null
+            var readAny = false
+            var why = ""
             for (i in 1..SCAN) {
                 if (!Runner.running) break
                 Runner.set("아레나", "상대 물색 중 (" + i + "/" + SCAN + ")")
                 val s = Runner.shot() ?: break
                 if (Screen.isArenaRefreshDialog(s)) {
-                    // 여기까지 왔으면 상대를 다 넘긴 것이다. 크리스탈을 쓰지 않고 지금 상대와 도전한다.
-                    Bot.log("  새로고침 팝업 - 취소하고 지금 상대와 그냥 도전")
+                    // 여기까지 왔으면 상대를 다 넘긴 것이다. 크리스탈은 절대 안 쓴다 → 취소. 그다음은 아래에서 고른다.
+                    Bot.log("  더 넘기려면 크리스탈 새로고침이라 취소 (크리스탈은 안 써요)")
                     Runner.tap(Screen.DLG_SAFE, 1600)
-                    chosen = true; break
+                    break
                 }
                 val opp = readOpp(s)
-                when {
-                    opp == null -> Bot.log("  상대 전투력을 못 읽음 (" + i + ") - 넘김")
-                    opp <= mine -> { Bot.log("  상대 " + Ocr.comma(opp) + " ≤ 나 " + Ocr.comma(mine) + " → 도전"); chosen = true; oppPick = opp }
-                    else -> Bot.log("  상대 " + Ocr.comma(opp) + " > 나 " + Ocr.comma(mine) + " → 다음 상대")
+                if (opp == null) Bot.log("  상대 전투력을 못 읽음 (" + i + ") - 넘김")
+                else {
+                    readAny = true; lastOpp = opp
+                    val w = pickWhy(opp, mine)
+                    if (w != null) { Bot.log("  상대 " + Ocr.comma(opp) + " · 나 " + Ocr.comma(mine) + " → 도전 (" + w + ")"); chosen = true; oppPick = opp; why = w }
+                    else Bot.log("  상대 " + Ocr.comma(opp) + " · 나 " + Ocr.comma(mine) + " → 조건에 안 맞아 다음 상대")
                 }
                 if (chosen) break
                 Runner.tap(Screen.ARENA_NEXT, 1600)
             }
             if (!Runner.running) break
-            if (!chosen) Bot.log("  약한 상대를 못 찾음 - 지금 상대와 그냥 도전")
+            if (!chosen) {
+                if (!readAny) {
+                    // 상대를 한 번도 못 읽었다 = 규칙을 적용할 재료가 없다. 눈 감고 싸우지 않는다(PC 와 같음).
+                    blind++
+                    Bot.log("  ⚠️ 상대 전투력을 다 못 읽었어요 (" + blind + "/3) - 화면 좌표가 바뀌었을 수 있어요")
+                    if (blind >= 3) { endWhy = "상대 전투력을 못 읽음"; break }
+                    Runner.sleep(2000); continue
+                }
+                blind = 0
+                Runner.shot()?.let { if (Screen.isArenaRefreshDialog(it)) Runner.tap(Screen.DLG_SAFE, 1600) }
+                if (!Prefs.arenaFallback) {
+                    Bot.log("  조건에 맞는 상대가 없어요 - 크리스탈 새로고침은 안 하므로 멈춥니다 (" + ruleText() + ")")
+                    endWhy = "조건에 맞는 상대가 없음 (크리스탈 새로고침은 안 함)"
+                    break
+                }
+                Bot.log("  조건에 맞는 상대가 없어 더 못 넘김 → 지금 상대와 도전")
+                oppPick = lastOpp; why = "못 넘겨서"
+            } else blind = 0
 
             // ── 전투 ──
             val before = Runner.shot()?.let { readPts(it) }
@@ -146,7 +195,13 @@ object Arena {
                 val dd = after - before
                 before.toString() + " → " + after + " (" + (if (dd >= 0) "+$dd" else "$dd") + ")"
             } else "점수 못 읽음"
-            val oppTxt = if (oppPick != null) "상대 " + Runner.fmtShort(oppPick!!) else "상대 (다 셈 · 그냥 도전)"
+            val op = oppPick
+            var oppTxt = "상대 ?"
+            if (op != null) {
+                val pct = if (mine > 0) 100.0 * (op - mine) / mine else 0.0
+                oppTxt = "상대 " + Runner.fmtShort(op) + " (" + (if (pct >= 0) "+" else "") + String.format("%.0f", pct) + "%)"
+            }
+            if (why == "못 넘겨서") oppTxt += " · 못 넘겨서"
             rows.add(String.format("%3d판  %-4s %s   %s", fights, res, ptTxt, oppTxt))
         }
 
@@ -155,7 +210,8 @@ object Arena {
         Runner.lastResult = "아레나 " + tail
         val L = ArrayList<String>()
         if (endWhy.isEmpty() && fights >= maxFights) endWhy = "정한 판 수(" + maxFights + ") 다 함"
-        if (endWhy.isNotEmpty()) { L.add("끝난 이유: " + endWhy); L.add("") }
+        if (endWhy.isNotEmpty()) L.add("끝난 이유: " + endWhy)
+        L.add("도전 조건: " + ruleText()); L.add("")
         L.add(tail)
         val p0 = startPts
         val p1 = ptsNow

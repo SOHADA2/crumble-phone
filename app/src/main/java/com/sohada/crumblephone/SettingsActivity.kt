@@ -109,6 +109,32 @@ class SettingsActivity : ListActivity() {
         root.addView(sectionHeader("쿠키 조합"))
         root.addView(bossOrderCard())
 
+        // ── 아레나 도전 조건 ── 여러 개 같이(PC 설정창 '아레나 도전 조건' 카드와 같다 · 2026-10-17)
+        root.addView(sectionHeader("아레나 도전 조건 · 여러 개 같이 고를 수 있어요"))
+        val gAr = group()
+        val (rArLow, _) = switchRow("나보다 전투력이 낮은 상대", "상대 ≤ 나 이면 도전", Prefs.arenaLower) {
+            Prefs.arenaLower = it; arenaRuleCheck()
+        }
+        val (rArHigh, _) = switchRow("나보다 높아도 정한 만큼까지", "아래 범위 안쪽이면 높아도 도전", Prefs.arenaHigher) {
+            Prefs.arenaHigher = it; arenaRuleCheck()
+        }
+        rowArMargin = row("얼마나 높아도 될까요", value = Prefs.arenaMargin.toString() + "% 까지",
+            subtitle = "예: 10% 면 나 6.0M 일 때 6.6M 까지", strip = Tint.ARENA.color) {
+            val c = Prefs.ARENA_MARGIN_CHOICES
+            val i = c.indexOf(Prefs.arenaMargin)
+            Prefs.arenaMargin = c[(if (i < 0) 0 else i + 1) % c.size]
+            rowArMargin.setValue(Prefs.arenaMargin.toString() + "% 까지", t.label2)
+        }
+        val (rArFb, _) = switchRow("더 넘길 수 없으면 지금 상대에게 도전",
+            "끄면 맞는 상대가 없을 때 멈춰요 · 크리스탈 새로고침은 언제나 안 해요", Prefs.arenaFallback) {
+            Prefs.arenaFallback = it; arenaRuleCheck()
+        }
+        gAr.addView(rArLow); gAr.addView(separator())
+        gAr.addView(rArHigh); gAr.addView(separator())
+        gAr.addView(rowArMargin); gAr.addView(separator())
+        gAr.addView(rArFb)
+        root.addView(gAr)
+
         // ── 자동 실행 ──
         root.addView(sectionHeader("자동 실행"))
         val gRun = group()
@@ -453,6 +479,13 @@ class SettingsActivity : ListActivity() {
             .setItems(names) { _, i -> GameApp.set(this, list[i].first) }
             .show()
     }
+    private lateinit var rowArMargin: LinearLayout
+    /** 아레나 조건을 셋 다 끄면 아레나가 바로 멈춘다 — 그때만 알려 준다. */
+    private fun arenaRuleCheck() {
+        if (!Prefs.arenaLower && !Prefs.arenaHigher && !Prefs.arenaFallback)
+            Toast.makeText(this, "아레나 조건을 하나도 안 켜면 아레나가 바로 멈춰요", Toast.LENGTH_LONG).show()
+    }
+
     /** 탭할 때마다 다음 값으로 돈다. 고르는 값이 몇 개뿐이라 별도 화면을 안 만든다. */
     private fun cycle(choices: IntArray, arena: Boolean) {
         val cur = if (arena) Prefs.arenaFights else Prefs.ovenPerRun
