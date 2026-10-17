@@ -61,6 +61,12 @@ object Prefs {
         get() = sp?.getInt("arenaMargin", 10) ?: 10
         set(v) { sp?.edit()?.putInt("arenaMargin", v)?.apply() }
     val ARENA_MARGIN_CHOICES = intArrayOf(5, 10, 15, 20, 30, 50, 100)
+    /** 아레나 재화를 몇 개까지 쓸지(2026-10-17 · PC `arenaSpend` 와 같음). 0 = 다 쓸 때까지. 판수 상한과 먼저 닿는 쪽에서 끝난다. */
+    var arenaSpend: Int
+        get() = sp?.getInt("arenaSpend", 0) ?: 0
+        set(v) { sp?.edit()?.putInt("arenaSpend", v)?.apply() }
+    val ARENA_SPEND_CHOICES = intArrayOf(0, 30, 60, 100, 150, 200, 300, 500)
+    fun arenaSpendLabel(v: Int = arenaSpend) = if (v <= 0) "다 쓸 때까지" else v.toString() + "개까지"
     /** 다 넘겨서 더 못 넘기면(다음은 크리스탈 새로고침) 지금 상대와 도전. 끄면 아레나를 멈춘다. */
     var arenaFallback: Boolean
         get() = sp?.getBoolean("arenaFallback", true) ?: true

@@ -21,12 +21,13 @@ import kotlin.concurrent.thread
  */
 object Arena {
 
-    private const val COST = 3            // 1판당 아레나 재화
+    private const val COST = 6            // 1판당 아레나 재화 (PC 실측: 도전 버튼 '258/6')
     private const val SCAN = 8            // 상대를 몇 명까지 넘겨 볼지
 
     /** 조건 한 줄 설명(로그·정산 머리) — PC `Format-ArenaRule` 과 같은 글. */
     private fun ruleText(): String {
         val p = ArrayList<String>()
+        if (Prefs.arenaSpend > 0) p.add("재화 " + Prefs.arenaSpend + "개까지")
         if (Prefs.arenaLower) p.add("나보다 낮으면")
         if (Prefs.arenaHigher) p.add("" + Prefs.arenaMargin + "% 높은 데까지")
         if (Prefs.arenaFallback) p.add("못 넘기면 지금 상대")
@@ -103,6 +104,18 @@ object Arena {
                 break
             }
             if (startPts == null) startPts = readPts(b)
+
+            // 정한 재화 사용량(⚙ · 판마다 다시 읽는다). 다음 한 판을 하면 넘치면 그 전에 멈춘다.
+            val lim = Prefs.arenaSpend
+            var spent = fights.toLong() * COST
+            val c0 = curStart; val c1 = curNow
+            if (c0 != null && c1 != null) spent = maxOf(spent, c0 - c1)
+            if (lim > 0 && spent + COST > lim) {
+                Bot.log("  정한 재화 사용량 " + lim + " 개에 닿았어요 (쓴 재화 " + spent + " · 1판 " + COST + ") - 종료")
+                Runner.set("아레나 끝", "정한 재화를 다 씀")
+                endWhy = "정한 재화 " + lim + " 개를 다 씀 (쓴 재화 " + spent + ")"
+                break
+            }
 
             // ── 조건에 맞는 상대 찾기 ──
             if (!Prefs.arenaLower && !Prefs.arenaHigher && !Prefs.arenaFallback) {
@@ -217,6 +230,9 @@ object Arena {
         val p1 = ptsNow
         if (p0 != null && p1 != null) { val dd = p1 - p0; L.add("점수   " + p0 + " → " + p1 + "  (" + (if (dd >= 0) "+$dd" else "$dd") + ")") }
         if (curStart != null) L.add("재화   " + curStart + " → " + (curNow ?: curStart) + "  (1판 " + COST + ")")
+        val cs = curStart; val cn = curNow
+        val usedAll = maxOf(fights.toLong() * COST, if (cs != null && cn != null) cs - cn else 0L)
+        L.add("쓴 재화 " + usedAll + (if (Prefs.arenaSpend > 0) " / " + Prefs.arenaSpend else ""))
         L.add("")
         if (rows.isEmpty()) L.add("아직 싸운 판이 없어요.") else { L.add("── 판별 기록 ──"); L.addAll(rows) }
         Runner.putSummary("아레나 정산", sumStart, L)

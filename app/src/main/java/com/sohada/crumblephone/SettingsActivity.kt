@@ -30,6 +30,7 @@ import androidx.core.view.WindowCompat
 class SettingsActivity : ListActivity() {
 
     private lateinit var rowArena: LinearLayout
+    private lateinit var rowArSpend: LinearLayout
     private lateinit var rowOven: LinearLayout
     private lateinit var rowCharge: LinearLayout
     private lateinit var rowDPlan: LinearLayout
@@ -129,6 +130,14 @@ class SettingsActivity : ListActivity() {
             "끄면 맞는 상대가 없을 때 멈춰요 · 크리스탈 새로고침은 언제나 안 해요", Prefs.arenaFallback) {
             Prefs.arenaFallback = it; arenaRuleCheck()
         }
+        rowArSpend = row("아레나 재화 사용량", value = Prefs.arenaSpendLabel(),
+            subtitle = "이만큼 쓰면 끝나요 (1판 6개 · 넘기지 않아요)", strip = Tint.ARENA.color) {
+            val c = Prefs.ARENA_SPEND_CHOICES
+            val i = c.indexOf(Prefs.arenaSpend)
+            Prefs.arenaSpend = c[(if (i < 0) 0 else i + 1) % c.size]
+            rowArSpend.setValue(Prefs.arenaSpendLabel(), t.label2)
+        }
+        gAr.addView(rowArSpend); gAr.addView(separator())
         gAr.addView(rArLow); gAr.addView(separator())
         gAr.addView(rArHigh); gAr.addView(separator())
         gAr.addView(rowArMargin); gAr.addView(separator())
