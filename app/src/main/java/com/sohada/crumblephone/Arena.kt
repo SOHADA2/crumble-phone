@@ -41,7 +41,8 @@ object Arena {
         return null
     }
 
-    fun start(ctx: Context, maxFights: Int = if (Prefs.testMode) 0 else Prefs.arenaFights) {
+    // 판 수 상한은 두지 않는다(2026-10-17 사장님) — 끝내는 기준은 ⚙ '아레나 재화 사용량' 하나. 1000 은 안전 상한일 뿐.
+    fun start(ctx: Context, maxFights: Int = if (Prefs.testMode) 0 else 1000) {
         if (!Runner.guard()) return
         Runner.running = true; Runner.task = "아레나"
         thread(name = "arena") {

@@ -41,10 +41,6 @@ object Prefs {
         get() = labUnlocked && (sp?.getBoolean("testMode", false) ?: false)
         set(v) { sp?.edit()?.putBoolean("testMode", v)?.apply() }
 
-    /** 아레나를 몇 판까지 할지. 재화가 먼저 떨어지면 거기서 스스로 끝난다. */
-    var arenaFights: Int
-        get() = sp?.getInt("arenaFights", 10) ?: 10
-        set(v) { sp?.edit()?.putInt("arenaFights", v)?.apply() }
 
     /**
      * 아레나 도전 조건(2026-10-17 · PC 와 같음) — **여러 개를 같이** 켠다. 하나라도 맞으면 도전.
@@ -61,11 +57,11 @@ object Prefs {
         get() = sp?.getInt("arenaMargin", 10) ?: 10
         set(v) { sp?.edit()?.putInt("arenaMargin", v)?.apply() }
     val ARENA_MARGIN_CHOICES = intArrayOf(5, 10, 15, 20, 30, 50, 100)
-    /** 아레나 재화를 몇 개까지 쓸지(2026-10-17 · PC `arenaSpend` 와 같음). 0 = 다 쓸 때까지. 판수 상한과 먼저 닿는 쪽에서 끝난다. */
+    /** 아레나 재화를 몇 개까지 쓸지(2026-10-17 · PC `arenaSpend` 와 같음). 0 = 다 쓸 때까지. 기본 200. 아레나는 이것 하나로만 끝난다(판수 상한 없음). */
     var arenaSpend: Int
-        get() = sp?.getInt("arenaSpend", 0) ?: 0
+        get() = sp?.getInt("arenaSpend", 200) ?: 200
         set(v) { sp?.edit()?.putInt("arenaSpend", v)?.apply() }
-    val ARENA_SPEND_CHOICES = intArrayOf(0, 30, 60, 100, 150, 200, 300, 500)
+    val ARENA_SPEND_CHOICES = intArrayOf(30, 60, 100, 150, 200, 300, 500, 0)
     fun arenaSpendLabel(v: Int = arenaSpend) = if (v <= 0) "다 쓸 때까지" else v.toString() + "개까지"
     /** 다 넘겨서 더 못 넘기면(다음은 크리스탈 새로고침) 지금 상대와 도전. 끄면 아레나를 멈춘다. */
     var arenaFallback: Boolean
@@ -111,7 +107,6 @@ object Prefs {
         get() = sp?.getInt("ovenPerRun", 20) ?: 20
         set(v) { sp?.edit()?.putInt("ovenPerRun", v)?.apply() }
 
-    val ARENA_CHOICES = intArrayOf(5, 10, 20, 30)
 
     /**
      * 보스전이 시작되면 오른쪽으로 밀어붙이는 시간(ms). 0 이면 안 한다.

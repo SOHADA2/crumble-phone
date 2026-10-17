@@ -29,7 +29,6 @@ import androidx.core.view.WindowCompat
  */
 class SettingsActivity : ListActivity() {
 
-    private lateinit var rowArena: LinearLayout
     private lateinit var rowArSpend: LinearLayout
     private lateinit var rowOven: LinearLayout
     private lateinit var rowCharge: LinearLayout
@@ -147,12 +146,11 @@ class SettingsActivity : ListActivity() {
         // ── 자동 실행 ──
         root.addView(sectionHeader("자동 실행"))
         val gRun = group()
-        rowArena = row("아레나 판수", value = Prefs.arenaFights.toString() + "판",
-            subtitle = "재화가 먼저 떨어지면 거기서 끝나요", strip = Tint.ARENA.color) { cycle(Prefs.ARENA_CHOICES, true) }
+        // '아레나 판수' 줄은 뺐다(2026-10-17) — 아레나는 위 '아레나 재화 사용량' 하나로만 끝난다.
         // 오븐은 레벨마다 한 번에 여는 개수가 달라서, 게임 쪽 값을 여기에 맞춰 둬야
         // 봇이 '한 싸이클'이 얼마나 큰지 알고 상한을 제대로 잡는다.
         rowOven = row("오븐 1회 개수", value = Prefs.ovenPerRun.toString() + "개",
-            subtitle = "게임의 '자동 열기 → 1회에 여는 개수'와 같게") { cycle(Prefs.OVEN_CHOICES, false) }
+            subtitle = "게임의 '자동 열기 → 1회에 여는 개수'와 같게") { cycleOven() }
         rowDelay = row("돌진 시작 지연", value = delayLabel(),
             subtitle = "보스 소환 직후엔 아직 조이스틱이 안 먹어요", strip = Tint.STAGE.color) { cycleDelay() }
         rowCharge = row("보스전 돌진 시간", value = chargeLabel(),
@@ -163,7 +161,6 @@ class SettingsActivity : ListActivity() {
             strip = Tint.DAILY.color) {
             startActivity(Intent(this, DailyPlanActivity::class.java))
         }
-        gRun.addView(rowArena); gRun.addView(separator())
         gRun.addView(rowOven); gRun.addView(separator())
         gRun.addView(rowDelay); gRun.addView(separator())
         gRun.addView(rowCharge); gRun.addView(separator())
@@ -496,12 +493,11 @@ class SettingsActivity : ListActivity() {
     }
 
     /** 탭할 때마다 다음 값으로 돈다. 고르는 값이 몇 개뿐이라 별도 화면을 안 만든다. */
-    private fun cycle(choices: IntArray, arena: Boolean) {
-        val cur = if (arena) Prefs.arenaFights else Prefs.ovenPerRun
-        val i = choices.indexOf(cur)
+    private fun cycleOven() {
+        val choices = Prefs.OVEN_CHOICES
+        val i = choices.indexOf(Prefs.ovenPerRun)
         val next = choices[(if (i < 0) 0 else i + 1) % choices.size]
-        if (arena) { Prefs.arenaFights = next; rowArena.setValue(next.toString() + "판", t.label2) }
-        else { Prefs.ovenPerRun = next; rowOven.setValue(next.toString() + "개", t.label2) }
+        Prefs.ovenPerRun = next; rowOven.setValue(next.toString() + "개", t.label2)
     }
 
     /** 0.5초 같은 소수를 정수 나눗셈으로 찍으면 '0초'가 된다. 딱 떨어질 때만 정수로 보인다. */
