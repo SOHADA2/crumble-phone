@@ -109,6 +109,10 @@ class SettingsActivity : ListActivity() {
         root.addView(sectionHeader("쿠키 조합"))
         root.addView(bossOrderCard())
 
+        // ── 일일 던전 고르기 ── 돌 던전만 켠다(2026-10-19 · PC 일일 던전 화면의 칩과 같다).
+        root.addView(sectionHeader("일일 던전 · 돌 던전 고르기"))
+        root.addView(dailyPickCard())
+
         // ── 아레나 도전 조건 ── 여러 개 같이(PC 설정창 '아레나 도전 조건' 카드와 같다 · 2026-10-17)
         root.addView(sectionHeader("아레나 도전 조건 · 여러 개 같이 고를 수 있어요"))
         val gAr = group()
@@ -536,6 +540,54 @@ class SettingsActivity : ListActivity() {
      * 이미 고른 것을 다시 누르면 빠지고 뒤 번호가 당겨진다. 누를 때마다 바로 저장한다.
      * 마지막 하나는 못 뺀다(하나도 없으면 보스를 아예 못 친다).
      */
+    /**
+     * 일일 던전에서 **돌 던전**을 고르는 칩 다섯 개(여러 개 같이). 누르면 바로 저장 · 마지막 하나는 못 뺀다.
+     * 고르지 않은 던전은 도전·보상 없이 넘기고, 고른 던전을 다 돌면 끝낸다(Daily.pick).
+     */
+    private fun dailyPickCard(): LinearLayout {
+        val names = Daily.NAME_LIST
+        val tint = Tint.DAILY.color
+        val on = BooleanArray(names.size) { names[it] in Daily.pick() }
+        val chips = ArrayList<TextView>()
+        val line = text("", 12f, t.label2).apply { setPadding(0, dp(10), 0, 0) }
+        fun refresh() {
+            for (i in names.indices) {
+                chips[i].background = t.rippleOver(t.box(if (on[i]) t.track else t.bg, dpf(10f),
+                    Math.max(1, dpf(1.4f).toInt()), if (on[i]) tint else t.separator), dpf(10f))
+                chips[i].setTextColor(if (on[i]) t.title else t.label3)
+                chips[i].text = (if (on[i]) "✓ " else "") + names[i]
+            }
+            val sel = names.filterIndexed { i, _ -> on[i] }
+            line.text = if (sel.size == names.size) "지금: 다섯 던전 전부" else "지금: " + sel.joinToString(" · ") + " 만"
+        }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        for (i in names.indices) {
+            val c = text("", 12f, t.label3, Typeface.DEFAULT_BOLD).apply {
+                gravity = Gravity.CENTER
+                isSingleLine = true
+                isClickable = true
+                setOnClickListener {
+                    if (on[i] && on.count { it } == 1) {
+                        Toast.makeText(this@SettingsActivity, "던전을 하나 이상 골라 주세요", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    on[i] = !on[i]
+                    val sel = names.indices.filter { on[it] }.map { it + 1 }
+                    Prefs.dailyPick = if (sel.size == names.size) "" else sel.joinToString(",")
+                    refresh()
+                }
+                layoutParams = LinearLayout.LayoutParams(0, dp(42), 1f).apply { leftMargin = dp(2); rightMargin = dp(2) }
+            }
+            chips.add(c); row.addView(c)
+        }
+        refresh()
+        return group().apply {
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            addView(row); addView(line)
+            addView(text("고르지 않은 던전은 도전·보상 없이 넘기고, 고른 던전을 다 돌면 끝내요.", 12f, t.label3).apply { setPadding(0, dp(4), 0, 0) })
+        }
+    }
+
     private fun bossOrderCard(): LinearLayout {
         val picked = Boss.order().toMutableList()
         val tint = Tint.STAGE.color

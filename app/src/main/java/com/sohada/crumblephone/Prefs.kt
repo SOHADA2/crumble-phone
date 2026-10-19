@@ -157,4 +157,12 @@ object Prefs {
     var bossOrder: String
         get() = sp?.getString("bossOrder", "1,2,3,4,5") ?: "1,2,3,4,5"
         set(v) { sp?.edit()?.putString("bossOrder", v)?.apply() }
+
+    /**
+     * 일일 던전에서 **돌 던전 순번** `"1,3"` (빈 값 = 다섯 개 전부 · 2026-10-19 · PC 와 같이).
+     * 읽는 쪽은 [Daily.pick] 하나뿐이고 이상한 값은 거기서 거른다.
+     */
+    var dailyPick: String
+        get() = sp?.getString("dailyPick", "") ?: ""
+        set(v) { sp?.edit()?.putString("dailyPick", v)?.apply() }
 }

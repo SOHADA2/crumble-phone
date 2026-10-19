@@ -31,6 +31,18 @@ object Daily {
     private val NAMES = arrayOf("경험치", "코인", "반죽", "연구석", "룬결정")
     private fun nameOf(i: Int) = if (i in 1..NAMES.size) NAMES[i - 1] else "던전$i"
 
+    /**
+     * ★ 고른 던전만 돈다(2026-10-19 · PC 와 같이). 사장님: *"다른 던전은 이미 해결했는데, 전체 돌리기로 하면
+     *   계속 확인해서 시간 낭비가 되거든."* ⚙ 설정의 칩이 `Prefs.dailyPick` 에 순번으로 적는다(빈 값 = 전부).
+     * 던전마다 다시 읽는다. 고르지 않은 던전은 ▶ 로 바로 넘기고, 고른 것 중 마지막을 마치면 끝낸다.
+     */
+    fun pick(): List<String> {
+        val idx = Prefs.dailyPick.split(',').mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..NAMES.size }.distinct().sorted()
+        return if (idx.isEmpty()) NAMES.toList() else idx.map { NAMES[it - 1] }
+    }
+    private fun pickAfter(idx: Int, p: List<String>): Boolean = ((idx + 1)..NAMES.size).any { NAMES[it - 1] in p }
+    val NAME_LIST: List<String> get() = NAMES.toList()
+
     // ★ 정산 창(2026-10-16 · PC 와 같이) — 던전마다 판별 결과(승 22초 · 패배 …)를 모은다.
     //   예전 결과는 '경험치 4판 · 코인 열쇠 없음' 한 줄이라 몇 번째 판에 졌는지가 안 보였다.
     private val dlBlocks = ArrayList<String>()
@@ -59,6 +71,9 @@ object Daily {
 
     private fun loop(maxDungeons: Int) {
         dlBlocks.clear(); dlFights.clear()
+        var pickEnded = false
+        val pick0 = pick()
+        if (pick0.size < NAMES.size) Bot.log("고른 던전만 돕니다: " + pick0.joinToString(" · "))
         val sumStart = System.currentTimeMillis()
         Runner.set("일일 던전 준비 중", "메인 화면으로 이동 중")
         val (ok, why) = Runner.resetToMain()
@@ -210,6 +225,16 @@ object Daily {
             sigs.add(sig)
             val idx = sigs.size
             val name = nameOf(idx)
+            // ★ 고르지 않은 던전 — 도전도 보상 수령도 없이 ▶ 로 넘긴다(넘어갔는지는 다음 바퀴 지문 검사가 본다).
+            val pk = pick()
+            if (name !in pk) {
+                Bot.log("── 던전 " + idx + " (" + name + ") · 고르지 않은 던전이라 넘어갑니다")
+                dlFights.clear(); closeBlock(name, "고르지 않음")
+                if (!pickAfter(idx, pk)) { Bot.log("고른 던전을 다 돌았어요 - 종료"); pickEnded = true; break }
+                Runner.shot()?.let { if (Screen.atDailyEntry(it)) Runner.tap(Screen.DAILY_NEXT, 2200) }
+                d++
+                continue
+            }
             Runner.set("일일 던전 " + idx + "번째", name + " · 준비 중")
             Runner.setProgress(1, 4)
 
@@ -298,6 +323,7 @@ object Daily {
                 results.add(name + " " + (if (fought > 0) fought.toString() + "판" + lossTag() else "열쇠 없음"))
                 Runner.lastResult = results.joinToString(" · ")
                 closeBlock(name, blockState)
+                if (!pickAfter(idx, pick())) { Bot.log("고른 던전을 다 돌았어요 - 종료"); pickEnded = true; break }
                 Runner.shot()?.let {
                     if (Screen.atDailyEntry(it)) Runner.tap(Screen.DAILY_NEXT, 2000)
                 }
@@ -327,6 +353,8 @@ object Daily {
             results.add(name + " " + (if (fought > 0) fought.toString() + "판" + lossTag() else "열쇠 없음"))
             Runner.lastResult = results.joinToString(" · ")
             closeBlock(name, blockState)
+            // 고른 던전이 더 없으면 남은 던전을 들여다보지 않고 끝낸다.
+            if (!pickAfter(idx, pick())) { Bot.log("고른 던전을 다 돌았어요 - 종료"); pickEnded = true; break }
 
             // ── ▶ 다음 던전 ──
             // ⚠️ **던전 화면일 때만** 누른다. 목록 화면에서 이 자리는 배너 한가운데다.
@@ -339,6 +367,7 @@ object Daily {
 
         // ⚠️ 끊겼는데 '완료' 로 적으면 **고장이 성공처럼 보인다**(PC 에서 겪은 그대로).
         var head = if (battled == 0) "돌 수 있는 던전이 없었어요" else battled.toString() + "개 던전 진행함"
+        if (pickEnded && pick0.size < NAMES.size) head = "고른 던전 완료 (" + pick0.joinToString(" · ") + ") · " + head
         if (brokeOff.isNotEmpty()) {
             head = "중간에 끊김 (" + brokeOff + ") · " + head + " - 다시 눌러 주세요"
             Bot.log("=== 일일 던전 중간에 끊김 (" + brokeOff + ") · " + battled + "개 진행함")
