@@ -165,4 +165,9 @@ object Prefs {
     var dailyPick: String
         get() = sp?.getString("dailyPick", "") ?: ""
         set(v) { sp?.edit()?.putString("dailyPick", v)?.apply() }
+
+    /** 일일 던전 '계속 돌기' — 져도 계속 도전 · 한 바퀴 끝나도 10분 쉬고 다시(2026-10-19 · PC 와 같이). */
+    var dailyRepeat: Boolean
+        get() = sp?.getBoolean("dailyRepeat", false) ?: false
+        set(v) { sp?.edit()?.putBoolean("dailyRepeat", v)?.apply() }
 }

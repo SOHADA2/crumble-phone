@@ -585,6 +585,15 @@ class SettingsActivity : ListActivity() {
             setPadding(dp(14), dp(14), dp(14), dp(14))
             addView(row); addView(line)
             addView(text("고르지 않은 던전은 도전·보상 없이 넘기고, 고른 던전을 다 돌면 끝내요.", 12f, t.label3).apply { setPadding(0, dp(4), 0, 0) })
+            addView(View(this@SettingsActivity).apply {
+                setBackgroundColor(t.separator)
+                layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, Math.max(1, dp(1))).apply { topMargin = dp(12); bottomMargin = dp(4) }
+            })
+            // 계속 돌기(2026-10-19 · PC 와 같이): 져도 계속 · 한 바퀴 끝나도 10분 쉬고 다시.
+            val (rRep, _) = switchRow("끝나도 계속 돌기",
+                "실패해도 계속 도전 · 한 바퀴 끝나면 10분 쉬고 다시 (멈추기 전까지)", Prefs.dailyRepeat) { Prefs.dailyRepeat = it }
+            rRep.setPadding(0, dp(8), 0, 0)
+            addView(rRep)
         }
     }
 

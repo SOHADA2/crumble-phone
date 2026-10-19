@@ -62,7 +62,22 @@ object Daily {
         thread(name = "daily") {
             try {
                 if (!Runner.bringGameToFront(ctx)) { Runner.set("시작 못 함", "게임을 찾지 못했어요"); return@thread }
-                loop(maxDungeons)
+                // ★ '계속 돌기'(Prefs.dailyRepeat) — 한 바퀴가 끝나도 끝내지 않고 REPEAT_WAIT_MS 쉬었다가 다시 한 바퀴.
+                //   (열쇠는 시간이 지나면 다시 생긴다.) 바퀴 안에서는 연달아 져도 넘기지 않는다(runKeys).
+                var round = 1
+                while (true) {
+                    if (round > 1) Bot.log("=== 일일 던전 " + round + "바퀴째")
+                    loop(maxDungeons)
+                    if (!Runner.running || !Prefs.dailyRepeat || maxDungeons <= 0) break
+                    Bot.log("계속 돌기 — " + round + "바퀴 끝 · " + (REPEAT_WAIT_MS / 60_000) + "분 뒤 다시 한 바퀴")
+                    var left = REPEAT_WAIT_MS
+                    while (left > 0 && Runner.running && Prefs.dailyRepeat) {
+                        Runner.set("일일 던전 · 다음 바퀴까지", (left / 60_000).toString() + "분 " + ((left % 60_000) / 1000) + "초 (" + round + "바퀴 끝)")
+                        Runner.sleep(5000); left -= 5000
+                    }
+                    if (!Runner.running || !Prefs.dailyRepeat) break
+                    round++
+                }
             }
             catch (e: Exception) { Runner.set("오류", e.message ?: "알 수 없음") }
             finally { Runner.running = false; Runner.task = "" }
@@ -520,6 +535,7 @@ object Daily {
         return false
     }
 
+    private const val REPEAT_WAIT_MS = 10 * 60_000L   // '계속 돌기' 바퀴 사이 쉬는 시간
     private const val MAX_LOSS_STREAK = 5   // 연달아 이만큼 지면 이 던전은 넘어간다(2026-10-16 사장님 결정)
 
     private fun runKeys(idx: Int, name: String, mySig: IntArray): Int {
@@ -541,7 +557,8 @@ object Daily {
         //      대신 전체 상한(15분)을 따로 둬서 무한히 매달리지는 않게 한다.
         val stallMs = 180_000L
         var deadline = System.currentTimeMillis() + stallMs
-        val hardStop = System.currentTimeMillis() + 900_000L
+        val keepTrying = Prefs.dailyRepeat    // '계속 돌기' — 져도 넘기지 않고 15분 상한도 없다
+        val hardStop = System.currentTimeMillis() + (if (keepTrying) 86_400_000L else 900_000L)
         while (System.currentTimeMillis() < deadline
             && System.currentTimeMillis() < hardStop && Runner.running) {
             val s = Runner.shot()
@@ -621,15 +638,17 @@ object Daily {
                 if (!closed && Runner.shot()?.let { Screen.atDailyList(it) } != true) Bot.log("  결과 화면이 안 닫혀요 - 잠시 뒤 다시 봅니다")
                 // ★ 2026-10-16 (PC 와 같이): **연달아 MAX_LOSS_STREAK 번 지면 다음 던전으로**(사장님 결정).
                 //   진 판은 입장권이 돌아와 기회가 안 줄어서, 못 깨는 던전이면 15분 상한까지 지기만 했다.
-                if (counted && lossStreak >= MAX_LOSS_STREAK) {
+                if (counted && lossStreak >= MAX_LOSS_STREAK && !keepTrying) {
                     Bot.log("던전 " + idx + ": 연달아 " + lossStreak + "번 졌어요 - 이 던전은 넘어갑니다 (컨트롤을 조정해 보세요)")
                     // 시간 초과 결과의 ✕ 는 목록으로 나간다 — 같은 던전으로 돌아가 있어야 보상 수령·▶ 다음 던전이 된다.
                     if (Runner.shot()?.let { Screen.atDailyList(it) } == true) returnToDungeon(idx, mySig)
                     streakOut = true
                     break
                 }
-                if (counted && lossStreak >= 3) {
+                if (counted && lossStreak >= 3 && !keepTrying) {
                     Bot.log("  (연달아 " + lossStreak + "번 못 깼어요 - " + MAX_LOSS_STREAK + "번이면 다음 던전으로 넘어갑니다)")
+                } else if (counted && keepTrying && lossStreak % 5 == 0) {
+                    Bot.log("  (연달아 " + lossStreak + "번 못 깼어요 - '계속 돌기' 라 계속 도전합니다. 컨트롤을 조정해 보세요)")
                 }
                 deadline = System.currentTimeMillis() + stallMs   // 진전 있음 → 시계 다시
                 continue
