@@ -591,7 +591,7 @@ class SettingsActivity : ListActivity() {
             })
             // 계속 돌기(2026-10-19 · PC 와 같이): 져도 계속 · 한 바퀴 끝나도 10분 쉬고 다시.
             val (rRep, _) = switchRow("끝나도 계속 돌기",
-                "실패해도 계속 도전 · 한 바퀴 끝나면 10분 쉬고 다시 (멈추기 전까지)", Prefs.dailyRepeat) { Prefs.dailyRepeat = it }
+                "5연패 던전은 넘기고 다음 바퀴에 바로 다시 · 기회를 다 썼으면 10분 쉬고 다시 (멈추기 전까지)", Prefs.dailyRepeat) { Prefs.dailyRepeat = it }
             rRep.setPadding(0, dp(8), 0, 0)
             addView(rRep)
         }
